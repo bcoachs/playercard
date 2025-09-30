@@ -18,10 +18,8 @@ export default function Home() {
             <div className="pills w-full max-w-4xl">
               <Link href="/projects/new" className="btn pill">NEUER RUN</Link>
               <Link href="/projects" className="btn pill">RUN LADEN</Link>
-              {/* Wenn deine Rangliste ein Projekt braucht, kannst du hier zunächst auch auf /projects verlinken */}
-              <Link href={`/leaderboard${activeProjectId ? `?project=${activeProjectId}` : ''}`} className="btn pill">RANGLISTE</Link>
-              {/* BASE: aktuell zu Capture-Hub des aktiven Projekts; bei Bedarf auf eine andere Seite ändern */}
-              <Link href={activeProjectId ? `/projects/${activeProjectId}/capture` : '/projects'} className="btn pill">BASE</Link>
+              <Link href="/leaderboard" className="btn pill">RANGLISTE</Link>
+              <Link href="/base" className="btn pill">BASE</Link>
             </div>
           </div>
         </div>
