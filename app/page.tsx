@@ -10,13 +10,11 @@ export default function Home() {
     <main>
       <section className="brand-hero hero-with-bg hero-full safe-area">
         <div className="mx-auto w-full max-w-6xl px-5">
-          {/* Grid zentriert horizontal & vertikal den Inhalt */}
           <div className="grid place-items-center gap-10 text-center">
             <h1 className="text-5xl md:text-6xl font-extrabold tracking-wide uppercase drop-shadow">
               NEXT RUN
             </h1>
-      
-            <div className="pills w-full max-w-4xl">
+            <div className="pills">
               <Link href="/projects/new" className="btn pill">NEUER RUN</Link>
               <Link href="/projects" className="btn pill">RUN LADEN</Link>
               <Link href="/leaderboard" className="btn pill">RANGLISTE</Link>
