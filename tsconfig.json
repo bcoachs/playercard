@@ -22,7 +22,7 @@
     "types": [
       "@types/node",
       "@types/react",
-      "@types/react-dom"
+      "@types/react-dom",
     ]
 
     // 👇 Das ist der Alias-Teil
@@ -37,7 +37,7 @@
   "include": [
     "next-env.d.ts",
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
   ],
   "exclude": [
     "node_modules"
