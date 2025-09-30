@@ -3,8 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  { global: { headers: { Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } } } as any
+  process.env.SUPABASE_SERVICE_ROLE_KEY!  // ← Service Role korrekt als 2. Parameter
 )
 
 export async function POST(req: NextRequest) {
@@ -21,10 +20,13 @@ export async function POST(req: NextRequest) {
   if (file) {
     const bytes = Buffer.from(await file.arrayBuffer())
     const path = `projects/${proj.id}/assets/logo.png`
-    const { error: uerr } = await supabaseAdmin.storage.from('projects').upload(path, bytes, { contentType: file.type || 'image/png', upsert: true })
-    if (uerr) console.error(uerr)
-    const { data: pub } = await supabaseAdmin.storage.from('projects').getPublicUrl(path)
-    await supabaseAdmin.from('projects').update({ logo_url: pub.publicUrl }).eq('id', proj.id)
+    const { error: uerr } = await supabaseAdmin.storage
+      .from('projects')
+      .upload(path, bytes, { contentType: file.type || 'image/png', upsert: true })
+    if (!uerr) {
+      const { data: pub } = await supabaseAdmin.storage.from('projects').getPublicUrl(path)
+      await supabaseAdmin.from('projects').update({ logo_url: pub.publicUrl }).eq('id', proj.id)
+    }
   }
 
   // default stations
