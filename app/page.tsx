@@ -12,7 +12,7 @@ export default async function Home() {
   return (
     <main>
       {/* HERO */}
-      <section className="brand-hero">
+      <section className="brand-hero hero-with-bg">
         <div className="container px-5 py-10 sm:py-14">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div className="max-w-xl">
