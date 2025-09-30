@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '../../../src/lib/supabaseAdmin'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const projectId = searchParams.get('project')
+  const projectId = new URL(req.url).searchParams.get('project')
   if (!projectId) return NextResponse.json({ error: 'missing project' }, { status: 400 })
 
   const [players, stations] = await Promise.all([
