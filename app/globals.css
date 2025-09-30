@@ -63,4 +63,23 @@ html, body { height: 100%; background: #fff; color: var(--ink); }
 @media (min-width: 768px){
   .hero-with-bg{ min-height: 340px; }
 }
+/* Pill-Buttons wie im Mock */
+.pills {
+  display: grid;
+  gap: 14px;
+}
+@media (min-width: 640px){ .pills { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (min-width: 768px){ .pills { grid-template-columns: repeat(4,minmax(0,1fr)); } }
+
+.btn.pill{
+  border-radius: 9999px;
+  padding: 14px 22px;
+  background: linear-gradient(180deg, #ec0347, #ab0000);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.5);
+  box-shadow: 0 10px 22px rgba(0,0,0,.25);
+  text-align: center;
+}
+.btn.pill:hover{ transform: translateY(-1px); filter: brightness(1.05); }
+.btn.pill:active{ transform: translateY(0); }
 
