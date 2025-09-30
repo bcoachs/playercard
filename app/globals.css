@@ -82,4 +82,16 @@ html, body { height: 100%; background: #fff; color: var(--ink); }
 }
 .btn.pill:hover{ transform: translateY(-1px); filter: brightness(1.05); }
 .btn.pill:active{ transform: translateY(0); }
+/* Vollbild-Hero + iOS-Safe-Area */
+.hero-full{
+  min-height: 100vh;      /* Fallback */
+  min-height: 100dvh;     /* moderne Browser: dynamische Viewporthöhe */
+  display: flex;
+  align-items: center;     /* vertikal zentrieren */
+}
+.safe-area{
+  padding-top: calc(24px + env(safe-area-inset-top));
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
 
