@@ -12,7 +12,7 @@ export default async function Home() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">Playercard – MVP</h1>
+      <h1 className="text-2xl font-bold">Playercard – MVP test</h1>
 
       <div className="grid gap-3 md:grid-cols-2">
         <Link href="/projects/new" className="border rounded p-4 hover:bg-neutral-50">
