@@ -13,13 +13,11 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
       "@/lib/*": ["src/lib/*", "lib/*"]
     },
-
     "types": ["@types/node", "@types/react", "@types/react-dom"],
     "plugins": [{ "name": "next" }]
   },
