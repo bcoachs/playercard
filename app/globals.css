@@ -1,5 +1,65 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+:root{
+  --brand: #0ea5e9;            /* Primärfarbe */
+  --bg:    #f8fafc;            /* Seitenhintergrund */
+  --ink:   #0f172a;            /* Textfarbe */
+  --muted: #64748b;            /* Grauton für Untertexte */
+  --card:  #ffffff;            /* Kartenhintergrund */
+  --ring:  rgba(14,165,233,.25); /* Fokusring */
+}
+
+html, body {
+  height: 100%;
+}
+
+body{
+  background: var(--bg);
+  color: var(--ink);
+}
+
+a, .link {
+  color: var(--brand);
+}
+
+.card{
+  background: var(--card);
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 16px;
+  transition: box-shadow .2s ease, transform .05s ease;
+}
+
+.card:hover{
+  box-shadow: 0 6px 18px rgba(0,0,0,.06);
+}
+
+.btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  background: var(--brand);
+  color: white;
+  border: none;
+}
+
+.btn.secondary{
+  background: #111827;
+}
+
+.input, select, .select{
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: white;
+}
+
+.input:focus, select:focus{
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 
 :root { --brand: #b90c2a; }
