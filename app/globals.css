@@ -2,54 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-/* THEME TOKENS – deine Farben + weiße Typo */
+/* THEME TOKENS – Deine Farben + weiße Typo im Hero */
 :root{
   --brand:  #ec0347;   /* Primär */
   --brand2: #ab0000;   /* Sekundär */
-  --bg:     #0a0a0a;   /* dunkler BG unter Hero für Kontrast */
-  --ink:    #0f172a;   /* Fließtext-Farbe (außer Hero) */
-  --muted:  #64748b;
-  --card:   #ffffff;
-  --ring:   rgba(236,3,71,.35);
+  --bg:     #0a0a0a;   /* optionaler dunkler BG unter Hero */
+  --ink:    #0f172a;   /* Standard-Textfarbe */
+  --muted:  #64748b;   /* Grauton für Untertexte */
+  --card:   #ffffff;   /* Kartenhintergrund */
+  --ring:   rgba(236,3,71,.35); /* Fokus-Ring */
 }
 
 html, body { height: 100%; background: #fff; color: var(--ink); }
 
-/* HERO: rot -> dunkelrot Verlauf, weiße Schrift */
+/* HERO: Verlauf (rot→dunkelrot) + weiße Schrift */
 .brand-hero{
   background: linear-gradient(135deg, var(--brand), var(--brand2));
   color: #fff;
 }
 
-/* Buttons & Cards – mobile freundlich */
-.btn{
-  @apply inline-flex items-center justify-center font-semibold rounded-xl px-4 py-2 transition;
-}
-.btn.primary{ background: #fff; color: var(--brand2); }
-.btn.primary:hover{ filter: brightness(0.95); }
-.btn.secondary{ background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.35); }
-.btn.secondary:hover{ background: rgba(255,255,255,.22); }
-
-.card{
-  @apply rounded-2xl border border-gray-200 p-5 bg-white shadow-sm;
-  transition: box-shadow .2s ease, transform .05s ease;
-}
-.card:hover{ box-shadow: 0 10px 28px rgba(0,0,0,.08); }
-
-.input, select{
-  @apply w-full border border-gray-200 rounded-xl p-3 bg-white;
-}
-.input:focus, select:focus{
-  outline: 3px solid var(--ring);
-  outline-offset: 2px;
-}
-
-/* Kleinzeug */
-.kicker{ letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
-.muted{ color: var(--muted); }
-.container{ max-width: 1100px; margin: 0 auto; }
-
-/* HERO mit Bild + rotem Overlay */
+/* Bild + Overlay im Hero (Datei liegt in /public/hero.jpg) */
 .hero-with-bg{
   background-image:
     linear-gradient(135deg, rgba(236,3,71,.88), rgba(171,0,0,.88)),
@@ -59,26 +31,41 @@ html, body { height: 100%; background: #fff; color: var(--ink); }
   background-repeat: no-repeat;
 }
 
-/* optional: etwas Mindesthöhe am Desktop */
-@media (min-width: 768px){
-  .hero-with-bg{ min-height: 340px; }
+/* Vollbild-Hero + iOS-Safe-Area */
+.hero-full{
+  min-height: 100vh;
+  min-height: 100dvh;   /* dynamische Viewport-Höhe auf mobilen Browsern */
+  display: flex;
+  align-items: center;  /* vertikal zentriert */
+}
+.safe-area{
+  padding-top: calc(24px + env(safe-area-inset-top));
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
 
-/* Pill-Grid: mittig und so breit wie der Inhalt */
-.pills{
-  display: grid;
-  gap: 14px;
-  justify-content: center;   /* Grid als Ganzes mittig */
-  justify-items: center;     /* jede Kachel mittig */
+/* Karten */
+.card{
+  @apply rounded-2xl border border-gray-200 p-5 bg-white shadow-sm;
+  transition: box-shadow .2s ease, transform .05s ease;
 }
+.card:hover{ box-shadow: 0 10px 28px rgba(0,0,0,.08); }
 
-@media (min-width: 640px){ .pills{ grid-template-columns: repeat(2, max-content); } }
-@media (min-width: 768px){ .pills{ grid-template-columns: repeat(4, max-content); } }
+/* Buttons (Basis) */
+.btn{
+  @apply inline-flex items-center justify-center font-semibold rounded-xl px-4 py-2 transition;
+  text-decoration: none; /* nie unterstrichen */
+}
+.btn.primary{ background: #fff; color: var(--brand2); }
+.btn.primary:hover{ filter: brightness(0.95); }
+.btn.secondary{
+  background: rgba(255,255,255,.14);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.35);
+}
+.btn.secondary:hover{ background: rgba(255,255,255,.22); }
+.btn:focus{ outline: 3px solid var(--ring); outline-offset: 2px; }
 
-/* Buttons: nie unterstrichen */
-.btn, .btn:link, .btn:visited{ text-decoration: none; }
-
-/* Pill-Look (lassen wir so, plus Sicherheit gegen Underline im Hover) */
+/* Pill-Buttons wie im Mock */
 .btn.pill{
   border-radius: 9999px;
   padding: 14px 22px;
@@ -87,13 +74,34 @@ html, body { height: 100%; background: #fff; color: var(--ink); }
   border: 1px solid rgba(255,255,255,.5);
   box-shadow: 0 10px 22px rgba(0,0,0,.25);
   text-align: center;
+  text-decoration: none;
 }
 .btn.pill:hover{
   transform: translateY(-1px);
   filter: brightness(1.05);
   text-decoration: none;
 }
-.safe-area{
-  padding-top: calc(24px + env(safe-area-inset-top));
-  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+
+/* Pill-Grid: exakt mittig und nur so breit wie der Inhalt */
+.pills{
+  display: grid;
+  gap: 14px;
+  justify-content: center;  /* Grid als Ganzes mittig */
+  justify-items: center;    /* jede Kachel mittig */
 }
+@media (min-width: 640px){ .pills{ grid-template-columns: repeat(2, max-content); } }
+@media (min-width: 768px){ .pills{ grid-template-columns: repeat(4, max-content); } }
+
+/* Inputs */
+.input, select{
+  @apply w-full border border-gray-200 rounded-xl p-3 bg-white;
+}
+.input:focus, select:focus{
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Typo-Helfer & Layout-Container */
+.kicker{ letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
+.muted{ color: var(--muted); }
+.container{ max-width: 1100px; margin: 0 auto; }
