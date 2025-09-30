@@ -11,13 +11,13 @@ export default async function Home() {
     .limit(6)
 
   return (
-    <main className="p-8 max-w-3xl mx-auto space-y-6">
+    <main className="p-8 max-w-4xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold">Playercard – MVP</h1>
 
       <div className="grid gap-3 md:grid-cols-2">
         <Link href="/projects/new" className="border rounded p-4 hover:bg-neutral-50">
           <div className="font-semibold mb-1">Projekt anlegen</div>
-          <div className="text-sm text-neutral-600">Neues Event starten (Name, Datum, Logo).</div>
+          <div className="text-sm text-neutral-600">Neues Event (Name, Datum, Logo).</div>
         </Link>
         <Link href="/projects" className="border rounded p-4 hover:bg-neutral-50">
           <div className="font-semibold mb-1">Bestehendes Projekt öffnen</div>
@@ -34,7 +34,10 @@ export default async function Home() {
                 <div className="font-medium">{p.name}</div>
                 <div className="text-sm text-neutral-600">{p.date}</div>
               </div>
-              <Link className="underline" href={`/projects/${p.id}`}>Öffnen</Link>
+              <div className="flex gap-3">
+                <Link className="underline" href={`/projects/${p.id}`}>Öffnen</Link>
+                <Link className="underline" href={`/leaderboard?project=${p.id}`}>Rangliste</Link>
+              </div>
             </div>
           ))}
           {(projects ?? []).length === 0 && (
