@@ -8,8 +8,8 @@ export default function Home() {
 
   return (
     <main>
-      <section className="brand-hero hero-with-bg">
-        <div className="container px-5 py-14 md:py-20">
+     <section className="brand-hero hero-with-bg hero-full safe-area">
+        <div className="container px-5">
           <div className="flex flex-col items-center text-center gap-10">
             <h1 className="text-5xl md:text-6xl font-extrabold tracking-wide uppercase drop-shadow">
               NEXT RUN
