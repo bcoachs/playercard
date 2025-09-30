@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const projectId = params.id
   const form = await req.formData()
+
   const payload = {
     project_id: projectId,
     display_name: String(form.get('display_name') || '').trim(),
