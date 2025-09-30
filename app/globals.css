@@ -96,3 +96,4 @@ html, body { height: 100%; background: #fff; color: var(--ink); }
 .safe-area{
   padding-top: calc(24px + env(safe-area-inset-top));
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
