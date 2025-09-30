@@ -1,14 +1,22 @@
-import './globals.css'
+// app/layout.tsx
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import './globals.css'
+
+const inter = Inter({ subsets: ['latin'], display: 'swap' })
 
 export const metadata: Metadata = {
-  title: 'Playercard MVP',
+  title: 'Soccer Club Playercard',
+  description: 'Projekt anlegen, Spieler erfassen, Stationen messen & Playercards generieren.',
+  themeColor: '#ec0347',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="de">
-      <body className="min-h-screen bg-neutral-50 text-neutral-900">{children}</body>
+      <body className={inter.className}>
+        {children}
+      </body>
     </html>
   )
 }
