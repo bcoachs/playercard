@@ -1,8 +1,13 @@
-export default function Leaderboard() {
+import { Suspense } from 'react'
+import LeaderboardClient from './Client'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+export default function Page() {
   return (
-    <main className="p-8">
-      <h1 className="text-xl font-bold mb-2">Rangliste</h1>
-      <p>Hier erscheint später die Rangliste.</p>
-    </main>
+    <Suspense fallback={<div className="p-8">Lade Rangliste…</div>}>
+      <LeaderboardClient />
+    </Suspense>
   )
 }
