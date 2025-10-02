@@ -15,33 +15,38 @@
 
 html, body { height: 100%; background: #fff; color: var(--ink); }
 
-/* HERO: Verlauf (rot→dunkelrot) + weiße Schrift */
-.brand-hero{
-  background: linear-gradient(135deg, var(--brand), var(--brand2));
-  color: #fff;
-}
-
-/* Bild + Overlay im Hero (Datei liegt in /public/hero.jpg) */
-.hero-with-bg{
-  background-image:
-    linear-gradient(135deg, rgba(236,3,71,.88), rgba(171,0,0,.88)),
-    url('/hero.jpg');
+/* Foto-Hero OHNE Overlay */
+.hero-photo{
+  background-image: url('/hero.jpg'); /* liegt in /public */
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  color: #fff; /* weißer Text auf Foto */
 }
 
-/* Vollbild-Hero + iOS-Safe-Area */
+/* Lesbarkeit von weißem Text auf Foto */
+.hero-text{
+  text-shadow: 0 2px 14px rgba(0,0,0,.35);
+}
+.hero-sub{
+  text-shadow: 0 1px 8px rgba(0,0,0,.30);
+  color: rgba(255,255,255,.92);
+}
+
+/* Vollbild + Safe-Area (hast du schon, zur Sicherheit hier nochmal) */
 .hero-full{
   min-height: 100vh;
-  min-height: 100dvh;   /* dynamische Viewport-Höhe auf mobilen Browsern */
+  min-height: 100dvh;
   display: flex;
-  align-items: center;  /* vertikal zentriert */
+  align-items: center;
 }
 .safe-area{
   padding-top: calc(24px + env(safe-area-inset-top));
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
+
+/* Buttons nie unterstrichen (falls noch nicht gesetzt) */
+a, .btn { text-decoration: none; }
 
 /* Karten */
 .card{
