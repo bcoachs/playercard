@@ -101,3 +101,6 @@ a, .btn { text-decoration: none; }
   min-height: 100dvh;  /* Dynamic Viewport Height */
 }
 
+/* Robuste Viewport-Höhe – optional (wird im Hero gesetzt) */
+:root { --vh: 1vh; }
+
