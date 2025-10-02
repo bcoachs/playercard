@@ -14,9 +14,9 @@ export default function Hero({
 }) {
   return (
     <section
-      className="relative" // wichtig: Referenz für absolute Mitte
+      className="relative" // Referenz für absolute Mitte
       style={{
-        minHeight: '100dvh',            // volle Höhe
+        minHeight: '100dvh',        // volle Höhe
         backgroundImage: `url('${image}')`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -24,7 +24,7 @@ export default function Hero({
         color: '#fff',
       }}
     >
-      {/* Logo oben rechts */}
+      {/* Logo oben rechts (optional) */}
       {topRightLogoUrl && (
         <img
           src={topRightLogoUrl}
@@ -33,18 +33,16 @@ export default function Hero({
         />
       )}
 
-      {/* >>> absolut & wirklich mittig über den ganzen Bildschirm <<< */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-full max-w-6xl px-5 text-center">
+      {/* >>> absolut & exakt MITTE/MITTE (viewport) <<< */}
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full px-5">
+        <div className="mx-auto max-w-6xl text-center">
           <h1 className="hero-text text-5xl md:text-6xl font-extrabold uppercase">
             {title}
           </h1>
           {subtitle && (
             <p className="hero-sub text-lg md:text-xl mt-2">{subtitle}</p>
           )}
-
-          {/* Buttons als Gruppe mittig */}
-          {children && <div className="mt-6 flex justify-center">{children}</div>}
+          {children && <div className="mt-6">{children}</div>}
         </div>
       </div>
     </section>
