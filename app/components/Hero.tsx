@@ -14,9 +14,10 @@ export default function Hero({
 }) {
   return (
     <section
-      className="relative" // Referenz für absolute Mitte
+      // Grid zentriert Inhalt horizontal UND vertikal über den gesamten Viewport
+      className="relative grid place-items-center"
       style={{
-        minHeight: '100dvh',        // volle Höhe
+        minHeight: '100dvh',                 // volle Höhe (dynamische Viewport-Höhe)
         backgroundImage: `url('${image}')`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -24,7 +25,7 @@ export default function Hero({
         color: '#fff',
       }}
     >
-      {/* Logo oben rechts (optional) */}
+      {/* Optionales Logo oben rechts */}
       {topRightLogoUrl && (
         <img
           src={topRightLogoUrl}
@@ -33,17 +34,19 @@ export default function Hero({
         />
       )}
 
-      {/* >>> absolut & exakt MITTE/MITTE (viewport) <<< */}
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full px-5">
-        <div className="mx-auto max-w-6xl text-center">
-          <h1 className="hero-text text-5xl md:text-6xl font-extrabold uppercase">
-            {title}
-          </h1>
-          {subtitle && (
-            <p className="hero-sub text-lg md:text-xl mt-2">{subtitle}</p>
-          )}
-          {children && <div className="mt-6">{children}</div>}
-        </div>
+      {/* Inhalt: exakt Mitte/Mitte, sauber begrenzt */}
+      <div className="w-full max-w-6xl px-5 text-center">
+        <h1 className="hero-text text-5xl md:text-6xl font-extrabold uppercase">
+          {title}
+        </h1>
+        {subtitle && (
+          <p className="hero-sub text-lg md:text-xl mt-2">{subtitle}</p>
+        )}
+        {children && (
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            {children}
+          </div>
+        )}
       </div>
     </section>
   )
