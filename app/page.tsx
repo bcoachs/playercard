@@ -5,7 +5,7 @@ import BackFab from './components/BackFab'
 export default function Home() {
   return (
     <main>
-      <Hero title="NEXT RUN" image="/hero.jpg">
+      <Hero title="PLAYERCARD" image="/hero.jpg">
         <div className="pills">
           <Link href="/projects/new" className="btn pill">NEUER RUN</Link>
           <Link href="/projects" className="btn pill">RUN LADEN</Link>
