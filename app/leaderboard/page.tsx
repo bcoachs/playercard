@@ -1,19 +1,9 @@
 'use client'
-
 import { useEffect, useState } from 'react'
 import Hero from '../components/Hero'
 
 type Project = { id: string; name: string }
-type Row = {
-  rank: number
-  playerId: string
-  name: string
-  club: string | null
-  pos: string | null
-  totalScore: number
-  projectId: string
-  projectName: string
-}
+type Row = { rank: number; playerId: string; name: string; club: string|null; pos: string|null; totalScore: number; projectId: string; projectName: string }
 
 export default function LeaderboardPage() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -21,40 +11,26 @@ export default function LeaderboardPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetch('/api/projects')
-      .then(r => r.json())
-      .then(res => setProjects(res.items ?? []))
-  }, [])
-
+  useEffect(() => { fetch('/api/projects').then(r=>r.json()).then(res => setProjects(res.items ?? [])) }, [])
   useEffect(() => {
     setLoading(true)
     const url = projectId ? `/api/leaderboard?project=${projectId}` : '/api/leaderboard'
-    fetch(url)
-      .then(r => r.json())
-      .then(res => setRows(res.items ?? []))
-      .finally(() => setLoading(false))
+    fetch(url).then(r=>r.json()).then(res => setRows(res.items ?? [])).finally(()=>setLoading(false))
   }, [projectId])
 
   return (
     <main>
-      <Hero
-        title="Rangliste"
-        subtitle={projectId ? 'Projekt-Rangliste' : 'Gesamtrangliste (alle Runs)'}
-        image="/leaderboard.jpg"          // <-- wichtig
-      />
-      <section className="p-5 max-w-5xl mx-auto">
-        <div className="card mb-4 grid gap-3 md:flex md:items-center md:justify-between">
-          <div>
-            <div className="text-sm text-gray-500">Ansicht</div>
-            <div className="font-medium">{projectId ? 'Projekt-Rangliste' : 'Gesamtrangliste'}</div>
-          </div>
-          <select className="input md:w-64" value={projectId} onChange={e=>setProjectId(e.target.value)}>
+      <Hero title="Rangliste" subtitle={projectId ? 'Projekt-Rangliste' : 'Gesamtrangliste (alle Runs)'} image="/leaderboard.jpg">
+        <div className="card glass w-full max-w-2xl mx-auto text-left">
+          <label className="block text-sm font-semibold mb-2">Projekt-Filter</label>
+          <select className="input" value={projectId} onChange={e=>setProjectId(e.target.value)}>
             <option value="">Alle Projekte</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
+      </Hero>
 
+      <section className="p-5 max-w-5xl mx-auto">
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
             <thead className="sticky top-0 bg-white">
