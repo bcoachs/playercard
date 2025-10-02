@@ -92,3 +92,12 @@ a, .btn { text-decoration: none; }
 /* Utilities */
 .muted{ color: var(--muted); }
 .container{ max-width: 1100px; margin: 0 auto; }
+
+/* Robuste Viewport-Höhe für alle Browser (iOS/Android/Desktop) */
+.vh {
+  min-height: 100vh;   /* Fallback */
+  min-height: 100svh;  /* Small Viewport Height (iOS) */
+  min-height: 100lvh;  /* Large  Viewport Height */
+  min-height: 100dvh;  /* Dynamic Viewport Height */
+}
+
