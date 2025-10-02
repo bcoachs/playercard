@@ -2,102 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
-/* THEME TOKENS – Deine Farben + weiße Typo im Hero */
+/* Theme Tokens */
 :root{
   --brand:  #ec0347;   /* Primär */
   --brand2: #ab0000;   /* Sekundär */
-  --bg:     #0a0a0a;   /* optionaler dunkler BG unter Hero */
-  --ink:    #0f172a;   /* Standard-Textfarbe */
-  --muted:  #64748b;   /* Grauton für Untertexte */
-  --card:   #ffffff;   /* Kartenhintergrund */
+  --ink:    #0f172a;   /* Standard-Text */
+  --muted:  #64748b;   /* Untertexte */
   --ring:   rgba(236,3,71,.35); /* Fokus-Ring */
 }
 
 html, body { height: 100%; background: #fff; color: var(--ink); }
 
-/* Foto-Hero OHNE Overlay */
-.hero-photo{
-  background-image: url('/hero.jpg'); /* liegt in /public */
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  color: #fff; /* weißer Text auf Foto */
-}
+/* Weißer Text mit dezentem Schatten auf Foto-Hintergründen */
+.hero-text{ text-shadow: 0 2px 14px rgba(0,0,0,.35); color:#fff; }
+.hero-sub { text-shadow: 0 1px 8px  rgba(0,0,0,.30); color:rgba(255,255,255,.92); }
 
-/* Lesbarkeit von weißem Text auf Foto */
-.hero-text{
-  text-shadow: 0 2px 14px rgba(0,0,0,.35);
-}
-.hero-sub{
-  text-shadow: 0 1px 8px rgba(0,0,0,.30);
-  color: rgba(255,255,255,.92);
-}
-
-/* Vollbild + Safe-Area (hast du schon, zur Sicherheit hier nochmal) */
+/* Vollbild-Hero + iOS Safe Area */
 .hero-full{
-  min-height: 100vh;
-  min-height: 100dvh;
+  min-height: 100vh;   /* Fallback */
+  min-height: 100dvh;  /* moderne Mobile-Browser */
   display: flex;
-  align-items: center;
+  align-items: center; /* vertikal zentriert */
 }
 .safe-area{
   padding-top: calc(24px + env(safe-area-inset-top));
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
 
-/* Buttons nie unterstrichen (falls noch nicht gesetzt) */
-a, .btn { text-decoration: none; }
-
-/* Karten */
+/* Cards & Inputs */
 .card{
   @apply rounded-2xl border border-gray-200 p-5 bg-white shadow-sm;
   transition: box-shadow .2s ease, transform .05s ease;
 }
 .card:hover{ box-shadow: 0 10px 28px rgba(0,0,0,.08); }
 
-/* Buttons (Basis) */
-.btn{
-  @apply inline-flex items-center justify-center font-semibold rounded-xl px-4 py-2 transition;
-  text-decoration: none; /* nie unterstrichen */
-}
-.btn.primary{ background: #fff; color: var(--brand2); }
-.btn.primary:hover{ filter: brightness(0.95); }
-.btn.secondary{
-  background: rgba(255,255,255,.14);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,.35);
-}
-.btn.secondary:hover{ background: rgba(255,255,255,.22); }
-.btn:focus{ outline: 3px solid var(--ring); outline-offset: 2px; }
-
-/* Pill-Buttons wie im Mock */
-.btn.pill{
-  border-radius: 9999px;
-  padding: 14px 22px;
-  background: linear-gradient(180deg, var(--brand), var(--brand2));
-  color: #fff;
-  border: 1px solid rgba(255,255,255,.5);
-  box-shadow: 0 10px 22px rgba(0,0,0,.25);
-  text-align: center;
-  text-decoration: none;
-}
-.btn.pill:hover{
-  transform: translateY(-1px);
-  filter: brightness(1.05);
-  text-decoration: none;
-}
-
-/* Pill-Grid: exakt mittig und nur so breit wie der Inhalt */
-.pills{
-  display: grid;
-  gap: 14px;
-  justify-content: center;  /* Grid als Ganzes mittig */
-  justify-items: center;    /* jede Kachel mittig */
-}
-@media (min-width: 640px){ .pills{ grid-template-columns: repeat(2, max-content); } }
-@media (min-width: 768px){ .pills{ grid-template-columns: repeat(4, max-content); } }
-
-/* Inputs */
 .input, select{
   @apply w-full border border-gray-200 rounded-xl p-3 bg-white;
 }
@@ -106,7 +44,50 @@ a, .btn { text-decoration: none; }
   outline-offset: 2px;
 }
 
-/* Typo-Helfer & Layout-Container */
-.kicker{ letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
+/* Buttons */
+a, .btn { text-decoration: none; }
+
+.btn{
+  @apply inline-flex items-center justify-center font-semibold rounded-xl px-4 py-2 transition;
+}
+
+.btn.pill{
+  border-radius: 9999px;
+  padding: 14px 22px;
+  background: linear-gradient(180deg, var(--brand), var(--brand2));
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.5);
+  box-shadow: 0 10px 22px rgba(0,0,0,.25);
+  text-align: center;
+}
+.btn.pill:hover{
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+/* Pill-Grid: exakt mittig & content-breit */
+.pills{
+  display: grid;
+  gap: 14px;
+  justify-content: center;  /* Grid mittig */
+  justify-items: center;    /* Items mittig */
+}
+@media (min-width: 640px){ .pills{ grid-template-columns: repeat(2, max-content); } }
+@media (min-width: 768px){ .pills{ grid-template-columns: repeat(4, max-content); } }
+
+/* Badges (Matrix) */
+.badge-green{
+  background:#16a34a;
+  color:#fff;
+  border-radius:9999px;
+  padding:.25rem .6rem;
+  font-weight:700;
+}
+.badge-red{
+  color:#dc2626;
+  font-weight:800;
+}
+
+/* Utilities */
 .muted{ color: var(--muted); }
 .container{ max-width: 1100px; margin: 0 auto; }
