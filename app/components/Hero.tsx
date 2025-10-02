@@ -1,4 +1,7 @@
-// app/components/Hero.tsx
+'use client'
+
+import { useEffect } from 'react'
+
 export default function Hero({
   title,
   subtitle,
@@ -12,11 +15,28 @@ export default function Hero({
   topRightLogoUrl?: string | null
   children?: React.ReactNode
 }) {
+  // 1% der aktuellen Viewport-Höhe als CSS-Variable --vh setzen
+  useEffect(() => {
+    const setVh = () => {
+      const vh = window.innerHeight * 0.01
+      document.documentElement.style.setProperty('--vh', `${vh}px`)
+    }
+    setVh()
+    window.addEventListener('resize', setVh)
+    window.addEventListener('orientationchange', setVh)
+    return () => {
+      window.removeEventListener('resize', setVh)
+      window.removeEventListener('orientationchange', setVh)
+    }
+  }, [])
+
   return (
     <section
-      // Grid zentriert Tracks (nicht nur Items) und füllt sicher den Viewport
-      className="relative grid vh place-content-center text-center"
+      // Grid: zentriert Tracks (vertikal + horizontal)
+      className="relative grid place-content-center text-center"
       style={{
+        // volle Höhe, robust auf allen Geräten
+        minHeight: 'calc(var(--vh, 1vh) * 100)',
         backgroundImage: `url('${image}')`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -24,7 +44,6 @@ export default function Hero({
         color: '#fff',
       }}
     >
-      {/* Optionales Logo oben rechts */}
       {topRightLogoUrl && (
         <img
           src={topRightLogoUrl}
@@ -33,14 +52,11 @@ export default function Hero({
         />
       )}
 
-      {/* Inhalt wirklich Mitte/Mitte */}
       <div className="w-full max-w-6xl px-5">
         <h1 className="hero-text text-5xl md:text-6xl font-extrabold uppercase">
           {title}
         </h1>
-        {subtitle && (
-          <p className="hero-sub text-lg md:text-xl mt-2">{subtitle}</p>
-        )}
+        {subtitle && <p className="hero-sub text-lg md:text-xl mt-2">{subtitle}</p>}
         {children && (
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             {children}
