@@ -20,10 +20,11 @@ html, body { height: 100%; background: #fff; color: var(--ink); }
 /* Vollbild-Hero + iOS Safe Area */
 .hero-full{
   min-height: 100vh;   /* Fallback */
-  min-height: 100dvh;  /* moderne Mobile-Browser */
-  display: flex;
-  align-items: center; /* vertikal zentriert */
+  min-height: 100svh;  /* iOS */
+  min-height: 100dvh;  /* moderne Browser */
+  position: relative;  /* falls du sie irgendwo weiter nutzt */
 }
+
 .safe-area{
   padding-top: calc(24px + env(safe-area-inset-top));
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
