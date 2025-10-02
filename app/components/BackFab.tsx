@@ -9,7 +9,9 @@ export default function BackFab({ fallback = '/' }: { fallback?: string }) {
         if (typeof window !== 'undefined' && window.history.length > 1) router.back()
         else router.push(fallback)
       }}
-      className="fixed bottom-4 right-4 btn pill z-50"
+      // Feste Position, unabhängig vom restlichen Layout
+      style={{ position: 'fixed', right: '16px', bottom: '16px', zIndex: 9999 }}
+      className="btn pill"
       aria-label="Zurück"
       title="Zurück"
     >
