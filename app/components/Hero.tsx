@@ -2,13 +2,13 @@
 export default function Hero({
   title,
   subtitle,
-  image,              // z.B. "/player.jpg"
-  topRightLogoUrl,    // optional: Projektwappen
+  image = '/hero.jpg',      // <-- Default-Bild
+  topRightLogoUrl,
   children,
 }: {
   title: string
   subtitle?: string
-  image: string
+  image?: string            // <-- optional gemacht
   topRightLogoUrl?: string | null
   children?: React.ReactNode
 }) {
