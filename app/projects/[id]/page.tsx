@@ -2,7 +2,7 @@ import Hero from '@/app/components/Hero'
 import BackFab from '@/app/components/BackFab'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import Link from 'next/link'
-import PlayerForm from './PlayerForm' // <-- neu: ausgelagerte Client-Komponente
+import PlayerForm from './PlayerForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,13 +13,6 @@ type Station = {
   min_value: number | null
   max_value: number | null
   higher_is_better: boolean | null
-}
-type Player = {
-  id: string
-  display_name: string
-  birth_year: number | null
-  club: string | null
-  fav_position: string | null
 }
 
 function clamp(n: number, lo: number, hi: number) {
@@ -83,24 +76,19 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         image="/player.jpg"
         topRightLogoUrl={project?.logo_url ?? undefined}
       >
-        <div className="pills">
-          <Link href={`/leaderboard?project=${projectId}`} className="btn pill">
-            Rangliste
-          </Link>
-          <Link href={`/projects/${projectId}/capture`} className="btn pill">
-            Capture
-          </Link>
+        {/* Buttons + Spieler-Formular liegen jetzt AUF dem Hintergrund */}
+        <div className="flex flex-col items-center gap-4 w-full">
+          <div className="pills">
+            <Link href={`/leaderboard?project=${projectId}`} className="btn pill">Rangliste</Link>
+            <Link href={`/projects/${projectId}/capture`} className="btn pill">Capture</Link>
+          </div>
+          <div className="card glass w-full max-w-2xl text-left">
+            <PlayerForm projectId={projectId} />
+          </div>
         </div>
       </Hero>
 
-      {/* Spieler anlegen */}
-      <section className="p-5 container">
-        <div className="card max-w-xl">
-          <PlayerForm projectId={projectId} />
-        </div>
-      </section>
-
-      {/* Matrix */}
+      {/* Matrix bleibt darunter (scrollbar) */}
       <section className="p-5 container">
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
@@ -108,9 +96,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
               <tr className="border-b">
                 <th className="text-left p-2">Spieler</th>
                 {stations?.map((s) => (
-                  <th key={s.id} className="text-center p-2">
-                    {s.name}
-                  </th>
+                  <th key={s.id} className="text-center p-2">{s.name}</th>
                 ))}
               </tr>
             </thead>
@@ -125,16 +111,11 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                     return (
                       <td key={st.id} className="p-2 text-center">
                         {cell ? (
-                          <span
-                            className="badge-green"
-                            title={`Rohwert: ${cell.raw}${st.unit ? ' ' + st.unit : ''}`}
-                          >
+                          <span className="badge-green" title={`Rohwert: ${cell.raw}${st.unit ? ' ' + st.unit : ''}`}>
                             {cell.norm}
                           </span>
                         ) : (
-                          <span className="badge-red" title="Noch nicht erfasst">
-                            ×
-                          </span>
+                          <span className="badge-red" title="Noch nicht erfasst">×</span>
                         )}
                       </td>
                     )
