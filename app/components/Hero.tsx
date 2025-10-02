@@ -14,10 +14,9 @@ export default function Hero({
 }) {
   return (
     <section
-      // Grid zentriert Inhalt horizontal UND vertikal über den gesamten Viewport
-      className="relative grid place-items-center"
+      // Grid zentriert Tracks (nicht nur Items) und füllt sicher den Viewport
+      className="relative grid vh place-content-center text-center"
       style={{
-        minHeight: '100dvh',                 // volle Höhe (dynamische Viewport-Höhe)
         backgroundImage: `url('${image}')`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -34,8 +33,8 @@ export default function Hero({
         />
       )}
 
-      {/* Inhalt: exakt Mitte/Mitte, sauber begrenzt */}
-      <div className="w-full max-w-6xl px-5 text-center">
+      {/* Inhalt wirklich Mitte/Mitte */}
+      <div className="w-full max-w-6xl px-5">
         <h1 className="hero-text text-5xl md:text-6xl font-extrabold uppercase">
           {title}
         </h1>
