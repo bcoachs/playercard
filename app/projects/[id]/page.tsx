@@ -25,7 +25,7 @@ function normScore(st: Station, raw: number): number {
   if (name.includes('schusskraft')) return clamp((Math.min(raw, 150) / 150) * 100, 0, 100)
   const minv = st.min_value ?? 0
   const maxv = st.max_value ?? 1
-  const hib = st.higher_is_better ?? true
+  const hib  = st.higher_is_better ?? true
   if (maxv === minv) return 0
   return hib
     ? clamp(((raw - minv) / (maxv - minv)) * 100, 0, 100)
@@ -38,20 +38,9 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const [{ data: project }, { data: stations }, { data: players }, { data: measurements }] =
     await Promise.all([
       supabaseAdmin.from('projects').select('id,name,date,logo_url').eq('id', projectId).single(),
-      supabaseAdmin
-        .from('stations')
-        .select('id,name,unit,min_value,max_value,higher_is_better')
-        .eq('project_id', projectId)
-        .order('name'),
-      supabaseAdmin
-        .from('players')
-        .select('id,display_name,birth_year,club,fav_position')
-        .eq('project_id', projectId)
-        .order('display_name'),
-      supabaseAdmin
-        .from('measurements')
-        .select('player_id,station_id,value')
-        .eq('project_id', projectId),
+      supabaseAdmin.from('stations').select('id,name,unit,min_value,max_value,higher_is_better').eq('project_id', projectId).order('name'),
+      supabaseAdmin.from('players').select('id,display_name,birth_year,club,fav_position').eq('project_id', projectId).order('display_name'),
+      supabaseAdmin.from('measurements').select('player_id,station_id,value').eq('project_id', projectId),
     ])
 
   const stById = new Map<string, Station>()
@@ -75,57 +64,63 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         subtitle={project?.date ?? ''}
         image="/player.jpg"
         topRightLogoUrl={project?.logo_url ?? undefined}
+        align="top"          // <— Inhalt oben starten (nicht mittig)
+        tileY                // <— Hintergrund kachelt vertikal
       >
-        {/* Buttons + Spieler-Formular liegen jetzt AUF dem Hintergrund */}
+        {/* Header-Buttons + Spieler-Form auf dem Hintergrund */}
         <div className="flex flex-col items-center gap-4 w-full">
           <div className="pills">
             <Link href={`/leaderboard?project=${projectId}`} className="btn pill">Rangliste</Link>
             <Link href={`/projects/${projectId}/capture`} className="btn pill">Capture</Link>
           </div>
+
           <div className="card glass w-full max-w-2xl text-left">
             <PlayerForm projectId={projectId} />
           </div>
+
+          {/* Matrix AUF dem Hintergrund, mit Luft unten */}
+          <div className="card glass w-full max-w-6xl text-left pb-8">
+            <div className="overflow-auto max-h-[60vh]">
+              <table className="min-w-full text-sm">
+                <thead className="sticky top-0 bg-white/90 backdrop-blur">
+                  <tr className="border-b">
+                    <th className="text-left p-2">Spieler</th>
+                    {stations?.map((s) => (
+                      <th key={s.id} className="text-center p-2">{s.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(players ?? []).map((pl) => (
+                    <tr key={pl.id} className="border-b">
+                      <td className="p-2 whitespace-nowrap font-medium">
+                        {pl.display_name} {pl.birth_year ? `(${pl.birth_year})` : ''}
+                      </td>
+                      {stations?.map((st) => {
+                        const cell = values[pl.id]?.[st.id]
+                        return (
+                          <td key={st.id} className="p-2 text-center">
+                            {cell ? (
+                              <span className="badge-green" title={`Rohwert: ${cell.raw}${st.unit ? ' ' + st.unit : ''}`}>
+                                {cell.norm}
+                              </span>
+                            ) : (
+                              <span className="badge-red" title="Noch nicht erfasst">×</span>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Extra-Luft unten */}
+          <div className="h-10" />
         </div>
       </Hero>
-
-      {/* Matrix bleibt darunter (scrollbar) */}
-      <section className="p-5 container">
-        <div className="overflow-auto">
-          <table className="min-w-full text-sm">
-            <thead className="sticky top-0 bg-white">
-              <tr className="border-b">
-                <th className="text-left p-2">Spieler</th>
-                {stations?.map((s) => (
-                  <th key={s.id} className="text-center p-2">{s.name}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(players ?? []).map((pl) => (
-                <tr key={pl.id} className="border-b">
-                  <td className="p-2 whitespace-nowrap font-medium">
-                    {pl.display_name} {pl.birth_year ? `(${pl.birth_year})` : ''}
-                  </td>
-                  {stations?.map((st) => {
-                    const cell = values[pl.id]?.[st.id]
-                    return (
-                      <td key={st.id} className="p-2 text-center">
-                        {cell ? (
-                          <span className="badge-green" title={`Rohwert: ${cell.raw}${st.unit ? ' ' + st.unit : ''}`}>
-                            {cell.norm}
-                          </span>
-                        ) : (
-                          <span className="badge-red" title="Noch nicht erfasst">×</span>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
       <BackFab />
     </main>
