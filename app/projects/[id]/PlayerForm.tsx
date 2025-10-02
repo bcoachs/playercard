@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 
 const POSITIONS = ['TS','IV','AV','ZM','OM','LOM','ROM','ST'] as const
 
-// EU + UK + USA + Afghanistan (ISO Code + Label)
 const COUNTRIES = [
   ['DE','Deutschland'],['AT','Österreich'],['CH','Schweiz'],
   ['BE','Belgien'],['BG','Bulgarien'],['CZ','Tschechien'],['DK','Dänemark'],
@@ -20,11 +19,13 @@ const COUNTRIES = [
 export default function PlayerForm({ projectId }: { projectId: string }) {
   const router = useRouter()
 
-  // Pflichtfelder
+  // Pflicht
   const [name, setName] = useState<string>('')
   const [year, setYear] = useState<number | ''>('')
 
   // Optional
+  const [club, setClub] = useState<string>('')             // <— Verein
+  const [favNumber, setFavNumber] = useState<number | ''>('') // <— Lieblingsnummer
   const [position, setPosition] = useState<string>('')
   const [nationality, setNationality] = useState<string>('')
   const [photo, setPhoto] = useState<File | null>(null)
@@ -40,30 +41,23 @@ export default function PlayerForm({ projectId }: { projectId: string }) {
     try {
       setSubmitting(true)
       const fd = new FormData()
-      fd.append('display_name', name.trim())           // <- WICHTIG: Name-Feld korrekt
+      fd.append('display_name', name.trim())
       fd.append('birth_year', String(year))
-      if (position)   fd.append('fav_position', position)
-      if (nationality)fd.append('nationality', nationality)
-      if (photo)      fd.append('photo', photo)        // optionales Foto
+      if (club)        fd.append('club', club)
+      if (favNumber)   fd.append('fav_number', String(favNumber))
+      if (position)    fd.append('fav_position', position)
+      if (nationality) fd.append('nationality', nationality)
+      if (photo)       fd.append('photo', photo)
 
-      const res = await fetch(`/api/projects/${projectId}/players`, {
-        method: 'POST',
-        body: fd,
-      })
-
+      const res  = await fetch(`/api/projects/${projectId}/players`, { method: 'POST', body: fd })
       const text = await res.text()
       if (!res.ok) {
         try { const j = JSON.parse(text); throw new Error(j?.error || 'Fehler') }
         catch { throw new Error(text || 'Fehler beim Speichern') }
       }
 
-      // Erfolg → Liste aktualisieren & Formular leeren
       router.refresh()
-      setName('')
-      setYear('')
-      setPosition('')
-      setNationality('')
-      setPhoto(null)
+      setName(''); setYear(''); setClub(''); setFavNumber(''); setPosition(''); setNationality(''); setPhoto(null)
     } catch (err: any) {
       alert(err.message || 'Unbekannter Fehler')
     } finally {
@@ -77,28 +71,26 @@ export default function PlayerForm({ projectId }: { projectId: string }) {
 
       <div>
         <label className="block text-sm font-semibold mb-1">Name *</label>
-        <input
-          className="input"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="z. B. Alex Mustermann"
-        />
+        <input className="input" required value={name} onChange={(e)=>setName(e.target.value)} placeholder="z. B. Alex Mustermann" />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-semibold mb-1">Jahrgang *</label>
-          <input
-            className="input"
-            type="number"
-            required
-            min={1950}
-            max={new Date().getFullYear()}
-            value={year}
-            onChange={(e) => setYear(e.target.value ? Number(e.target.value) : '')}
-            placeholder="z. B. 2010"
-          />
+          <input className="input" type="number" required min={1950} max={new Date().getFullYear()}
+                 value={year} onChange={(e)=>setYear(e.target.value ? Number(e.target.value) : '')} placeholder="z. B. 2010" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold mb-1">Verein (optional)</label>
+          <input className="input" value={club} onChange={(e)=>setClub(e.target.value)} placeholder="z. B. SV Nufringen" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-semibold mb-1">Lieblingsnummer (optional)</label>
+          <input className="input" type="number" min={0} max={999}
+                 value={favNumber} onChange={(e)=>setFavNumber(e.target.value ? Number(e.target.value) : '')} placeholder="z. B. 10" />
         </div>
         <div>
           <label className="block text-sm font-semibold mb-1">Position (optional)</label>
@@ -119,14 +111,8 @@ export default function PlayerForm({ projectId }: { projectId: string }) {
         </div>
         <div>
           <label className="block text-sm font-semibold mb-1">Foto (optional)</label>
-          <input
-            className="input"
-            type="file"
-            accept="image/*"
-            // Handy-Kamera öffnen bevorzugt:
-            capture="environment"
-            onChange={(e)=>setPhoto(e.target.files?.[0] ?? null)}
-          />
+          <input className="input" type="file" accept="image/*" capture="environment"
+                 onChange={(e)=>setPhoto(e.target.files?.[0] ?? null)} />
           <p className="muted text-xs mt-1">Tipp: Direkt mit der Handy-Kamera aufnehmen.</p>
         </div>
       </div>
