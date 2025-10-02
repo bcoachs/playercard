@@ -15,7 +15,6 @@ export default function BasePage() {
   const [projectId, setProjectId] = useState<string>('')
   const [stationId, setStationId] = useState<string>('')
 
-  // Projekte laden
   useEffect(() => {
     fetch('/api/projects')
       .then(r => r.json())
@@ -23,7 +22,6 @@ export default function BasePage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // Stationen laden, wenn Projekt gewählt
   useEffect(() => {
     setStations([]); setStationId('')
     if (!projectId) return
@@ -42,51 +40,51 @@ export default function BasePage() {
         title="Stations-Erfassung"
         subtitle="Projekt wählen → Station wählen → zur Eingabemaske"
         image="/base.jpg"
-      />
+      >
+        <div className="card glass w-full max-w-2xl mx-auto grid gap-4 text-left">
+          <div>
+            <label className="block text-sm font-semibold mb-2">Projekt</label>
+            <select
+              className="input"
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+            >
+              <option value="">{loading ? 'Lade…' : 'Bitte wählen'}</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name} – {p.date}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      <section className="p-5 max-w-2xl mx-auto grid gap-4">
-        <div className="card">
-          <label className="block text-sm font-semibold mb-2">Projekt</label>
-          <select
-            className="input"
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-          >
-            <option value="">{loading ? 'Lade…' : 'Bitte wählen'}</option>
-            {projects.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.name} – {p.date}
-              </option>
-            ))}
-          </select>
-        </div>
+          <div>
+            <label className="block text-sm font-semibold mb-2">Station</label>
+            <select
+              className="input"
+              value={stationId}
+              onChange={(e) => setStationId(e.target.value)}
+              disabled={!projectId}
+            >
+              <option value="">{projectId ? 'Bitte wählen' : 'Zuerst Projekt wählen'}</option>
+              {stations.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name}{s.unit ? ` (${s.unit})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div className="card">
-          <label className="block text-sm font-semibold mb-2">Station</label>
-          <select
-            className="input"
-            value={stationId}
-            onChange={(e) => setStationId(e.target.value)}
-            disabled={!projectId}
-          >
-            <option value="">{projectId ? 'Bitte wählen' : 'Zuerst Projekt wählen'}</option>
-            {stations.map(s => (
-              <option key={s.id} value={s.id}>
-                {s.name}{s.unit ? ` (${s.unit})` : ''}
-              </option>
-            ))}
-          </select>
+          <div className="text-center">
+            <Link
+              href={captureHref}
+              className={`btn pill ${projectId && stationId ? '' : 'pointer-events-none opacity-50'}`}
+            >
+              Zur Eingabemaske
+            </Link>
+          </div>
         </div>
-
-        <div className="text-center">
-          <Link
-            href={captureHref}
-            className={`btn pill ${projectId && stationId ? '' : 'pointer-events-none opacity-50'}`}
-          >
-            Zur Eingabemaske
-          </Link>
-        </div>
-      </section>
+      </Hero>
 
       <BackFab />
     </main>
