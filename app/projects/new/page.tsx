@@ -1,43 +1,56 @@
 'use client'
-
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Hero from '../../components/Hero'
+import BackFab from '../../components/BackFab'
 
-export default function NewProject() {
+export default function NewProjectPage() {
+  const [name, setName] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().slice(0,10))
+  const [logo, setLogo] = useState<File | null>(null)
+  const [submitting, setSubmitting] = useState(false)
   const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  async function onSubmit(formData: FormData) {
-    setLoading(true)
-    const res = await fetch('/api/projects', { method: 'POST', body: formData })
-    if (!res.ok) {
-      alert('Fehler beim Anlegen: ' + (await res.text()))
-      setLoading(false)
-      return
-    }
-    const { projectId } = await res.json()
-    router.push(`/leaderboard?project=${projectId}`)
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const fd = new FormData()
+    fd.append('name', name.trim())
+    fd.append('date', date)
+    if (logo) fd.append('logo', logo)
+    setSubmitting(true)
+    const res = await fetch('/api/projects', { method: 'POST', body: fd })
+    setSubmitting(false)
+    if (!res.ok) { alert('Fehler beim Anlegen'); return }
+    const json = await res.json()
+    router.push(`/projects/${json.project.id}`)
   }
 
-  const today = new Date().toISOString().slice(0,10)
-
   return (
-    <main className="p-8 max-w-xl mx-auto">
-      <h1 className="text-xl font-bold mb-4">Projekt anlegen</h1>
-      <form action={onSubmit} className="space-y-3">
-        <div>
-          <label className="block text-sm">Projektname</label>
-          <input name="name" required defaultValue="SV Nufringen – 30.09.2025" className="border p-2 w-full" />
-        </div>
-        <div>
-          <label className="block text-sm">Datum</label>
-          <input type="date" name="date" required defaultValue={today} className="border p-2 w-full" />
-        </div>
-        <div>
-          <label className="block text-sm">Vereinswappen (Logo)</label>
-          <input type="file" name="logo" accept="image/*" required className="border p-2 w-full" />
-        </div>
-        <button disabled={loading} className="bg-[var(--brand)] text-white px-4 py-2 rounded">{loading ? 'Anlegen…' : 'Projekt anlegen'}</button>
-      </form>
+    <main>
+      <Hero title="Neuer Run" subtitle="Name, Datum & Logo festlegen" image="/run.jpg" />
+
+      <section className="p-5 max-w-xl mx-auto">
+        <form onSubmit={onSubmit} className="grid gap-4 card">
+          <div>
+            <label className="block text-sm font-semibold mb-1">Run/Projekt-Name *</label>
+            <input className="input" value={name} onChange={(e)=>setName(e.target.value)} required placeholder="z. B. SV Nufringen – 30.09.2025" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1">Datum *</label>
+            <input type="date" className="input" value={date} onChange={(e)=>setDate(e.target.value)} required />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1">Vereinslogo (optional)</label>
+            <input type="file" accept="image/*" className="input" onChange={(e)=>setLogo(e.target.files?.[0] ?? null)} />
+            <p className="muted text-xs mt-1">PNG/SVG/JPG, wird oben rechts im Projekt angezeigt.</p>
+          </div>
+          <div className="flex justify-end">
+            <button className="btn pill" disabled={submitting}>{submitting ? 'Anlegen…' : 'Run anlegen'}</button>
+          </div>
+        </form>
+      </section>
+
+      <BackFab />
     </main>
   )
 }
