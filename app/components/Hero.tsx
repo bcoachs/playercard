@@ -15,7 +15,7 @@ export default function Hero({
   topRightLogoUrl?: string | null
   children?: React.ReactNode
 }) {
-  // 1% der aktuellen Viewport-Höhe als CSS-Variable --vh setzen
+  // Robuste Viewport-Höhe für Mobile (iOS/Android)
   useEffect(() => {
     const setVh = () => {
       const vh = window.innerHeight * 0.01
@@ -32,11 +32,16 @@ export default function Hero({
 
   return (
     <section
-      // Grid: zentriert Tracks (vertikal + horizontal)
-      className="relative grid place-content-center text-center"
+      className="relative text-center"
       style={{
-        // volle Höhe, robust auf allen Geräten
+        // Vollbild-Höhe, robust per --vh
         minHeight: 'calc(var(--vh, 1vh) * 100)',
+        // >>> HARTES CENTERING:
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+
+        // Hintergrund
         backgroundImage: `url('${image}')`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -44,6 +49,7 @@ export default function Hero({
         color: '#fff',
       }}
     >
+      {/* Optionales Vereinslogo oben rechts */}
       {topRightLogoUrl && (
         <img
           src={topRightLogoUrl}
@@ -52,11 +58,14 @@ export default function Hero({
         />
       )}
 
+      {/* Inhalt: steht durch das Flex-Centering MITTE/MITTE */}
       <div className="w-full max-w-6xl px-5">
         <h1 className="hero-text text-5xl md:text-6xl font-extrabold uppercase">
           {title}
         </h1>
-        {subtitle && <p className="hero-sub text-lg md:text-xl mt-2">{subtitle}</p>}
+        {subtitle && (
+          <p className="hero-sub text-lg md:text-xl mt-2">{subtitle}</p>
+        )}
         {children && (
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             {children}
