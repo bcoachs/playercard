@@ -20,11 +20,10 @@ html, body { height: 100%; background: #fff; color: var(--ink); }
 /* Vollbild-Hero + iOS Safe Area */
 .hero-full{
   min-height: 100vh;   /* Fallback */
-  min-height: 100svh;  /* iOS */
-  min-height: 100dvh;  /* moderne Browser */
-  position: relative;  /* falls du sie irgendwo weiter nutzt */
+  min-height: 100dvh;  /* moderne Mobile-Browser */
+  display: flex;
+  align-items: center; /* vertikal zentriert */
 }
-
 .safe-area{
   padding-top: calc(24px + env(safe-area-inset-top));
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
@@ -59,14 +58,6 @@ a, .btn { text-decoration: none; }
   color: #fff;
   border: 1px solid rgba(255,255,255,.5);
   box-shadow: 0 10px 22px rgba(0,0,0,.25);
-
-  /* Form-Karte gut lesbar auf Foto-Hintergrund */
-.glass{
-  background: rgba(255,255,255,.92);
-  backdrop-filter: saturate(140%) blur(10px);
-  border: 1px solid rgba(255,255,255,.4);
-}
-
   text-align: center;
 }
 .btn.pill:hover{
@@ -101,14 +92,5 @@ a, .btn { text-decoration: none; }
 .muted{ color: var(--muted); }
 .container{ max-width: 1100px; margin: 0 auto; }
 
-/* Robuste Viewport-Höhe für alle Browser (iOS/Android/Desktop) */
-.vh {
-  min-height: 100vh;   /* Fallback */
-  min-height: 100svh;  /* Small Viewport Height (iOS) */
-  min-height: 100lvh;  /* Large  Viewport Height */
-  min-height: 100dvh;  /* Dynamic Viewport Height */
-}
-
-/* Robuste Viewport-Höhe – optional (wird im Hero gesetzt) */
-:root { --vh: 1vh; }
-
+/* --- NEU: mehr Luft am Seitenende für Tabellen/Listen --- */
+.page-pad{ padding-bottom: 6rem; }
