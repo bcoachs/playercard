@@ -55,7 +55,7 @@ async function loadS6Map(gender: 'male' | 'female'): Promise<Record<string, numb
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
   if (lines.length < 2) throw new Error('CSV leer/ungültig')
 
-  // Semikolon-getrennt: Kopf = Altersbuckets
+  // Semikolon-getrennt
   const header = lines[0].split(';').map(s => s.trim())
   const ageCols = header.slice(1)
 
@@ -68,7 +68,7 @@ async function loadS6Map(gender: 'male' | 'female'): Promise<Record<string, numb
       const age = ageCols[c - 1]
       const sec = Number((cols[c] || '').replace(',', '.'))
       if (!Number.isFinite(sec)) continue
-      out[age].push(sec) // Reihenfolge: Index 0 = 100 Punkte, …, Index 100 = 0 Punkte
+      out[age].push(sec) // Index 0 = 100 Punkte, …, Index 100 = 0 Punkte
     }
   }
   return out
@@ -105,6 +105,63 @@ function normScore(st: Station, raw: number): number {
   } else {
     return Math.round(clamp((max - raw) / (max - min), 0, 1) * 100)
   }
+}
+
+/* ------- Inputs: commit erst bei Enter/Blur ------- */
+function NumberCommitInput({
+  label, value, min, max, onCommit
+}: { label: string; value: number; min: number; max: number; onCommit: (n: number) => void }) {
+  const [tmp, setTmp] = useState<string>(String(value ?? 0))
+  useEffect(() => { setTmp(String(value ?? 0)) }, [value])
+
+  function commit() {
+    const v = tmp === '' ? 0 : Math.max(min, Math.min(max, Math.round(Number(tmp))))
+    onCommit(Number.isFinite(v) ? v : 0)
+  }
+
+  return (
+    <div>
+      <label className="block text-xs font-semibold mb-1">{label}</label>
+      <input
+        className="input"
+        type="number"
+        min={min}
+        max={max}
+        value={tmp}
+        onChange={e => setTmp(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') { commit(); (e.target as HTMLInputElement).blur() } }}
+      />
+    </div>
+  )
+}
+
+function DecimalCommitInput({
+  label, value, placeholder, onCommit
+}: { label: string; value: number; placeholder?: string; onCommit: (n: number) => void }) {
+  const [tmp, setTmp] = useState<string>(value === 0 || value ? String(value) : '')
+  useEffect(() => { setTmp(value === 0 || value ? String(value) : '') }, [value])
+
+  function commit() {
+    const normalized = tmp.replace(',', '.')
+    const n = Number(normalized)
+    onCommit(Number.isFinite(n) ? n : 0)
+  }
+
+  return (
+    <div>
+      <label className="block text-xs font-semibold mb-1">{label}</label>
+      <input
+        className="input"
+        inputMode="decimal"
+        value={tmp}
+        placeholder={placeholder || 'Wert'}
+        onChange={e => setTmp(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') { commit(); (e.target as HTMLInputElement).blur() } }}
+      />
+    </div>
+  )
 }
 
 export default function CaptureClient() {
@@ -184,7 +241,7 @@ export default function CaptureClient() {
   function scoreFor(st: Station, p: Player, raw: number): number {
     const n = st.name.toLowerCase()
 
-    // S6: CSV-Tabellen (male/female), Fallback auf 4–20 s Normierung
+    // S6
     if (n.includes('schnelligkeit')) {
       const age = resolveAge(p.birth_year)
       const map = p.gender === 'male' ? s6Male : s6Female
@@ -199,12 +256,12 @@ export default function CaptureClient() {
       return normScore({ ...st, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
     }
 
-    // S3/S5: Rohwert IST bereits 0..100 skaliert → direkt clampen (kein DB-Min/Max!)
+    // S3/S5 sind schon 0..100
     if (n.includes('passgenauigkeit') || n.includes('schusspräzision')) {
       return Math.round(clamp(Number(raw), 0, 100))
     }
 
-    // alle anderen Stationen: DB-Min/Max
+    // Rest: DB-Min/Max
     return Math.round(normScore(st, Number(raw)))
   }
 
@@ -270,24 +327,6 @@ export default function CaptureClient() {
     )
   }
 
-  function NumberInput({ label, value, min, max, onChange }: {
-    label: string; value: number; min: number; max: number; onChange: (n: number) => void
-  }) {
-    return (
-      <div>
-        <label className="block text-xs font-semibold mb-1">{label}</label>
-        <input
-          className="input"
-          type="number"
-          min={min}
-          max={max}
-          value={value}
-          onChange={e => onChange(e.target.value === '' ? 0 : Math.max(min, Math.min(max, Number(e.target.value))))}
-        />
-      </div>
-    )
-  }
-
   function PlayerRow({ p }: { p: Player }) {
     const st = currentStation!; const n = st.name.toLowerCase()
     const v = values[p.id] || {}; let raw = 0; let inputs: React.ReactNode = null
@@ -297,9 +336,12 @@ export default function CaptureClient() {
       raw = h10 * 11 + h14 * 17 + h18 * 33
       inputs = (
         <div className="grid grid-cols-3 gap-2">
-          <NumberInput label="10 m (0–3)" value={h10} min={0} max={3} onChange={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h10: x } }))} />
-          <NumberInput label="14 m (0–2)" value={h14} min={0} max={2} onChange={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h14: x } }))} />
-          <NumberInput label="18 m (0–1)" value={h18} min={0} max={1} onChange={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h18: x } }))} />
+          <NumberCommitInput label="10 m (0–3)" value={h10} min={0} max={3}
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h10: x } }))} />
+          <NumberCommitInput label="14 m (0–2)" value={h14} min={0} max={2}
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h14: x } }))} />
+          <NumberCommitInput label="18 m (0–1)" value={h18} min={0} max={1}
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h18: x } }))} />
         </div>
       )
     } else if (n.includes('schusspräzision')) {
@@ -307,29 +349,29 @@ export default function CaptureClient() {
       raw = (ul + ur) * 3 + (ll + lr) * 1
       inputs = (
         <div className="grid grid-cols-4 gap-2">
-          <NumberInput label="oben L (0–3)" value={ul} min={0} max={3} onChange={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ul: x } }))} />
-          <NumberInput label="oben R (0–3)" value={ur} min={0} max={3} onChange={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ur: x } }))} />
-          <NumberInput label="unten L (0–3)" value={ll} min={0} max={3} onChange={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ll: x } }))} />
-          <NumberInput label="unten R (0–3)" value={lr} min={0} max={3} onChange={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], lr: x } }))} />
+          <NumberCommitInput label="oben L (0–3)" value={ul} min={0} max={3}
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ul: x } }))} />
+          <NumberCommitInput label="oben R (0–3)" value={ur} min={0} max={3}
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ur: x } }))} />
+          <NumberCommitInput label="unten L (0–3)" value={ll} min={0} max={3}
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ll: x } }))} />
+          <NumberCommitInput label="unten R (0–3)" value={lr} min={0} max={3}
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], lr: x } }))} />
         </div>
       )
     } else {
-      const val = v.value ?? ''
+      const val = typeof v.value === 'number' ? v.value : 0
+      raw = Number(val || 0)
       inputs = (
         <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-xs font-semibold mb-1">Messwert {st.unit ? `(${st.unit})` : ''}</label>
-            <input
-              className="input"
-              inputMode="decimal"
-              value={val}
-              onChange={e => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: e.target.value } }))}
-              placeholder={st.unit || 'Wert'}
-            />
-          </div>
+          <DecimalCommitInput
+            label={`Messwert ${st.unit ? `(${st.unit})` : ''}`}
+            value={val}
+            placeholder={st.unit || 'Wert'}
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: x } }))}
+          />
         </div>
       )
-      raw = Number(val || 0)
     }
 
     const score = scoreFor(st, p, raw)
@@ -390,7 +432,7 @@ export default function CaptureClient() {
       </Hero>
 
       {/* Matrix-Bereich – mit zusätzlichem Abstand unten */}
-      <section className="p-5 max-w-5xl mx-auto pb-24">
+      <section className="p-5 max-w-5xl mx-auto page-pad">
         {!projectId && (
           <div className="card mb-4">
             <div className="font-semibold">Hinweis</div>
@@ -409,7 +451,7 @@ export default function CaptureClient() {
           <div className="card">
             <div className="mb-3">
               <div className="text-lg font-semibold">{currentStation?.name || 'Station'}</div>
-              <div className="text-sm muted">Bitte Messwerte eintragen. Punkte werden live berechnet und die Liste nach Punktzahl sortiert.</div>
+              <div className="text-sm muted">Bitte Messwerte eintragen. Punkte werden nach Enter/Blur berechnet; Liste sortiert automatisch nach Punktzahl.</div>
             </div>
 
             <div className="overflow-x-auto">
