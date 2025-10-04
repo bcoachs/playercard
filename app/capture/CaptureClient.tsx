@@ -1,3 +1,4 @@
+// app/capture/CaptureClient.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -47,9 +48,9 @@ const ST_INDEX: Record<string, number> = {
 const ST_DESCR: Record<string, string> = {
   Beweglichkeit: '5-10-5 Lauf (Sekunden). Range 10–40s, weniger ist besser.',
   Technik: 'Parcours (Sekunden). Range 20–90s, weniger ist besser.',
-  Passgenauigkeit: '30 Sek., 3×10m, 2×14m, 1×18m (Gewichte 1/2/3 → max 10).',
+  Passgenauigkeit: '6 Pässe: 3×10m à 11, 2×14m à 17, 1×18m à 33 → max 100.',
   Schusskraft: 'km/h; Cap 150 km/h = 100 Punkte.',
-  Schusspräzision: 'Ecken: oben 3 Pt/Treffer, unten 1 Pt/Treffer. Max 24.',
+  Schusspräzision: 'Ecken: oben 3 Pt/Treffer, unten 1 Pt/Treffer. Max 24 = 100.',
   Schnelligkeit: '30-m Sprint (Sekunden). Schneller = mehr Punkte.',
 }
 
@@ -57,7 +58,7 @@ const ST_DESCR: Record<string, string> = {
 function clamp(n: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, n)) }
 function normScore(st: Station, raw: number): number {
   const n = st.name.toLowerCase()
-  if (n.includes('passgenauigkeit')) return clamp((raw / 10) * 100, 0, 100)
+  if (n.includes('passgenauigkeit')) return clamp((raw / 100) * 100, 0, 100) // hier S3 nur als Fallback
   if (n.includes('schusspräzision')) return clamp((raw / 24) * 100, 0, 100)
   if (n.includes('schusskraft'))     return clamp((Math.min(raw, 150) / 150) * 100, 0, 100)
   const minv = st.min_value ?? 0, maxv = st.max_value ?? 1, hib = st.higher_is_better ?? true
@@ -88,7 +89,7 @@ function buildScoreMap(items: ScoreRow[]): ScoreMap {
   for (const k of Object.keys(map) as AgeBucket[]){ map[k]!.sort((a,b)=> b.points - a.points) }
   return map as ScoreMap
 }
-/** piecewise linear interpolation between descending points rows */
+/** lineare Interpolation zwischen absteigenden Punkte-Stützpunkten */
 function scoreFromTime(timeSec: number, rows: ScoreRow[]): number {
   if (!rows.length) return 0
   const r100 = rows.find(r=>r.points===100) || rows[0]
@@ -128,6 +129,11 @@ export default function CaptureClient(){
   const [scoreMapS2, setScoreMapS2] = useState<ScoreMap|null>(null)
   const [scoreMapFemale, setScoreMapFemale] = useState<ScoreMap|null>(null)
   const [scoreMapMale,   setScoreMapMale]   = useState<ScoreMap|null>(null)
+
+  // Flags für CSV-Fehler (für Textbox)
+  const [csvWarnS1, setCsvWarnS1] = useState(false)
+  const [csvWarnS2, setCsvWarnS2] = useState(false)
+  const [csvWarnS6, setCsvWarnS6] = useState(false)
 
   // Projekte laden (wenn keine Vorauswahl)
   useEffect(()=>{ if (projectId) return
@@ -169,30 +175,45 @@ export default function CaptureClient(){
 
     const name = (st.name || '').toLowerCase()
 
-    // S1/S2: altersabhängige Zeit-CSV global
+    // Reset CSV Flags
+    setCsvWarnS1(false); setCsvWarnS2(false); setCsvWarnS6(false)
+
+    // S1/S2 global
     if (name.includes('beweglichkeit')) {
       fetch(`/api/scoremaps?station=S1`)
-        .then(r=>r.json()).then(res=> setScoreMapS1(buildScoreMap((res.items||[]) as ScoreRow[])))
-        .catch(()=> setScoreMapS1(null))
+        .then(r=>r.json())
+        .then(res=>{
+          if (!res.items?.length) { setScoreMapS1(null); setCsvWarnS1(true) }
+          else { setScoreMapS1(buildScoreMap(res.items as ScoreRow[])) }
+        })
+        .catch(()=> { setScoreMapS1(null); setCsvWarnS1(true) })
       setScoreMapS2(null); setScoreMapFemale(null); setScoreMapMale(null)
       return
     }
     if (name.includes('technik')) {
       fetch(`/api/scoremaps?station=S2`)
-        .then(r=>r.json()).then(res=> setScoreMapS2(buildScoreMap((res.items||[]) as ScoreRow[])))
-        .catch(()=> setScoreMapS2(null))
+        .then(r=>r.json())
+        .then(res=>{
+          if (!res.items?.length) { setScoreMapS2(null); setCsvWarnS2(true) }
+          else { setScoreMapS2(buildScoreMap(res.items as ScoreRow[])) }
+        })
+        .catch(()=> { setScoreMapS2(null); setCsvWarnS2(true) })
       setScoreMapS1(null); setScoreMapFemale(null); setScoreMapMale(null)
       return
     }
 
-    // S6: global + gender
+    // S6 global + gender
     if (name.includes('schnelligkeit')) {
-      fetch(`/api/scoremaps?station=S6&gender=female`)
-        .then(r=>r.json()).then(res=> setScoreMapFemale(buildScoreMap((res.items||[]) as ScoreRow[])))
-        .catch(()=> setScoreMapFemale(null))
-      fetch(`/api/scoremaps?station=S6&gender=male`)
-        .then(r=>r.json()).then(res=> setScoreMapMale(buildScoreMap((res.items||[]) as ScoreRow[])))
-        .catch(()=> setScoreMapMale(null))
+      Promise.all([
+        fetch(`/api/scoremaps?station=S6&gender=female`).then(r=>r.json()).catch(()=>({items:[]})),
+        fetch(`/api/scoremaps?station=S6&gender=male`).then(r=>r.json()).catch(()=>({items:[]})),
+      ]).then(([fRes, mRes])=>{
+        const fOk = !!fRes.items?.length
+        const mOk = !!mRes.items?.length
+        setScoreMapFemale(fOk ? buildScoreMap(fRes.items as ScoreRow[]) : null)
+        setScoreMapMale(mOk ? buildScoreMap(mRes.items as ScoreRow[]) : null)
+        if (!fOk && !mOk) setCsvWarnS6(true)
+      }).catch(()=> setCsvWarnS6(true))
       setScoreMapS1(null); setScoreMapS2(null)
       return
     }
@@ -203,7 +224,7 @@ export default function CaptureClient(){
 
   const currentStation = useMemo(()=> stations.find(s=>s.id===selected), [stations, selected])
 
-  /* UI Basics */
+  /* UI: Projektauswahl */
   function ProjectsSelect(){
     if (qProject) return null
     return (
@@ -250,40 +271,41 @@ export default function CaptureClient(){
     return Math.max(6, Math.min(49, eventYear - by))
   }
 
+  // Rohwert je Station berechnen (für Formeln)
   function resolveRaw(st: Station, v: any){
     const n = st.name.toLowerCase()
     if (!v) return 0
-    if (n.includes('passgenauigkeit')) return (v.h10||0)*1 + (v.h14||0)*2 + (v.h18||0)*3
-    if (n.includes('schusspräzision')) return (v.ul||0 + v.ur||0)*3 + (v.ll||0 + v.lr||0)*1
+    if (n.includes('passgenauigkeit')) {
+      // NEU: 10m:11, 14m:17, 18m:33 → max 100
+      return (v.h10||0)*11 + (v.h14||0)*17 + (v.h18||0)*33
+    }
+    if (n.includes('schusspräzision')) {
+      return (v.ul||0 + v.ur||0)*3 + (v.ll||0 + v.lr||0)*1
+    }
     return Number(v.value||0)
   }
 
-  function scoreFromCsv(map: ScoreMap|null, rawTimeSec: number, age: number){
-    if (!map) return null
-    const bucket = nearestAgeBucket(age)
-    const rows = map[bucket] || []
-    if (!rows.length) return null
-    return scoreFromTime(Number(rawTimeSec), rows)
-  }
-
+  // CSV-gestützter Score (S1/S2/S6) oder Formel-Fallback
   function scoreFor(st: Station, p: Player, raw: number): number{
     const name = st.name.toLowerCase()
     const age = resolveAge(p.birth_year)
 
-    // CSV-gesteuerte
     if (name.includes('beweglichkeit')) {
-      const s = scoreFromCsv(scoreMapS1, raw, age)
-      if (s !== null) return s
-      // Fallback: norm via min/max
+      const bucket = nearestAgeBucket(age)
+      const rows = scoreMapS1 ? (scoreMapS1[bucket] || []) : []
+      if (rows.length) return scoreFromTime(Number(raw), rows)
+      // sonst Fallback unten
     }
     if (name.includes('technik')) {
-      const s = scoreFromCsv(scoreMapS2, raw, age)
-      if (s !== null) return s
+      const bucket = nearestAgeBucket(age)
+      const rows = scoreMapS2 ? (scoreMapS2[bucket] || []) : []
+      if (rows.length) return scoreFromTime(Number(raw), rows)
     }
     if (name.includes('schnelligkeit')) {
+      const bucket = nearestAgeBucket(age)
       const map = (p.gender==='male' ? scoreMapMale : scoreMapFemale) || scoreMapFemale || scoreMapMale
-      const s = scoreFromCsv(map||null, raw, age)
-      if (s !== null) return s
+      const rows = map ? (map[bucket] || []) : []
+      if (rows.length) return scoreFromTime(Number(raw), rows)
     }
 
     // Formelbasiert (S3, S5, S4 & Fallbacks)
@@ -307,7 +329,8 @@ export default function CaptureClient(){
     const v = values[p.id] || {}; let raw = 0; let inputs: React.ReactNode = null
 
     if (n.includes('passgenauigkeit')){
-      const h10=v.h10??0, h14=v.h14??0, h18=v.h18??0; raw = h10*1+h14*2+h18*3
+      const h10=v.h10??0, h14=v.h14??0, h18=v.h18??0
+      raw = h10*11 + h14*17 + h18*33
       inputs = (
         <div className="grid grid-cols-3 gap-2">
           <NumberInput label="10 m (0–3)" value={h10} min={0} max={3} onChange={x=>setValues(prev=>({...prev,[p.id]:{...prev[p.id],h10:x}}))}/>
@@ -369,9 +392,15 @@ export default function CaptureClient(){
     )
   }
 
-  const currentStation = useMemo(()=> stations.find(s=>s.id===selected), [stations,selected])
-  const currentIndex = currentStation ? (ST_INDEX[currentStation.name] ?? 1) : 1
+  const currentIndex = useMemo(()=>{
+    const st = currentStation
+    return st ? (ST_INDEX[st.name] ?? 1) : 1
+  },[currentStation])
   const sketchHref = `/station${currentIndex}.pdf`
+
+  const isS1 = currentStation?.name.includes('Beweglichkeit') ?? false
+  const isS2 = currentStation?.name.includes('Technik') ?? false
+  const isS6 = currentStation?.name.includes('Schnelligkeit') ?? false
 
   return (
     <main>
@@ -384,6 +413,24 @@ export default function CaptureClient(){
               <div className="card glass text-left md:col-span-2">
                 <h3 className="font-semibold text-lg">{currentStation.name}</h3>
                 <p className="text-sm mt-1">{ST_DESCR[currentStation.name]||'Stationsbeschreibung'}</p>
+
+                {/* CSV Warnboxen */}
+                {(csvWarnS1 && isS1) && (
+                  <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3">
+                    ⚠️ Scoremap (CSV) für <b>Beweglichkeit (S1)</b> nicht gefunden – Formel-Fallback aktiv.
+                  </div>
+                )}
+                {(csvWarnS2 && isS2) && (
+                  <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3">
+                    ⚠️ Scoremap (CSV) für <b>Technik (S2)</b> nicht gefunden – Formel-Fallback aktiv.
+                  </div>
+                )}
+                {(csvWarnS6 && isS6) && (
+                  <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3">
+                    ⚠️ Scoremap (CSV) für <b>Schnelligkeit (S6)</b> nicht gefunden – Formel-Fallback aktiv.
+                  </div>
+                )}
+
                 <div className="mt-3 flex gap-2">
                   <Link href={sketchHref} target="_blank" className="btn pill">Skizze öffnen</Link>
                   <button className="btn pill pointer-events-none opacity-60" title="Später editierbar">Skizze/Text bearbeiten</button>
