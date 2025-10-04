@@ -36,7 +36,6 @@ const ST_ORDER = [
   'Schnelligkeit',
 ]
 
-// Fallback-Sortierung
 function stationSort(a: Station, b: Station) {
   const ia = ST_ORDER.indexOf(a.name)
   const ib = ST_ORDER.indexOf(b.name)
@@ -46,21 +45,18 @@ function stationSort(a: Station, b: Station) {
   return a.name.localeCompare(b.name, 'de')
 }
 
-/* ---------- CSV-Lader für S6 (global in /config/) ---------- */
+/* ---------- CSV-Lader für S6 (global in /public/config/) ---------- */
 async function loadS6Map(gender: 'male' | 'female'): Promise<Record<string, number[]>> {
-  // Erwartet /config/s6_female.csv oder /config/s6_male.csv (öffentlich serviert)
   const file = gender === 'male' ? '/config/s6_male.csv' : '/config/s6_female.csv'
   const res = await fetch(file, { cache: 'no-store' })
   if (!res.ok) throw new Error(`CSV nicht gefunden: ${file}`)
   const text = await res.text()
 
-  // CSV-Format: Kopfzeile mit Alters-Spalten, darunter Zeilen "Punkte", Werte = Sekunden
-  // Wir konvertieren in: { "6-7": [secs bei 100..0], "8-9": [...], ... }
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
   if (lines.length < 2) throw new Error('CSV leer/ungültig')
 
+  // Semikolon-getrennt: Kopf = Altersbuckets
   const header = lines[0].split(';').map(s => s.trim())
-  // header[0] ist "Punkte/Alter", rest sind Alters-Buckets
   const ageCols = header.slice(1)
 
   const out: Record<string, number[]> = {}
@@ -68,20 +64,17 @@ async function loadS6Map(gender: 'male' | 'female'): Promise<Record<string, numb
 
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(';').map(s => s.trim())
-    // cols[0] wäre Punkte (100..0), aber wir verwenden die Reihenfolge als Index
     for (let c = 1; c < cols.length; c++) {
       const age = ageCols[c - 1]
       const sec = Number((cols[c] || '').replace(',', '.'))
       if (!Number.isFinite(sec)) continue
-      out[age].push(sec)
+      out[age].push(sec) // Reihenfolge: Index 0 = 100 Punkte, …, Index 100 = 0 Punkte
     }
   }
   return out
 }
 
-// Den passenden Altersbucket zur Zahl finden (6..49)
 function nearestAgeBucket(age: number, keys: string[]): string {
-  // keys sind z. B. ["6 bis 7","8 bis 9",...], wir nehmen den Mittelwert je Bucket
   const parsed = keys.map(k => {
     const nums = k.match(/\d+/g)?.map(n => Number(n)) || []
     const mid = nums.length === 2 ? (nums[0] + nums[1]) / 2 : (nums[0] || 0)
@@ -91,10 +84,7 @@ function nearestAgeBucket(age: number, keys: string[]): string {
   return parsed[0]?.key || keys[0]
 }
 
-// Sekunden → Score (Index der Zeile entspricht 100..0)
 function scoreFromTime(seconds: number, rows: number[]): number {
-  // rows[0] = Zeit für 100 Punkte, rows[1] = 99, ..., rows[100] = 0
-  // wir suchen den nächsten Wert und geben den Score zurück
   let bestIdx = 100
   let bestDiff = Infinity
   for (let i = 0; i < rows.length; i++) {
@@ -105,7 +95,6 @@ function scoreFromTime(seconds: number, rows: number[]): number {
   return Math.max(0, Math.min(100, score))
 }
 
-/* ---------- Normierung (0..100) für Stationen ohne CSV ---------- */
 function clamp(n: number, min: number, max: number) { return Math.max(min, Math.min(max, n)) }
 function normScore(st: Station, raw: number): number {
   const min = st.min_value ?? 0
@@ -133,67 +122,49 @@ export default function CaptureClient() {
   const [players, setPlayers] = useState<Player[]>([])
   const [selected, setSelected] = useState<string>(qStation)
 
-  const [values, setValues] = useState<Record<string, any>>({}) // pro playerId Eingaben
-  const [saved, setSaved] = useState<Record<string, number>>({}) // pro playerId zuletzt gespeicherter raw
+  const [values, setValues] = useState<Record<string, any>>({})
+  const [saved, setSaved] = useState<Record<string, number>>({})
 
-  // CSV-Maps für S6
+  // CSV-Maps für S6 + Status
   const [s6Female, setS6Female] = useState<Record<string, number[]> | null>(null)
   const [s6Male, setS6Male] = useState<Record<string, number[]> | null>(null)
+  const [csvStatus, setCsvStatus] = useState<{ female: 'ok' | 'fail' | 'loading'; male: 'ok' | 'fail' | 'loading' }>({ female: 'loading', male: 'loading' })
 
-  // Projekte laden (für Dropdown)
   useEffect(() => {
-    fetch('/api/projects')
-      .then(r => r.json())
-      .then(res => setProjects(res.items || []))
-      .catch(() => setProjects([]))
+    fetch('/api/projects').then(r => r.json()).then(res => setProjects(res.items || [])).catch(() => setProjects([]))
   }, [])
 
-  // Sobald projectId gesetzt ist → Projekt, Stationen, Spieler laden
   useEffect(() => {
     if (!projectId) return
-    setStations([])
-    setPlayers([])
-    setProject(null)
+    setStations([]); setPlayers([]); setProject(null)
 
-    // Projekt
-    fetch(`/api/projects/${projectId}`)
-      .then(r => r.json())
-      .then(res => setProject(res.item || null))
-      .catch(() => setProject(null))
+    fetch(`/api/projects/${projectId}`).then(r => r.json()).then(res => setProject(res.item || null)).catch(() => setProject(null))
 
-    // Stationen
-    fetch(`/api/projects/${projectId}/stations`)
-      .then(r => r.json())
-      .then(res => {
-        const st: Station[] = (res.items ?? []).slice().sort(stationSort)
-        setStations(st)
-        // initiale Station: URL > erste Station
-        const fromUrl = sp.get('station')
-        if (fromUrl && st.find(s => s.id === fromUrl)) {
-          setSelected(fromUrl)
-        } else if (st[0]) {
-          setSelected(st[0].id)
-          router.replace(`?project=${projectId}&station=${st[0].id}`)
-        }
-      })
+    fetch(`/api/projects/${projectId}/stations`).then(r => r.json()).then(res => {
+      const st: Station[] = (res.items ?? []).slice().sort(stationSort)
+      setStations(st)
+      const fromUrl = sp.get('station')
+      if (fromUrl && st.find(s => s.id === fromUrl)) {
+        setSelected(fromUrl)
+      } else if (st[0]) {
+        setSelected(st[0].id)
+        router.replace(`?project=${projectId}&station=${st[0].id}`)
+      }
+    })
 
-    // Spieler
-    fetch(`/api/projects/${projectId}/players`)
-      .then(r => r.json())
-      .then(res => setPlayers(res.items || []))
-      .catch(() => setPlayers([]))
+    fetch(`/api/projects/${projectId}/players`).then(r => r.json()).then(res => setPlayers(res.items || [])).catch(() => setPlayers([]))
   }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // CSVs einmalig (global)
   useEffect(() => {
-    loadS6Map('female').then(setS6Female).catch(() => setS6Female(null))
-    loadS6Map('male').then(setS6Male).catch(() => setS6Male(null))
+    setCsvStatus(s => ({ ...s, female: 'loading' }))
+    loadS6Map('female').then(map => { setS6Female(map); setCsvStatus(s => ({ ...s, female: 'ok' })) })
+                       .catch(() => setCsvStatus(s => ({ ...s, female: 'fail' })))
+    setCsvStatus(s => ({ ...s, male: 'loading' }))
+    loadS6Map('male').then(map => { setS6Male(map); setCsvStatus(s => ({ ...s, male: 'ok' })) })
+                     .catch(() => setCsvStatus(s => ({ ...s, male: 'fail' })))
   }, [])
 
-  const currentStation = useMemo(
-    () => stations.find(s => s.id === selected) || null,
-    [stations, selected]
-  )
+  const currentStation = useMemo(() => stations.find(s => s.id === selected) || null, [stations, selected])
 
   /* -------- Score-/Raw-Helfer -------- */
   function resolveAge(by: number | null): number {
@@ -211,8 +182,10 @@ export default function CaptureClient() {
   }
 
   function scoreFor(st: Station, p: Player, raw: number): number {
-    const isS6 = st.name.toLowerCase().includes('schnelligkeit')
-    if (isS6) {
+    const n = st.name.toLowerCase()
+
+    // S6: CSV-Tabellen (male/female), Fallback auf 4–20 s Normierung
+    if (n.includes('schnelligkeit')) {
       const age = resolveAge(p.birth_year)
       const map = p.gender === 'male' ? s6Male : s6Female
       if (map) {
@@ -223,13 +196,15 @@ export default function CaptureClient() {
           if (rows.length) return scoreFromTime(Number(raw), rows)
         }
       }
-      // Fallback, falls CSV fehlt
-      return normScore(
-        { ...st, min_value: 4, max_value: 20, higher_is_better: false },
-        Number(raw)
-      )
+      return normScore({ ...st, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
     }
-    // S3 & S5 sind bereits als „raw“ gewichtet → clamp auf 0..100
+
+    // S3/S5: Rohwert IST bereits 0..100 skaliert → direkt clampen (kein DB-Min/Max!)
+    if (n.includes('passgenauigkeit') || n.includes('schusspräzision')) {
+      return Math.round(clamp(Number(raw), 0, 100))
+    }
+
+    // alle anderen Stationen: DB-Min/Max
     return Math.round(normScore(st, Number(raw)))
   }
 
@@ -239,8 +214,7 @@ export default function CaptureClient() {
     setPlayers(prev => {
       const arr = [...prev]
       arr.sort((a, b) => {
-        const va = values[a.id]
-        const vb = values[b.id]
+        const va = values[a.id], vb = values[b.id]
         const sa = scoreFor(st, a, resolveRaw(st, va))
         const sb = scoreFor(st, b, resolveRaw(st, vb))
         return sb - sa
@@ -260,18 +234,14 @@ export default function CaptureClient() {
           value={projectId}
           onChange={e => {
             const id = e.target.value
-            setProjectId(id)
-            setSelected('')
-            setValues({})
-            setSaved({})
+            setProjectId(id); setSelected(''); setValues({}); setSaved({})
             if (id) router.replace(`?project=${id}`)
           }}
         >
           <option value="">{projects.length ? 'Bitte wählen' : 'Lade…'}</option>
           {projects.map(p => (
             <option key={p.id} value={p.id}>
-              {p.name}
-              {p.date ? ` – ${p.date}` : ''}
+              {p.name}{p.date ? ` – ${p.date}` : ''}
             </option>
           ))}
         </select>
@@ -300,18 +270,8 @@ export default function CaptureClient() {
     )
   }
 
-  function NumberInput({
-    label,
-    value,
-    min,
-    max,
-    onChange,
-  }: {
-    label: string
-    value: number
-    min: number
-    max: number
-    onChange: (n: number) => void
+  function NumberInput({ label, value, min, max, onChange }: {
+    label: string; value: number; min: number; max: number; onChange: (n: number) => void
   }) {
     return (
       <div>
@@ -329,16 +289,11 @@ export default function CaptureClient() {
   }
 
   function PlayerRow({ p }: { p: Player }) {
-    const st = currentStation!
-    const n = st.name.toLowerCase()
-    const v = values[p.id] || {}
-    let raw = 0
-    let inputs: React.ReactNode = null
+    const st = currentStation!; const n = st.name.toLowerCase()
+    const v = values[p.id] || {}; let raw = 0; let inputs: React.ReactNode = null
 
     if (n.includes('passgenauigkeit')) {
-      const h10 = v.h10 ?? 0,
-        h14 = v.h14 ?? 0,
-        h18 = v.h18 ?? 0
+      const h10 = v.h10 ?? 0, h14 = v.h14 ?? 0, h18 = v.h18 ?? 0
       raw = h10 * 11 + h14 * 17 + h18 * 33
       inputs = (
         <div className="grid grid-cols-3 gap-2">
@@ -348,10 +303,7 @@ export default function CaptureClient() {
         </div>
       )
     } else if (n.includes('schusspräzision')) {
-      const ul = v.ul ?? 0,
-        ur = v.ur ?? 0,
-        ll = v.ll ?? 0,
-        lr = v.lr ?? 0
+      const ul = v.ul ?? 0, ur = v.ur ?? 0, ll = v.ll ?? 0, lr = v.lr ?? 0
       raw = (ul + ur) * 3 + (ll + lr) * 1
       inputs = (
         <div className="grid grid-cols-4 gap-2">
@@ -366,9 +318,7 @@ export default function CaptureClient() {
       inputs = (
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="block text-xs font-semibold mb-1">
-              Messwert {st.unit ? `(${st.unit})` : ''}
-            </label>
+            <label className="block text-xs font-semibold mb-1">Messwert {st.unit ? `(${st.unit})` : ''}</label>
             <input
               className="input"
               inputMode="decimal"
@@ -391,10 +341,7 @@ export default function CaptureClient() {
       body.append('value', String(raw))
       const res = await fetch(`/api/projects/${projectId}/measurements`, { method: 'POST', body })
       const txt = await res.text()
-      if (!res.ok) {
-        alert(txt || 'Fehler beim Speichern')
-        return
-      }
+      if (!res.ok) { alert(txt || 'Fehler beim Speichern'); return }
       setSaved(prev => ({ ...prev, [p.id]: Number(raw) }))
       sortPlayersByScore()
     }
@@ -403,50 +350,47 @@ export default function CaptureClient() {
       <tr className="border-b align-top">
         <td className="p-2 whitespace-nowrap font-medium">
           {p.display_name} {p.birth_year ? `(${p.birth_year})` : ''}
-          <br />
-          <span className="text-xs muted">
-            {p.gender ? (p.gender === 'male' ? 'männlich' : 'weiblich') : '—'} • {p.club || '–'}{' '}
-            {p.fav_position ? `• ${p.fav_position}` : ''}
+          <br /><span className="text-xs muted">
+            {p.gender ? (p.gender === 'male' ? 'männlich' : 'weiblich') : '—'} • {p.club || '–'} {p.fav_position ? `• ${p.fav_position}` : ''}
           </span>
         </td>
         <td className="p-2">{inputs}</td>
-        <td className="p-2 text-center">
-          <span className="badge-green">{score}</span>
-        </td>
-        <td className="p-2 text-right">
-          <button className="btn pill" onClick={saveOne}>
-            Speichern
-          </button>
-        </td>
+        <td className="p-2 text-center"><span className="badge-green">{score}</span></td>
+        <td className="p-2 text-right"><button className="btn pill" onClick={saveOne}>Speichern</button></td>
       </tr>
     )
   }
 
-  // Station-Index für Skizzen (1..6)
   const currentIndex = currentStation ? Math.max(1, ST_ORDER.indexOf(currentStation.name) + 1) : 1
   const sketchHref = `/station${currentIndex}.pdf`
 
   return (
     <main>
       <Hero title="Stationseingabe" subtitle={project ? project.name : 'Projekt wählen'} image="/base.jpg">
-        {/* Projekt-Auswahl falls nicht per URL gesetzt */}
         <ProjectsSelect />
-        {/* Buttons erscheinen, sobald Stationen geladen sind */}
-        <div className="mt-4">
-          <StationButtons />
+        <div className="mt-4"><StationButtons /></div>
+
+        {/* CSV-Statuszeile für S6 */}
+        <div className="mt-3 text-sm hero-sub">
+          <span className="mr-3">S6-Tabellen:</span>
+          <span className={csvStatus.female === 'ok' ? 'text-green-200' : csvStatus.female === 'fail' ? 'text-red-200' : 'text-yellow-200'}>
+            weiblich {csvStatus.female === 'ok' ? '✅' : csvStatus.female === 'fail' ? '❌' : '…'}
+          </span>
+          <span className="mx-2">|</span>
+          <span className={csvStatus.male === 'ok' ? 'text-green-200' : csvStatus.male === 'fail' ? 'text-red-200' : 'text-yellow-200'}>
+            männlich {csvStatus.male === 'ok' ? '✅' : csvStatus.male === 'fail' ? '❌' : '…'}
+          </span>
         </div>
-        {/* Hinweis/Skizze-Button */}
+
         {!!currentStation && (
           <div className="mt-3">
-            <a className="btn pill" href={sketchHref} target="_blank" rel="noreferrer">
-              Stationsskizze öffnen
-            </a>
+            <a className="btn pill" href={sketchHref} target="_blank" rel="noreferrer">Stationsskizze öffnen</a>
           </div>
         )}
       </Hero>
 
-      {/* Matrix-Bereich */}
-      <section className="p-5 max-w-5xl mx-auto">
+      {/* Matrix-Bereich – mit zusätzlichem Abstand unten */}
+      <section className="p-5 max-w-5xl mx-auto pb-24">
         {!projectId && (
           <div className="card mb-4">
             <div className="font-semibold">Hinweis</div>
@@ -457,9 +401,7 @@ export default function CaptureClient() {
         {projectId && !stations.length && (
           <div className="card mb-4">
             <div className="font-semibold">Keine Stationen gefunden</div>
-            <div className="text-sm muted">
-              Für dieses Projekt sind keine Stationen angelegt. Lege einen neuen Run an oder prüfe die DB.
-            </div>
+            <div className="text-sm muted">Für dieses Projekt sind keine Stationen angelegt. Lege einen neuen Run an oder prüfe die DB.</div>
           </div>
         )}
 
@@ -467,9 +409,7 @@ export default function CaptureClient() {
           <div className="card">
             <div className="mb-3">
               <div className="text-lg font-semibold">{currentStation?.name || 'Station'}</div>
-              <div className="text-sm muted">
-                Bitte Messwerte eintragen. Punkte werden live berechnet und die Liste nach Punktzahl sortiert.
-              </div>
+              <div className="text-sm muted">Bitte Messwerte eintragen. Punkte werden live berechnet und die Liste nach Punktzahl sortiert.</div>
             </div>
 
             <div className="overflow-x-auto">
@@ -483,14 +423,10 @@ export default function CaptureClient() {
                   </tr>
                 </thead>
                 <tbody>
-                  {players.map(p => (
-                    <PlayerRow key={p.id} p={p} />
-                  ))}
+                  {players.map(p => <PlayerRow key={p.id} p={p} />)}
                   {!players.length && (
                     <tr>
-                      <td colSpan={4} className="p-3 text-center muted">
-                        Noch keine Spieler in diesem Projekt.
-                      </td>
+                      <td colSpan={4} className="p-3 text-center muted">Noch keine Spieler in diesem Projekt.</td>
                     </tr>
                   )}
                 </tbody>
