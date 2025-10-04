@@ -1,126 +1,200 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
-const POSITIONS = ['TS','IV','AV','ZM','OM','LOM','ROM','ST'] as const
-
-const COUNTRIES = [
-  ['DE','Deutschland'],['AT','Österreich'],['CH','Schweiz'],
-  ['BE','Belgien'],['BG','Bulgarien'],['CZ','Tschechien'],['DK','Dänemark'],
-  ['EE','Estland'],['ES','Spanien'],['FI','Finnland'],['FR','Frankreich'],
-  ['GR','Griechenland'],['HR','Kroatien'],['HU','Ungarn'],['IE','Irland'],
-  ['IT','Italien'],['LT','Litauen'],['LU','Luxemburg'],['LV','Lettland'],
-  ['MT','Malta'],['NL','Niederlande'],['PL','Polen'],['PT','Portugal'],
-  ['RO','Rumänien'],['SE','Schweden'],['SI','Slowenien'],['SK','Slowakei'],
-  ['GB','Vereinigtes Königreich'],['US','USA'],['AF','Afghanistan'],
-]
+const POSITIONS = ['TS', 'IV', 'AV', 'ZM', 'OM', 'LOM', 'ROM', 'ST'] as const
 
 export default function PlayerForm({ projectId }: { projectId: string }) {
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
 
   // Pflicht
-  const [name, setName] = useState<string>('')
-  const [year, setYear] = useState<number | ''>('')
+  const [displayName, setDisplayName] = useState('')
+  const [birthYear, setBirthYear] = useState<number | ''>('')
 
   // Optional
-  const [club, setClub] = useState<string>('')             // <— Verein
-  const [favNumber, setFavNumber] = useState<number | ''>('') // <— Lieblingsnummer
-  const [position, setPosition] = useState<string>('')
-  const [nationality, setNationality] = useState<string>('')
+  const [club, setClub] = useState('')
+  const [favNumber, setFavNumber] = useState<number | ''>('')
+  const [favPosition, setFavPosition] = useState<string>('')
+  const [nationality, setNationality] = useState('')
+  const [gender, setGender] = useState<'male' | 'female' | ''>('') // neu
   const [photo, setPhoto] = useState<File | null>(null)
 
-  const [submitting, setSubmitting] = useState(false)
+  const currentYear = new Date().getFullYear()
+  const minYear = 1950
+  const maxYear = currentYear
 
-  async function submit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim() || !year) {
-      alert('Bitte Name und Jahrgang ausfüllen.')
+    if (!displayName.trim()) {
+      alert('Name fehlt')
       return
     }
-    try {
-      setSubmitting(true)
-      const fd = new FormData()
-      fd.append('display_name', name.trim())
-      fd.append('birth_year', String(year))
-      if (club)        fd.append('club', club)
-      if (favNumber)   fd.append('fav_number', String(favNumber))
-      if (position)    fd.append('fav_position', position)
-      if (nationality) fd.append('nationality', nationality)
-      if (photo)       fd.append('photo', photo)
-
-      const res  = await fetch(`/api/projects/${projectId}/players`, { method: 'POST', body: fd })
-      const text = await res.text()
-      if (!res.ok) {
-        try { const j = JSON.parse(text); throw new Error(j?.error || 'Fehler') }
-        catch { throw new Error(text || 'Fehler beim Speichern') }
-      }
-
-      router.refresh()
-      setName(''); setYear(''); setClub(''); setFavNumber(''); setPosition(''); setNationality(''); setPhoto(null)
-    } catch (err: any) {
-      alert(err.message || 'Unbekannter Fehler')
-    } finally {
-      setSubmitting(false)
+    if (!birthYear) {
+      alert('Jahrgang fehlt')
+      return
     }
+    // Build FormData
+    const fd = new FormData()
+    fd.append('display_name', displayName.trim())
+    fd.append('birth_year', String(birthYear))
+    if (club) fd.append('club', club)
+    if (favNumber !== '' && !Number.isNaN(favNumber)) fd.append('fav_number', String(favNumber))
+    if (favPosition) fd.append('fav_position', favPosition)
+    if (nationality) fd.append('nationality', nationality)
+    if (gender) fd.append('gender', gender) // neu
+    if (photo) fd.append('photo', photo)
+
+    const res = await fetch(`/api/projects/${projectId}/players`, {
+      method: 'POST',
+      body: fd,
+    })
+    const txt = await res.text()
+    if (!res.ok) {
+      alert(txt || 'Fehler beim Speichern')
+      return
+    }
+
+    // Reset + neu laden
+    setDisplayName('')
+    setBirthYear('')
+    setClub('')
+    setFavNumber('')
+    setFavPosition('')
+    setNationality('')
+    setGender('')
+    setPhoto(null)
+
+    startTransition(() => router.refresh())
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-3">
-      <h3 className="font-semibold text-lg">Spieler anlegen</h3>
+    <form onSubmit={onSubmit} className="grid gap-4">
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Name (Pflicht) */}
+        <div>
+          <label className="block text-sm font-semibold mb-1">Spielername *</label>
+          <input
+            className="input"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="z. B. Alex Beispiel"
+            required
+          />
+        </div>
 
-      <div>
-        <label className="block text-sm font-semibold mb-1">Name *</label>
-        <input className="input" required value={name} onChange={(e)=>setName(e.target.value)} placeholder="z. B. Alex Mustermann" />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
+        {/* Jahrgang (Pflicht) */}
         <div>
           <label className="block text-sm font-semibold mb-1">Jahrgang *</label>
-          <input className="input" type="number" required min={1950} max={new Date().getFullYear()}
-                 value={year} onChange={(e)=>setYear(e.target.value ? Number(e.target.value) : '')} placeholder="z. B. 2010" />
+          <input
+            className="input"
+            type="number"
+            min={minYear}
+            max={maxYear}
+            value={birthYear}
+            onChange={(e) => {
+              const v = e.target.value === '' ? '' : Number(e.target.value)
+              setBirthYear(v)
+            }}
+            placeholder={`${currentYear - 16}`}
+            required
+          />
         </div>
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-4">
+        {/* Verein (optional) */}
         <div>
           <label className="block text-sm font-semibold mb-1">Verein (optional)</label>
-          <input className="input" value={club} onChange={(e)=>setClub(e.target.value)} placeholder="z. B. SV Nufringen" />
+          <input
+            className="input"
+            value={club}
+            onChange={(e) => setClub(e.target.value)}
+            placeholder="z. B. SV Nufringen"
+          />
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-3">
+        {/* Lieblingsnummer (optional, nur Zahl) */}
         <div>
           <label className="block text-sm font-semibold mb-1">Lieblingsnummer (optional)</label>
-          <input className="input" type="number" min={0} max={999}
-                 value={favNumber} onChange={(e)=>setFavNumber(e.target.value ? Number(e.target.value) : '')} placeholder="z. B. 10" />
+          <input
+            className="input"
+            type="number"
+            min={0}
+            max={999}
+            value={favNumber}
+            onChange={(e) => {
+              const v = e.target.value === '' ? '' : Number(e.target.value)
+              setFavNumber(v)
+            }}
+            placeholder="z. B. 10"
+          />
         </div>
+
+        {/* Position (optional) */}
         <div>
-          <label className="block text-sm font-semibold mb-1">Position (optional)</label>
-          <select className="input" value={position} onChange={(e)=>setPosition(e.target.value)}>
-            <option value="">Bitte wählen</option>
-            {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+          <label className="block text-sm font-semibold mb-1">Lieblingsposition (optional)</label>
+          <select
+            className="input"
+            value={favPosition}
+            onChange={(e) => setFavPosition(e.target.value)}
+          >
+            <option value="">– bitte wählen –</option>
+            {POSITIONS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid md:grid-cols-3 gap-4">
+        {/* Nationalität (optional) – freie Eingabe (Dropdown später) */}
         <div>
           <label className="block text-sm font-semibold mb-1">Nationalität (optional)</label>
-          <select className="input" value={nationality} onChange={(e)=>setNationality(e.target.value)}>
-            <option value="">Bitte wählen</option>
-            {COUNTRIES.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+          <input
+            className="input"
+            value={nationality}
+            onChange={(e) => setNationality(e.target.value)}
+            placeholder="z. B. DE"
+          />
+        </div>
+
+        {/* Gender (optional, aber empfohlen für S6 CSV-Auswahl) */}
+        <div>
+          <label className="block text-sm font-semibold mb-1">Geschlecht (für S6 Score-Tabelle)</label>
+          <select
+            className="input"
+            value={gender}
+            onChange={(e) => setGender(e.target.value as 'male' | 'female' | '')}
+          >
+            <option value="">– nicht angegeben –</option>
+            <option value="male">männlich</option>
+            <option value="female">weiblich</option>
           </select>
         </div>
+
+        {/* Foto (optional) */}
         <div>
           <label className="block text-sm font-semibold mb-1">Foto (optional)</label>
-          <input className="input" type="file" accept="image/*" capture="environment"
-                 onChange={(e)=>setPhoto(e.target.files?.[0] ?? null)} />
-          <p className="muted text-xs mt-1">Tipp: Direkt mit der Handy-Kamera aufnehmen.</p>
+          <input
+            className="input"
+            type="file"
+            accept="image/*"
+            onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+          />
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <button className="btn pill" disabled={submitting}>
-          {submitting ? 'Speichern…' : 'Spieler speichern'}
+      <div className="flex items-center gap-3">
+        <button className="btn pill" type="submit" disabled={isPending}>
+          {isPending ? 'Speichere…' : 'Spieler anlegen'}
         </button>
+        <span className="text-sm muted">
+          Pflichtfelder: <strong>Name</strong> & <strong>Jahrgang</strong>. Alle anderen Angaben optional.
+        </span>
       </div>
     </form>
   )
