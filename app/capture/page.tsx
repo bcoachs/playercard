@@ -25,7 +25,13 @@ type Player = {
   fav_position: string | null
 }
 
+/** Anzeige-Reihenfolge der Stationsnamen */
 const ST_ORDER = ['Beweglichkeit','Technik','Passgenauigkeit','Schusskraft','Schusspräzision','Schnelligkeit'] as const
+/** Typ-sichere, performante Lookup-Tabelle für die Sortierung */
+const ORDER_INDEX: Record<string, number> = Object.fromEntries(
+  (ST_ORDER as readonly string[]).map((n, i) => [n, i])
+)
+
 const ST_DESCR: Record<string,string> = {
   'Beweglichkeit': '5-10-5 Lauf (Zeit in Sekunden). Range 10–40s, weniger ist besser.',
   'Technik': 'Dribbling/Parcours (Zeit in Sekunden). Range 20–90s, weniger ist besser.',
@@ -85,7 +91,8 @@ export default function CapturePage(){
       fetch(`/api/projects/${projectId}/players`).then(r=>r.json()),
     ]).then(([stRes, plRes])=>{
       const st: Station[] = (stRes.items ?? [])
-        .sort((a:Station,b:Station)=> ST_ORDER.indexOf(a.name) - ST_ORDER.indexOf(b.name))
+        // >>> FIX: Sortierung über ORDER_INDEX statt indexOf(string-union)
+        .sort((a:Station,b:Station)=> (ORDER_INDEX[a.name] ?? 999) - (ORDER_INDEX[b.name] ?? 999))
       setStations(st)
       setPlayers(plRes.items ?? [])
       // initial station wählen: aus URL ?station=… oder erste
@@ -115,7 +122,6 @@ export default function CapturePage(){
 
   const currentStation = useMemo<Station|undefined>(() => stations.find(s=>s.id===selected), [stations, selected])
 
-  // --- UI-Teile ---
   function ProjectsSelect(){
     if (qProject) return null // vorausgewählt → kein Dropdown
     return (
@@ -276,14 +282,12 @@ export default function CapturePage(){
     return Number(v.value||0)
   }
 
-  // Pfad für die Stations-Skizze (6 einzelne Platzhalter)
-  const sketchHref = currentStation
-    ? `/station${ST_INDEX[currentStation.name] ?? 1}.pdf`
-    : '/station1.pdf'
+  const currentSketch = currentStation ? (ST_INDEX[currentStation.name] ?? 1) : 1
+  const sketchHref = `/station${currentSketch}.pdf`
 
   return (
     <main>
-      {/* Kopf: Base-Hintergrund, Projekt wählen (falls nicht vorgegeben), Station wählen */}
+      {/* Kopf: Base-Hintergrund */}
       <Hero title="Stations-Erfassung" subtitle="Projekt wählen → Station wählen → Werte erfassen" image="/base.jpg" align="top">
         <div className="flex flex-col items-center gap-4 w-full">
           <ProjectsSelect />
@@ -311,7 +315,7 @@ export default function CapturePage(){
         </div>
       </Hero>
 
-      {/* Matrix/Liste: gleicher (kachelnder) Matrix-Hintergrund */}
+      {/* Matrix/Liste: kachelnder Hintergrund */}
       {projectId && currentStation && (
         <TiledSection image="/matrix.jpg">
           <div className="card glass w-full">
