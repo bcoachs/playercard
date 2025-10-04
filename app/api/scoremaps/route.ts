@@ -2,16 +2,16 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-// CSV -> JSON Parser (einfach)
+/** Simple CSV→JSON parser (comma, dot-decimals) */
 function parseCsv(text: string){
   const lines = text.trim().split(/\r?\n/)
-  const [h, ...rows] = lines
-  const headers = h.split(',').map(s=>s.trim())
-  return rows.map(r=>{
+  if (!lines.length) return []
+  const headers = lines[0].split(',').map(s=>s.trim())
+  const rows = lines.slice(1)
+  return rows.filter(Boolean).map(r=>{
     const cols = r.split(',').map(s=>s.trim())
     const obj: any = {}
     headers.forEach((key, i)=> obj[key] = cols[i])
-    // Normalisieren
     if (obj.from_value !== undefined) obj.from_value = parseFloat(obj.from_value)
     if (obj.to_value   !== undefined) obj.to_value   = parseFloat(obj.to_value)
     if (obj.points     !== undefined) obj.points     = parseFloat(obj.points)
@@ -19,57 +19,65 @@ function parseCsv(text: string){
   })
 }
 
-// GET /api/scoremaps?station=S6&gender=female|male
+// GET /api/scoremaps?station=S1|S2|S6[&gender=female|male]
 export async function GET(req: Request){
   const { searchParams } = new URL(req.url)
-  const station = searchParams.get('station') || 'S6'
-  const gender  = searchParams.get('gender')  || 'female'
+  const station = (searchParams.get('station') || '').toUpperCase()
 
-  // aktuell nur S6
-  if (station !== 'S6'){
+  if (!['S1','S2','S6'].includes(station)) {
     return NextResponse.json({ items: [] })
   }
 
-  const path = `config/s6_${gender}.csv`
-  const { data, error } = await supabaseAdmin.storage.from('config').download(path)
-
-  // Fallback: wenn male fehlt -> female
-  if (error) {
-    if (gender === 'male'){
-      const alt = await supabaseAdmin.storage.from('config').download('config/s6_female.csv')
-      if (alt.data){
-        const text = await alt.data.text()
-        return NextResponse.json({ items: parseCsv(text) })
-      }
-    }
-    return NextResponse.json({ error: error.message, items: [] }, { status: 404 })
+  let path = ''
+  if (station === 'S1') path = 'config/s1.csv'
+  if (station === 'S2') path = 'config/s2.csv'
+  if (station === 'S6') {
+    const gender = (searchParams.get('gender') || 'female').toLowerCase()
+    path = `config/s6_${gender}.csv`
   }
 
-  const text = await data.text()
+  let dl = await supabaseAdmin.storage.from('config').download(path)
+
+  // Fallback für S6 male → female
+  if (!dl.data && station === 'S6' && path.endsWith('_male.csv')) {
+    dl = await supabaseAdmin.storage.from('config').download('config/s6_female.csv')
+  }
+
+  if (!dl.data) {
+    const msg = dl.error?.message || 'not found'
+    return NextResponse.json({ error: msg, items: [] }, { status: 404 })
+  }
+
+  const text = await dl.data.text()
   return NextResponse.json({ items: parseCsv(text) })
 }
 
-// POST /api/scoremaps?station=S6&gender=female|male
-// Lade CSV in den globalen Bucket hoch (nur einfache Absicherung via APP_PASSWORD)
+// POST /api/scoremaps?station=S1|S2|S6[&gender=female|male][&pwd=...]
+// -> Upload/Update globaler CSVs (einfacher Schutz via APP_PASSWORD)
 export async function POST(req: Request){
   const { searchParams } = new URL(req.url)
-  const station = searchParams.get('station') || 'S6'
-  const gender  = searchParams.get('gender')  || 'female'
+  const station = (searchParams.get('station') || '').toUpperCase()
   const pwd     = searchParams.get('pwd') || ''
-
-  if (process.env.APP_PASSWORD && pwd !== process.env.APP_PASSWORD){
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  if (station !== 'S6'){
+  if (!['S1','S2','S6'].includes(station)) {
     return NextResponse.json({ error: 'Unsupported station' }, { status: 400 })
+  }
+  if (process.env.APP_PASSWORD && pwd !== process.env.APP_PASSWORD) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const fd = await req.formData()
   const file = fd.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'file missing' }, { status: 400 })
 
+  let path = ''
+  if (station === 'S1') path = 'config/s1.csv'
+  if (station === 'S2') path = 'config/s2.csv'
+  if (station === 'S6') {
+    const gender = (searchParams.get('gender') || 'female').toLowerCase()
+    path = `config/s6_${gender}.csv`
+  }
+
   const arrayBuf = await file.arrayBuffer()
-  const path = `config/s6_${gender}.csv`
   const { error } = await supabaseAdmin.storage.from('config').upload(
     path,
     new Blob([arrayBuf], { type: 'text/csv' }),
