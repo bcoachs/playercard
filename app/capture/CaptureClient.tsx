@@ -66,10 +66,9 @@ function normScore(st: Station, raw: number): number {
   return clamp(sc, 0, 100)
 }
 
-/* ---------- S6 Scoremap (global) ---------- */
+/* ---------- Scoremap-Strukturen ---------- */
 const AGE_BUCKETS = ['6-7','8-9','10-11','12-13','14-15','16-17','18-19','20-24','25-29','30-34','35-39','40-44','45-49'] as const
 type AgeBucket = (typeof AGE_BUCKETS)[number]
-
 type ScoreRow = { age_range: string; from_value: number; to_value: number; points: number }
 type ScoreMap = Record<AgeBucket, ScoreRow[]>
 
@@ -89,6 +88,7 @@ function buildScoreMap(items: ScoreRow[]): ScoreMap {
   for (const k of Object.keys(map) as AgeBucket[]){ map[k]!.sort((a,b)=> b.points - a.points) }
   return map as ScoreMap
 }
+/** piecewise linear interpolation between descending points rows */
 function scoreFromTime(timeSec: number, rows: ScoreRow[]): number {
   if (!rows.length) return 0
   const r100 = rows.find(r=>r.points===100) || rows[0]
@@ -108,7 +108,6 @@ function scoreFromTime(timeSec: number, rows: ScoreRow[]): number {
   return Math.round(100 * (t0 - timeSec) / (t0 - t100))
 }
 
-/* ---------- Component ---------- */
 export default function CaptureClient(){
   const sp = useSearchParams()
   const router = useRouter()
@@ -124,7 +123,9 @@ export default function CaptureClient(){
   const [values, setValues] = useState<Record<string, any>>({})
   const [saved,  setSaved ] = useState<Record<string, number>>({})
 
-  // S6 maps getrennt für female/male (GLOBAL)
+  // Scoremaps global: S1/S2 altersbasiert; S6 weiblich/männlich
+  const [scoreMapS1, setScoreMapS1] = useState<ScoreMap|null>(null)
+  const [scoreMapS2, setScoreMapS2] = useState<ScoreMap|null>(null)
   const [scoreMapFemale, setScoreMapFemale] = useState<ScoreMap|null>(null)
   const [scoreMapMale,   setScoreMapMale]   = useState<ScoreMap|null>(null)
 
@@ -155,7 +156,6 @@ export default function CaptureClient(){
   // Messwerte + ggf. Scoremaps laden (GLOBAL)
   useEffect(()=>{
     if (!projectId || !selected) return
-
     const st = stations.find(s=>s.id===selected)
     if (!st) return
 
@@ -167,22 +167,43 @@ export default function CaptureClient(){
         setValues(map); setSaved(savedMap)
       })
 
-    // S6 → globale CSVs holen
-    if (st.name.toLowerCase().includes('schnelligkeit')){
+    const name = (st.name || '').toLowerCase()
+
+    // S1/S2: altersabhängige Zeit-CSV global
+    if (name.includes('beweglichkeit')) {
+      fetch(`/api/scoremaps?station=S1`)
+        .then(r=>r.json()).then(res=> setScoreMapS1(buildScoreMap((res.items||[]) as ScoreRow[])))
+        .catch(()=> setScoreMapS1(null))
+      setScoreMapS2(null); setScoreMapFemale(null); setScoreMapMale(null)
+      return
+    }
+    if (name.includes('technik')) {
+      fetch(`/api/scoremaps?station=S2`)
+        .then(r=>r.json()).then(res=> setScoreMapS2(buildScoreMap((res.items||[]) as ScoreRow[])))
+        .catch(()=> setScoreMapS2(null))
+      setScoreMapS1(null); setScoreMapFemale(null); setScoreMapMale(null)
+      return
+    }
+
+    // S6: global + gender
+    if (name.includes('schnelligkeit')) {
       fetch(`/api/scoremaps?station=S6&gender=female`)
         .then(r=>r.json()).then(res=> setScoreMapFemale(buildScoreMap((res.items||[]) as ScoreRow[])))
         .catch(()=> setScoreMapFemale(null))
       fetch(`/api/scoremaps?station=S6&gender=male`)
         .then(r=>r.json()).then(res=> setScoreMapMale(buildScoreMap((res.items||[]) as ScoreRow[])))
         .catch(()=> setScoreMapMale(null))
-    } else {
-      setScoreMapFemale(null); setScoreMapMale(null)
+      setScoreMapS1(null); setScoreMapS2(null)
+      return
     }
+
+    // andere: keine CSV nötig
+    setScoreMapS1(null); setScoreMapS2(null); setScoreMapFemale(null); setScoreMapMale(null)
   },[projectId, selected, stations])
 
   const currentStation = useMemo(()=> stations.find(s=>s.id===selected), [stations, selected])
 
-  /* UI */
+  /* UI Basics */
   function ProjectsSelect(){
     if (qProject) return null
     return (
@@ -237,15 +258,35 @@ export default function CaptureClient(){
     return Number(v.value||0)
   }
 
+  function scoreFromCsv(map: ScoreMap|null, rawTimeSec: number, age: number){
+    if (!map) return null
+    const bucket = nearestAgeBucket(age)
+    const rows = map[bucket] || []
+    if (!rows.length) return null
+    return scoreFromTime(Number(rawTimeSec), rows)
+  }
+
   function scoreFor(st: Station, p: Player, raw: number): number{
-    const isS6 = st.name.toLowerCase().includes('schnelligkeit')
-    if (isS6){
-      const age = resolveAge(p.birth_year)
-      const bucket = nearestAgeBucket(age)
-      const map = (p.gender==='male' ? scoreMapMale : scoreMapFemale) || scoreMapFemale || scoreMapMale
-      const rows = map ? (map[bucket] || []) : []
-      if (rows.length) return scoreFromTime(Number(raw), rows)
+    const name = st.name.toLowerCase()
+    const age = resolveAge(p.birth_year)
+
+    // CSV-gesteuerte
+    if (name.includes('beweglichkeit')) {
+      const s = scoreFromCsv(scoreMapS1, raw, age)
+      if (s !== null) return s
+      // Fallback: norm via min/max
     }
+    if (name.includes('technik')) {
+      const s = scoreFromCsv(scoreMapS2, raw, age)
+      if (s !== null) return s
+    }
+    if (name.includes('schnelligkeit')) {
+      const map = (p.gender==='male' ? scoreMapMale : scoreMapFemale) || scoreMapFemale || scoreMapMale
+      const s = scoreFromCsv(map||null, raw, age)
+      if (s !== null) return s
+    }
+
+    // Formelbasiert (S3, S5, S4 & Fallbacks)
     return Math.round(normScore(st, Number(raw)))
   }
 
