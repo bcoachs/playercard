@@ -10,7 +10,7 @@ export default function Home() {
           <Link href="/projects/new" className="btn pill">NEUER RUN</Link>
           <Link href="/projects" className="btn pill">RUN LADEN</Link>
           <Link href="/leaderboard" className="btn pill">RANGLISTE</Link>
-          <Link href="/capure" className="btn pill">BASE</Link>
+          <Link href="/capture" className="btn pill">BASE</Link>
         </div>
       </Hero>
       <BackFab />
