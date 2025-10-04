@@ -72,7 +72,7 @@ function normScore(st: Station, raw: number): number {
 export default async function ProjectPage({ params }: { params: { id: string } }) {
   const projectId = params.id
 
-  // Daten parallel laden (Server-seitig, kein Client-Hook nötig)
+  // Daten parallel laden
   const [
     { data: project, error: pErr },
     { data: stations, error: sErr },
@@ -101,11 +101,10 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   if (plErr) throw new Error(plErr.message)
   if (mErr) throw new Error(mErr.message)
 
-  // Indexe für schnelle Nachschau
+  // Indexe
   const stById = new Map<string, Station>()
   ;(stations ?? []).forEach((s) => stById.set(s.id, s as Station))
 
-  // Werte je Spieler/Station vorrechnen (raw + norm)
   const values: Record<string, Record<string, { raw: number; norm: number }>> = {}
   for (const m of (measurements ?? []) as Measurement[]) {
     const st = stById.get(m.station_id)
@@ -118,7 +117,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
   return (
     <main>
-      {/* Kopfbereich auf player.jpg, Inhalt oben ausrichten */}
+      {/* Kopfbereich (player.jpg) */}
       <Hero
         title={project?.name ?? 'Run'}
         subtitle={project?.date ?? ''}
@@ -127,20 +126,20 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         align="top"
       >
         <div className="flex flex-col items-center gap-4 w-full">
-          {/* Schnellzugriffe */}
           <div className="pills">
             <Link href={`/leaderboard?project=${projectId}`} className="btn pill">Rangliste</Link>
-            <Link href={`/projects/${projectId}/capture`} className="btn pill">Capture</Link>
+            {/* BUTTON-FIX: jetzt auf /capture?project=... */}
+            <Link href={`/capture?project=${projectId}`} className="btn pill">Capture</Link>
           </div>
 
-          {/* Spieleranlage – Client-Komponente auf dem Hintergrund */}
+          {/* Spieleranlage */}
           <div className="card glass w-full max-w-2xl text-left">
             <PlayerForm projectId={projectId} />
           </div>
         </div>
       </Hero>
 
-      {/* Matrix-Bereich mit eigenem kachelnden Hintergrund */}
+      {/* Matrix-Bereich (matrix.jpg) */}
       <TiledSection image="/matrix.jpg">
         <div className="card glass w-full text-left pb-8">
           <div className="overflow-auto">
@@ -188,7 +187,6 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           </div>
         </div>
 
-        {/* etwas Luft am Ende */}
         <div className="h-16" />
       </TiledSection>
 
