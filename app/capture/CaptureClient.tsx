@@ -13,7 +13,6 @@ type Station = {
   max_value: number | null
   higher_is_better: boolean | null
 }
-
 type Player = {
   id: string
   display_name: string
@@ -24,8 +23,8 @@ type Player = {
   nationality: string | null
   gender?: 'male' | 'female' | null
 }
-
 type Project = { id: string; name: string; date: string | null }
+type Measurement = { player_id: string; station_id: string; value: number }
 
 const ST_ORDER = [
   'Beweglichkeit',
@@ -35,7 +34,6 @@ const ST_ORDER = [
   'Schusspräzision',
   'Schnelligkeit',
 ]
-
 function stationSort(a: Station, b: Station) {
   const ia = ST_ORDER.indexOf(a.name)
   const ib = ST_ORDER.indexOf(b.name)
@@ -45,20 +43,17 @@ function stationSort(a: Station, b: Station) {
   return a.name.localeCompare(b.name, 'de')
 }
 
-/* ---------- CSV-Lader für S6 (global in /public/config/) ---------- */
+/* ---------- CSV-Lader für S6 (global: /public/config/) ---------- */
 async function loadS6Map(gender: 'male' | 'female'): Promise<Record<string, number[]>> {
   const file = gender === 'male' ? '/config/s6_male.csv' : '/config/s6_female.csv'
   const res = await fetch(file, { cache: 'no-store' })
   if (!res.ok) throw new Error(`CSV nicht gefunden: ${file}`)
   const text = await res.text()
-
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
   if (lines.length < 2) throw new Error('CSV leer/ungültig')
 
-  // Semikolon-getrennt
   const header = lines[0].split(';').map(s => s.trim())
   const ageCols = header.slice(1)
-
   const out: Record<string, number[]> = {}
   for (const age of ageCols) out[age] = []
 
@@ -68,12 +63,11 @@ async function loadS6Map(gender: 'male' | 'female'): Promise<Record<string, numb
       const age = ageCols[c - 1]
       const sec = Number((cols[c] || '').replace(',', '.'))
       if (!Number.isFinite(sec)) continue
-      out[age].push(sec) // Index 0 = 100 Punkte, …, Index 100 = 0 Punkte
+      out[age].push(sec) // Index 0=100P, 100=0P
     }
   }
   return out
 }
-
 function nearestAgeBucket(age: number, keys: string[]): string {
   const parsed = keys.map(k => {
     const nums = k.match(/\d+/g)?.map(n => Number(n)) || []
@@ -83,28 +77,21 @@ function nearestAgeBucket(age: number, keys: string[]): string {
   parsed.sort((a, b) => Math.abs(a.mid - age) - Math.abs(b.mid - age))
   return parsed[0]?.key || keys[0]
 }
-
 function scoreFromTime(seconds: number, rows: number[]): number {
-  let bestIdx = 100
-  let bestDiff = Infinity
+  let idx = 100, best = Infinity
   for (let i = 0; i < rows.length; i++) {
-    const diff = Math.abs(seconds - rows[i])
-    if (diff < bestDiff) { bestDiff = diff; bestIdx = i }
+    const d = Math.abs(seconds - rows[i])
+    if (d < best) { best = d; idx = i }
   }
-  const score = 100 - bestIdx
-  return Math.max(0, Math.min(100, score))
+  return Math.max(0, Math.min(100, 100 - idx))
 }
-
 function clamp(n: number, min: number, max: number) { return Math.max(min, Math.min(max, n)) }
 function normScore(st: Station, raw: number): number {
   const min = st.min_value ?? 0
   const max = st.max_value ?? 100
   if (max === min) return 0
-  if (st.higher_is_better) {
-    return Math.round(clamp((raw - min) / (max - min), 0, 1) * 100)
-  } else {
-    return Math.round(clamp((max - raw) / (max - min), 0, 1) * 100)
-  }
+  if (st.higher_is_better) return Math.round(clamp((raw - min) / (max - min), 0, 1) * 100)
+  return Math.round(clamp((max - raw) / (max - min), 0, 1) * 100)
 }
 
 /* ------- Inputs: commit erst bei Enter/Blur ------- */
@@ -113,21 +100,15 @@ function NumberCommitInput({
 }: { label: string; value: number; min: number; max: number; onCommit: (n: number) => void }) {
   const [tmp, setTmp] = useState<string>(String(value ?? 0))
   useEffect(() => { setTmp(String(value ?? 0)) }, [value])
-
   function commit() {
     const v = tmp === '' ? 0 : Math.max(min, Math.min(max, Math.round(Number(tmp))))
     onCommit(Number.isFinite(v) ? v : 0)
   }
-
   return (
     <div>
       <label className="block text-xs font-semibold mb-1">{label}</label>
       <input
-        className="input"
-        type="number"
-        min={min}
-        max={max}
-        value={tmp}
+        className="input" type="number" min={min} max={max} value={tmp}
         onChange={e => setTmp(e.target.value)}
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') { commit(); (e.target as HTMLInputElement).blur() } }}
@@ -135,27 +116,21 @@ function NumberCommitInput({
     </div>
   )
 }
-
 function DecimalCommitInput({
   label, value, placeholder, onCommit
 }: { label: string; value: number; placeholder?: string; onCommit: (n: number) => void }) {
   const [tmp, setTmp] = useState<string>(value === 0 || value ? String(value) : '')
   useEffect(() => { setTmp(value === 0 || value ? String(value) : '') }, [value])
-
   function commit() {
     const normalized = tmp.replace(',', '.')
     const n = Number(normalized)
     onCommit(Number.isFinite(n) ? n : 0)
   }
-
   return (
     <div>
       <label className="block text-xs font-semibold mb-1">{label}</label>
       <input
-        className="input"
-        inputMode="decimal"
-        value={tmp}
-        placeholder={placeholder || 'Wert'}
+        className="input" inputMode="decimal" value={tmp} placeholder={placeholder || 'Wert'}
         onChange={e => setTmp(e.target.value)}
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') { commit(); (e.target as HTMLInputElement).blur() } }}
@@ -167,7 +142,6 @@ function DecimalCommitInput({
 export default function CaptureClient() {
   const router = useRouter()
   const sp = useSearchParams()
-
   const qProject = sp.get('project') || ''
   const qStation = sp.get('station') || ''
 
@@ -179,23 +153,23 @@ export default function CaptureClient() {
   const [players, setPlayers] = useState<Player[]>([])
   const [selected, setSelected] = useState<string>(qStation)
 
+  // Messwerte, die bereits gespeichert sind (vom Server)
+  const [meas, setMeas] = useState<Record<string, Record<string, number>>>({}) // playerId -> stationId -> raw
+
+  // Eingabepuffer (noch nicht gespeichert)
   const [values, setValues] = useState<Record<string, any>>({})
-  const [saved, setSaved] = useState<Record<string, number>>({})
 
   // CSV-Maps für S6 + Status
   const [s6Female, setS6Female] = useState<Record<string, number[]> | null>(null)
   const [s6Male, setS6Male] = useState<Record<string, number[]> | null>(null)
   const [csvStatus, setCsvStatus] = useState<{ female: 'ok' | 'fail' | 'loading'; male: 'ok' | 'fail' | 'loading' }>({ female: 'loading', male: 'loading' })
 
-  useEffect(() => {
-    fetch('/api/projects').then(r => r.json()).then(res => setProjects(res.items || [])).catch(() => setProjects([]))
-  }, [])
-
+  useEffect(() => { fetch('/api/projects').then(r => r.json()).then(res => setProjects(res.items || [])) }, [])
   useEffect(() => {
     if (!projectId) return
-    setStations([]); setPlayers([]); setProject(null)
+    setStations([]); setPlayers([]); setProject(null); setMeas({}); setValues({})
 
-    fetch(`/api/projects/${projectId}`).then(r => r.json()).then(res => setProject(res.item || null)).catch(() => setProject(null))
+    fetch(`/api/projects/${projectId}`).then(r => r.json()).then(res => setProject(res.item || null)).catch(()=>setProject(null))
 
     fetch(`/api/projects/${projectId}/stations`).then(r => r.json()).then(res => {
       const st: Station[] = (res.items ?? []).slice().sort(stationSort)
@@ -209,7 +183,18 @@ export default function CaptureClient() {
       }
     })
 
-    fetch(`/api/projects/${projectId}/players`).then(r => r.json()).then(res => setPlayers(res.items || [])).catch(() => setPlayers([]))
+    fetch(`/api/projects/${projectId}/players`).then(r => r.json()).then(res => setPlayers(res.items || [])).catch(()=>setPlayers([]))
+
+    // Alle bisherigen Messungen holen
+    fetch(`/api/projects/${projectId}/measurements`).then(r => r.json()).then(res => {
+      const m: Record<string, Record<string, number>> = {}
+      const items: Measurement[] = res.items || []
+      for (const it of items) {
+        if (!m[it.player_id]) m[it.player_id] = {}
+        m[it.player_id][it.station_id] = Number(it.value || 0)
+      }
+      setMeas(m)
+    })
   }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -223,13 +208,12 @@ export default function CaptureClient() {
 
   const currentStation = useMemo(() => stations.find(s => s.id === selected) || null, [stations, selected])
 
-  /* -------- Score-/Raw-Helfer -------- */
+  // ---- Score-Helfer ----
   function resolveAge(by: number | null): number {
     const eventYear = project?.date ? Number(String(project.date).slice(0, 4)) : new Date().getFullYear()
     if (!by) return 16
     return Math.max(6, Math.min(49, eventYear - by))
   }
-
   function resolveRaw(st: Station, v: any) {
     const n = st.name.toLowerCase()
     if (!v) return 0
@@ -237,11 +221,8 @@ export default function CaptureClient() {
     if (n.includes('schusspräzision')) return (v.ul || 0 + v.ur || 0) * 3 + (v.ll || 0 + v.lr || 0) * 1
     return Number(v.value || 0)
   }
-
   function scoreFor(st: Station, p: Player, raw: number): number {
     const n = st.name.toLowerCase()
-
-    // S6
     if (n.includes('schnelligkeit')) {
       const age = resolveAge(p.birth_year)
       const map = p.gender === 'male' ? s6Male : s6Female
@@ -253,35 +234,57 @@ export default function CaptureClient() {
           if (rows.length) return scoreFromTime(Number(raw), rows)
         }
       }
+      // Fallback auf min/max: 4–20 s (weniger ist besser)
       return normScore({ ...st, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
     }
-
-    // S3/S5 sind schon 0..100
     if (n.includes('passgenauigkeit') || n.includes('schusspräzision')) {
       return Math.round(clamp(Number(raw), 0, 100))
     }
-
-    // Rest: DB-Min/Max
     return Math.round(normScore(st, Number(raw)))
   }
 
-  function sortPlayersByScore() {
-    const st = currentStation
-    if (!st) return
+  function averageScoreForPlayer(p: Player): number | null {
+    if (!stations.length) return null
+    let sum = 0, cnt = 0
+    for (const st of stations) {
+      // Pending-Wert für aktuelle Station bevorzugen
+      const pending = values[p.id]
+      let raw: number | null = null
+      if (pending && st.id === selected) {
+        raw = resolveRaw(st, pending)
+      } else {
+        const byStation = meas[p.id] || {}
+        const savedRaw = byStation[st.id]
+        if (typeof savedRaw === 'number') raw = savedRaw
+      }
+      if (raw !== null && raw !== undefined) {
+        sum += scoreFor(st, p, Number(raw))
+        cnt++
+      }
+    }
+    if (!cnt) return null
+    return Math.round(sum / cnt)
+  }
+
+  function sortPlayersByAverage() {
     setPlayers(prev => {
       const arr = [...prev]
       arr.sort((a, b) => {
-        const va = values[a.id], vb = values[b.id]
-        const sa = scoreFor(st, a, resolveRaw(st, va))
-        const sb = scoreFor(st, b, resolveRaw(st, vb))
-        return sb - sa
+        const aa = averageScoreForPlayer(a)
+        const bb = averageScoreForPlayer(b)
+        // fehlende Ø ans Ende
+        if (aa === null && bb === null) return a.display_name.localeCompare(b.display_name, 'de')
+        if (aa === null) return 1
+        if (bb === null) return -1
+        return bb - aa
       })
       return arr
     })
   }
 
-  /* -------- UI-Subkomponenten -------- */
+  // ---- UI-Komponenten ----
   function ProjectsSelect() {
+    const qProject = sp.get('project') || ''
     if (qProject) return null
     return (
       <div className="card glass w-full max-w-2xl mx-auto text-left">
@@ -291,16 +294,11 @@ export default function CaptureClient() {
           value={projectId}
           onChange={e => {
             const id = e.target.value
-            setProjectId(id); setSelected(''); setValues({}); setSaved({})
+            setProjectId(id); setSelected(''); setValues({})
             if (id) router.replace(`?project=${id}`)
-          }}
-        >
+          }}>
           <option value="">{projects.length ? 'Bitte wählen' : 'Lade…'}</option>
-          {projects.map(p => (
-            <option key={p.id} value={p.id}>
-              {p.name}{p.date ? ` – ${p.date}` : ''}
-            </option>
-          ))}
+          {projects.map(p => <option key={p.id} value={p.id}>{p.name}{p.date ? ` – ${p.date}` : ''}</option>)}
         </select>
       </div>
     )
@@ -311,15 +309,9 @@ export default function CaptureClient() {
     return (
       <div className="pills">
         {stations.map(s => (
-          <button
-            key={s.id}
-            className="btn pill"
-            onClick={() => {
-              setSelected(s.id)
-              router.replace(projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`)
-            }}
-            style={s.id === selected ? { filter: 'brightness(1.15)' } : {}}
-          >
+          <button key={s.id} className="btn pill"
+            onClick={() => { setSelected(s.id); router.replace(projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`); sortPlayersByAverage() }}
+            style={s.id === selected ? { filter: 'brightness(1.15)' } : {}}>
             {s.name}
           </button>
         ))}
@@ -329,52 +321,59 @@ export default function CaptureClient() {
 
   function PlayerRow({ p }: { p: Player }) {
     const st = currentStation!; const n = st.name.toLowerCase()
-    const v = values[p.id] || {}; let raw = 0; let inputs: React.ReactNode = null
+    const pending = values[p.id] || {}
+    const savedRaw = (meas[p.id] || {})[st.id]
+    // Rohwert aus pending (falls vorhanden) sonst aus saved
+    let raw = pending ? resolveRaw(st, pending) : (typeof savedRaw === 'number' ? savedRaw : 0)
 
+    let inputs: React.ReactNode = null
     if (n.includes('passgenauigkeit')) {
-      const h10 = v.h10 ?? 0, h14 = v.h14 ?? 0, h18 = v.h18 ?? 0
-      raw = h10 * 11 + h14 * 17 + h18 * 33
+      const h10 = pending.h10 ?? 0, h14 = pending.h14 ?? 0, h18 = pending.h18 ?? 0
       inputs = (
         <div className="grid grid-cols-3 gap-2">
           <NumberCommitInput label="10 m (0–3)" value={h10} min={0} max={3}
-            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h10: x } }))} />
+            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h10: x } })); sortPlayersByAverage() }} />
           <NumberCommitInput label="14 m (0–2)" value={h14} min={0} max={2}
-            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h14: x } }))} />
+            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h14: x } })); sortPlayersByAverage() }} />
           <NumberCommitInput label="18 m (0–1)" value={h18} min={0} max={1}
-            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h18: x } }))} />
+            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h18: x } })); sortPlayersByAverage() }} />
         </div>
       )
+      raw = h10 * 11 + h14 * 17 + h18 * 33
     } else if (n.includes('schusspräzision')) {
-      const ul = v.ul ?? 0, ur = v.ur ?? 0, ll = v.ll ?? 0, lr = v.lr ?? 0
-      raw = (ul + ur) * 3 + (ll + lr) * 1
+      const ul = pending.ul ?? 0, ur = pending.ur ?? 0, ll = pending.ll ?? 0, lr = pending.lr ?? 0
       inputs = (
         <div className="grid grid-cols-4 gap-2">
           <NumberCommitInput label="oben L (0–3)" value={ul} min={0} max={3}
-            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ul: x } }))} />
+            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ul: x } })); sortPlayersByAverage() }} />
           <NumberCommitInput label="oben R (0–3)" value={ur} min={0} max={3}
-            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ur: x } }))} />
+            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ur: x } })); sortPlayersByAverage() }} />
           <NumberCommitInput label="unten L (0–3)" value={ll} min={0} max={3}
-            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ll: x } }))} />
+            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ll: x } })); sortPlayersByAverage() }} />
           <NumberCommitInput label="unten R (0–3)" value={lr} min={0} max={3}
-            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], lr: x } }))} />
+            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], lr: x } })); sortPlayersByAverage() }} />
         </div>
       )
+      raw = (ul + ur) * 3 + (ll + lr) * 1
     } else {
-      const val = typeof v.value === 'number' ? v.value : 0
-      raw = Number(val || 0)
+      const val = typeof pending.value === 'number'
+        ? pending.value
+        : (typeof savedRaw === 'number' ? savedRaw : 0)
       inputs = (
         <div className="grid grid-cols-2 gap-2">
           <DecimalCommitInput
             label={`Messwert ${st.unit ? `(${st.unit})` : ''}`}
             value={val}
             placeholder={st.unit || 'Wert'}
-            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: x } }))}
+            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: x } })); sortPlayersByAverage() }}
           />
         </div>
       )
+      raw = Number(val || 0)
     }
 
     const score = scoreFor(st, p, raw)
+    const avg = averageScoreForPlayer(p)
 
     async function saveOne() {
       const body = new FormData()
@@ -384,8 +383,16 @@ export default function CaptureClient() {
       const res = await fetch(`/api/projects/${projectId}/measurements`, { method: 'POST', body })
       const txt = await res.text()
       if (!res.ok) { alert(txt || 'Fehler beim Speichern'); return }
-      setSaved(prev => ({ ...prev, [p.id]: Number(raw) }))
-      sortPlayersByScore()
+      // In den gespeicherten Messwerten überschreiben (Upsert-Spiegel)
+      setMeas(prev => {
+        const next = { ...prev }
+        if (!next[p.id]) next[p.id] = {}
+        next[p.id][st.id] = Number(raw)
+        return next
+      })
+      // Eingabepuffer für diese Station optional leeren
+      setValues(prev => ({ ...prev, [p.id]: {} }))
+      sortPlayersByAverage()
     }
 
     return (
@@ -398,6 +405,7 @@ export default function CaptureClient() {
         </td>
         <td className="p-2">{inputs}</td>
         <td className="p-2 text-center"><span className="badge-green">{score}</span></td>
+        <td className="p-2 text-center">{avg === null ? <span className="badge-red">—</span> : <span className="badge-green">{avg}</span>}</td>
         <td className="p-2 text-right"><button className="btn pill" onClick={saveOne}>Speichern</button></td>
       </tr>
     )
@@ -406,6 +414,7 @@ export default function CaptureClient() {
   const currentIndex = currentStation ? Math.max(1, ST_ORDER.indexOf(currentStation.name) + 1) : 1
   const sketchHref = `/station${currentIndex}.pdf`
 
+  // Page
   return (
     <main>
       <Hero title="Stationseingabe" subtitle={project ? project.name : 'Projekt wählen'} image="/base.jpg">
@@ -431,7 +440,7 @@ export default function CaptureClient() {
         )}
       </Hero>
 
-      {/* Matrix-Bereich – mit zusätzlichem Abstand unten */}
+      {/* Matrix-Bereich – mit Abstand unten */}
       <section className="p-5 max-w-5xl mx-auto page-pad">
         {!projectId && (
           <div className="card mb-4">
@@ -443,7 +452,7 @@ export default function CaptureClient() {
         {projectId && !stations.length && (
           <div className="card mb-4">
             <div className="font-semibold">Keine Stationen gefunden</div>
-            <div className="text-sm muted">Für dieses Projekt sind keine Stationen angelegt. Lege einen neuen Run an oder prüfe die DB.</div>
+            <div className="text-sm muted">Für dieses Projekt sind keine Stationen angelegt.</div>
           </div>
         )}
 
@@ -451,7 +460,7 @@ export default function CaptureClient() {
           <div className="card">
             <div className="mb-3">
               <div className="text-lg font-semibold">{currentStation?.name || 'Station'}</div>
-              <div className="text-sm muted">Bitte Messwerte eintragen. Punkte werden nach Enter/Blur berechnet; Liste sortiert automatisch nach Punktzahl.</div>
+              <div className="text-sm muted">Werte eintragen. Punkte werden nach Enter/Blur berechnet. Sortierung nach Ø-Score (alle Stationen).</div>
             </div>
 
             <div className="overflow-x-auto">
@@ -461,15 +470,14 @@ export default function CaptureClient() {
                     <th className="p-2">Spieler</th>
                     <th className="p-2">Messung</th>
                     <th className="p-2 text-center">Score</th>
+                    <th className="p-2 text-center">Ø Score (alle)</th>
                     <th className="p-2 text-right">Aktion</th>
                   </tr>
                 </thead>
                 <tbody>
                   {players.map(p => <PlayerRow key={p.id} p={p} />)}
                   {!players.length && (
-                    <tr>
-                      <td colSpan={4} className="p-3 text-center muted">Noch keine Spieler in diesem Projekt.</td>
-                    </tr>
+                    <tr><td colSpan={5} className="p-3 text-center muted">Noch keine Spieler in diesem Projekt.</td></tr>
                   )}
                 </tbody>
               </table>
