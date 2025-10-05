@@ -263,19 +263,14 @@ export default function ProjectDashboard(){
           <div className="flex items-start justify-between mb-5">
             <div>
               <h1 className="text-3xl md:text-4xl font-extrabold hero-text">
-                {project?.name || 'Projekt'}
+                Run: {project?.name || '—'}
               </h1>
               {project?.date && <div className="hero-sub">{String(project.date)}</div>}
             </div>
 
-            <div className="flex items-start gap-3">
-              {/* Capture-Button (zur Stationseingabe) */}
-              <Link href={`/capture?project=${projectId}`} className="btn pill">Capture</Link>
-              {/* Vereinslogo oben rechts */}
-              {project?.logo_url && (
-                <img src={project.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
-              )}
-            </div>
+            {project?.logo_url && (
+              <img src={project.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
+            )}
           </div>
 
           {/* Formular auf dunklem Glas-Panel, helle Schrift */}
@@ -321,79 +316,73 @@ export default function ProjectDashboard(){
                 </select>
               </div>
 
-              <div className="md:col-span-3">
+              {/* Button-Reihe mit Abstand nach oben */}
+              <div className="md:col-span-3 mt-2 flex items-center gap-3 justify-end">
                 <button className="btn pill" type="submit">Spieler anlegen</button>
+                <Link href={`/capture?project=${projectId}`} className="btn pill">Capture</Link>
               </div>
             </form>
           </div>
         </div>
       </section>
 
-      {/* Kein Abstand zwischen player.jpg und matrix.jpg gewünscht → Spacer entfernt */}
-
-      {/* Sektion 2: Matrix über matrix.jpg (wiederholend) + gleicher Glass-Rahmen */}
+      {/* Sektion 2: Matrix über matrix.jpg (mit kleinem Rand links/rechts/oben) */}
       <section className="bg-matrix page-pad">
         <div className="container w-full px-5 py-8">
-          <div className="card-glass-dark table-dark overflow-x-auto">
-            <div className="mb-3">
-              <div className="text-lg font-semibold">Spieler-Matrix</div>
-              <div className="text-sm" style={{color:'rgba(255,255,255,.8)'}}>
-                Ø sortiert (absteigend). Rohwert steht jeweils klein unter dem Score.
+          {/* kleiner äußerer Rand: */}
+          <div className="mx-2 md:mx-3 mt-2">
+            <div className="card-glass-dark table-dark overflow-x-auto">
+              <div className="mb-3">
+                <div className="text-lg font-semibold">Spieler-Matrix</div>
+                <div className="text-sm" style={{color:'rgba(255,255,255,.8)'}}>
+                  Ø steht für Durchschnitt über alle erfassten Stationen.
+                </div>
               </div>
-            </div>
 
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left" style={{borderBottom:'1px solid rgba(255,255,255,.15)'}}>
-                  <th className="p-2 whitespace-nowrap">Spieler</th>
-                  {stations.length ? ST_ORDER.map(n=>{
-                    const st = stations.find(s=>s.name===n)
-                    return st ? <th key={st.id} className="p-2 whitespace-nowrap">{st.name}</th> : null
-                  }) : null}
-                  <th className="p-2 whitespace-nowrap text-right">Ø</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(({player, perStation, avg})=>(
-                  <tr key={player.id} style={{borderBottom:'1px solid rgba(255,255,255,.12)'}} className="align-top">
-                    <td className="p-2 whitespace-nowrap font-medium">
-                      {player.display_name} {player.birth_year?`(${player.birth_year})`:''}
-                      <br/>
-                      <span className="text-[11px]" style={{color:'rgba(255,255,255,.75)'}}>
-                        {player.gender ? (player.gender==='male'?'männlich':'weiblich') : '—'} • {player.club || '–'}
-                        {player.fav_position ? ` • ${player.fav_position}` : ''}
-                        {Number.isFinite(player.fav_number as any) ? ` • #${player.fav_number}` : ''}
-                      </span>
-                    </td>
-
-                    {perStation.map(cell=>{
-                      const score = cell.score
-                      const raw = cell.raw
-                      return (
-                        <td key={cell.id} className="p-2">
-                          {typeof score === 'number' ? (
-                            <div>
-                              <span className="badge-green">{score}</span>
-                              <div className="text-[11px]" style={{color:'rgba(255,255,255,.75)'}}>
-                                {typeof raw==='number' ? `${raw}${cell.unit ? ` ${cell.unit}` : ''}` : '—'}
-                              </div>
-                            </div>
-                          ) : <span className="text-xs" style={{color:'rgba(255,255,255,.7)'}}>—</span>}
-                        </td>
-                      )
-                    })}
-
-                    <td className="p-2 text-right">
-                      <span className="badge-green">{avg}</span>
-                    </td>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left" style={{borderBottom:'1px solid rgba(255,255,255,.15)'}}>
+                    <th className="p-2 whitespace-nowrap">Spieler</th>
+                    <th className="p-2 whitespace-nowrap">Ø</th>
+                    {stations.length ? ST_ORDER.map(n=>{
+                      const st = stations.find(s=>s.name===n)
+                      return st ? <th key={st.id} className="p-2 whitespace-nowrap">{st.name}</th> : null
+                    }) : null}
                   </tr>
-                ))}
+                </thead>
+                <tbody>
+                  {rows.map(({player, perStation, avg})=>(
+                    <tr key={player.id} style={{borderBottom:'1px solid rgba(255,255,255,.12)'}} className="align-top">
+                      <td className="p-2 whitespace-nowrap font-medium">
+                        {player.display_name}{Number.isFinite(player.fav_number as any) ? ` #${player.fav_number}` : ''}
+                      </td>
+                      <td className="p-2"><span className="badge-green">{avg}</span></td>
 
-                {!rows.length && (
-                  <tr><td colSpan={2+stations.length} className="p-3 text-center" style={{color:'rgba(255,255,255,.8)'}}>Noch keine Spieler.</td></tr>
-                )}
-              </tbody>
-            </table>
+                      {perStation.map(cell=>{
+                        const score = cell.score
+                        const raw = cell.raw
+                        return (
+                          <td key={cell.id} className="p-2">
+                            {typeof score === 'number' ? (
+                              <div>
+                                <span className="badge-green">{score}</span>
+                                <div className="text-[11px]" style={{color:'rgba(255,255,255,.75)'}}>
+                                  {typeof raw==='number' ? `${raw}${cell.unit ? ` ${cell.unit}` : ''}` : '—'}
+                                </div>
+                              </div>
+                            ) : <span className="text-xs" style={{color:'rgba(255,255,255,.7)'}}>—</span>}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+
+                  {!rows.length && (
+                    <tr><td colSpan={2+stations.length} className="p-3 text-center" style={{color:'rgba(255,255,255,.8)'}}>Noch keine Spieler.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* S6-Hinweis ganz am Seitenende */}
