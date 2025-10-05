@@ -94,3 +94,48 @@ a, .btn { text-decoration: none; }
 
 /* --- NEU: mehr Luft am Seitenende für Tabellen/Listen --- */
 .page-pad{ padding-bottom: 6rem; }
+
+/* Hintergrund-Utilities */
+.bg-player{
+  background-image: url('/player.jpg');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  color: #fff;
+}
+.bg-matrix{
+  /* Wiederholender Hintergrund für lange Tabellen */
+  background-image: url('/matrix.jpg');
+  background-position: center top;
+  /* Höhe einer „Kachel“ – passt das Optik-Gefühl ggf. an */
+  background-size: auto 480px;
+  background-repeat: repeat;
+  color: #fff;
+}
+
+/* Dunkles „Glas“-Panel für gute Lesbarkeit auf dunklem Bild */
+.card-glass-dark{
+  border-radius: 16px;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,.12);
+  padding: 16px;
+  color: #fff;
+}
+
+/* Tabelle auf dunklem Panel */
+.table-dark th,
+.table-dark td{
+  border-color: rgba(255,255,255,.15) !important;
+}
+.table-dark thead th{
+  color: rgba(255,255,255,.9);
+}
+.table-dark tbody td{
+  color: rgba(255,255,255,.92);
+}
+
+/* Abstand unten für lange Seiten */
+.page-pad { padding-bottom: 6rem; }
+
