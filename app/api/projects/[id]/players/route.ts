@@ -1,68 +1,160 @@
+// app/api/projects/[id]/players/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-export const dynamic = 'force-dynamic'
+type Params = { params: { id: string } }
 
-/** GET: alle Spieler eines Projekts */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const project_id = params.id
+// kleine Helper
+function numOrNull(v: FormDataEntryValue | null) {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+function strOrNull(v: FormDataEntryValue | null) {
+  if (v === null || v === undefined) return null
+  const s = String(v).trim()
+  return s.length ? s : null
+}
+function genderOrNull(v: FormDataEntryValue | null) {
+  const s = String(v || '').toLowerCase()
+  if (s === 'male' || s === 'female') return s as 'male' | 'female'
+  return null
+}
+
+/** GET /api/projects/:id/players
+ *  Listet alle Spieler eines Projekts
+ */
+export async function GET(_req: NextRequest, { params }: Params) {
+  const projectId = params.id
   const { data, error } = await supabaseAdmin
     .from('players')
-    .select('id, display_name, birth_year, club, fav_number, fav_position, nationality, gender, photo_url')
-    .eq('project_id', project_id)
+    .select('*')
+    .eq('project_id', projectId)
     .order('created_at', { ascending: true })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
   return NextResponse.json({ items: data ?? [] })
 }
 
-/** POST: neuen Spieler anlegen (optional mit Foto) */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const project_id = params.id
-  const form = await req.formData()
+/** POST /api/projects/:id/players
+ *  Erstellt einen neuen Spieler (FormData)
+ *  Pflicht: display_name, birth_year (YYYY)
+ *  Optional: club, fav_number, fav_position, nationality, gender
+ */
+export async function POST(req: NextRequest, { params }: Params) {
+  const projectId = params.id
+  const fd = await req.formData()
 
-  const display_name = String(form.get('display_name') || '').trim()
-  if (!display_name) return NextResponse.json({ error: 'Name fehlt' }, { status: 400 })
+  const display_name = strOrNull(fd.get('display_name'))
+  const birth_year = numOrNull(fd.get('birth_year'))
+  const club = strOrNull(fd.get('club'))
+  const fav_number = numOrNull(fd.get('fav_number'))
+  const fav_position = strOrNull(fd.get('fav_position'))
+  const nationality = strOrNull(fd.get('nationality'))
+  const gender = genderOrNull(fd.get('gender'))
 
-  const birth_year = form.get('birth_year') ? Number(form.get('birth_year')) : null
-  const club        = form.get('club')?.toString() ?? null
-  const fav_number  = form.get('fav_number') ? Number(form.get('fav_number')) : null
-  const fav_position= form.get('fav_position')?.toString() ?? null
-  const nationality = form.get('nationality')?.toString() ?? null
-  const genderVal   = form.get('gender')?.toString() ?? null      // 'male' | 'female' | null
-  const photo       = form.get('photo') as File | null
-
-  // 1) Spieler anlegen (ohne Foto)
-  const { data: ins, error: iErr } = await supabaseAdmin
-    .from('players')
-    .insert({
-      project_id, display_name, birth_year, club,
-      fav_number, fav_position, nationality, gender: genderVal
-    })
-    .select('id')
-    .single()
-
-  if (iErr || !ins) return NextResponse.json({ error: iErr?.message || 'Insert fehlgeschlagen' }, { status: 500 })
-  const playerId = ins.id as string
-
-  // 2) Foto optional speichern
-  if (photo && photo.size > 0) {
-    const ext = (photo.name.split('.').pop() || 'jpg').toLowerCase()
-    const path = `players/${playerId}/portrait.${ext}`
-    const buf = Buffer.from(await photo.arrayBuffer())
-
-    const up = await supabaseAdmin.storage.from('players').upload(path, buf, {
-      contentType: photo.type || 'image/jpeg',
-      upsert: true,
-    })
-    if (up.error) {
-      // kein fataler Fehler – nur loggen
-      console.error('Upload error:', up.error.message)
-    } else {
-      const pub = supabaseAdmin.storage.from('players').getPublicUrl(path)
-      await supabaseAdmin.from('players').update({ photo_url: pub.data.publicUrl }).eq('id', playerId)
-    }
+  if (!display_name) {
+    return NextResponse.json({ error: 'display_name is required' }, { status: 400 })
+  }
+  if (!birth_year || String(birth_year).length !== 4) {
+    return NextResponse.json({ error: 'birth_year (YYYY) is required' }, { status: 400 })
   }
 
-  return NextResponse.json({ ok: true, playerId })
+  const { data, error } = await supabaseAdmin
+    .from('players')
+    .insert([
+      {
+        project_id: projectId,
+        display_name,
+        birth_year,
+        club,
+        fav_number,
+        fav_position,
+        nationality,
+        gender, // nullable in DB
+      },
+    ])
+    .select('*')
+    .single()
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  return NextResponse.json({ item: data }, { status: 201 })
+}
+
+/** PUT /api/projects/:id/players
+ *  Aktualisiert einen Spieler (FormData)
+ *  Pflicht: id
+ *  Optional: dieselben Felder wie POST
+ */
+export async function PUT(req: NextRequest, { params }: Params) {
+  const projectId = params.id
+  const fd = await req.formData()
+
+  const id = strOrNull(fd.get('id'))
+  if (!id) {
+    return NextResponse.json({ error: 'id is required' }, { status: 400 })
+  }
+
+  // Felder vorbereiten – nur setzen, wenn übergeben
+  const patch: Record<string, any> = {}
+  const display_name = strOrNull(fd.get('display_name'))
+  const birth_year = numOrNull(fd.get('birth_year'))
+  const club = strOrNull(fd.get('club'))
+  const fav_number = numOrNull(fd.get('fav_number'))
+  const fav_position = strOrNull(fd.get('fav_position'))
+  const nationality = strOrNull(fd.get('nationality'))
+  const gender = genderOrNull(fd.get('gender'))
+
+  if (display_name !== null) patch.display_name = display_name
+  if (birth_year !== null) patch.birth_year = birth_year
+  if (club !== null) patch.club = club
+  if (fav_number !== null) patch.fav_number = fav_number
+  if (fav_position !== null) patch.fav_position = fav_position
+  if (nationality !== null) patch.nationality = nationality
+  if (gender !== null) patch.gender = gender
+
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: 'no fields to update' }, { status: 400 })
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('players')
+    .update(patch)
+    .eq('id', id)
+    .eq('project_id', projectId)
+    .select('*')
+    .single()
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  return NextResponse.json({ item: data })
+}
+
+/** DELETE /api/projects/:id/players?id=UUID
+ *  Löscht einen Spieler (und dank FK on delete cascade auch Messungen)
+ */
+export async function DELETE(req: NextRequest, { params }: Params) {
+  const projectId = params.id
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+
+  if (!id) {
+    return NextResponse.json({ error: 'id query param is required' }, { status: 400 })
+  }
+
+  const { error } = await supabaseAdmin
+    .from('players')
+    .delete()
+    .eq('id', id)
+    .eq('project_id', projectId)
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  return NextResponse.json({ ok: true })
 }
