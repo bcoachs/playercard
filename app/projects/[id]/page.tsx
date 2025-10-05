@@ -37,7 +37,7 @@ const ST_ORDER = [
 const ST_INDEX: Record<string, number> =
   ST_ORDER.reduce((acc, n, i)=>{ acc[n]=i; return acc }, {} as Record<string, number>)
 
-/* S6 via CSV global (optional) */
+/* S6 via CSV global (optional, default an) */
 const USE_S6_CSV = (() => {
   const v = process.env.NEXT_PUBLIC_USE_S6_CSV
   if (v === '0' || v === 'false') return false
@@ -76,13 +76,12 @@ function nearestAgeBucket(age:number, keys:string[]): string{
   parsed.sort((a,b)=>Math.abs(a.mid-age)-Math.abs(b.mid-age))
   return parsed[0]?.key || keys[0]
 }
-function scoreFromTime(seconds:number, rows:number[]): number{
-  let idx = 100, best = Infinity
-  for(let i=0;i<rows.length;i++){
-    const d = Math.abs(seconds-rows[i])
-    if(d<best){ best=d; idx=i }
+/** Schrittlogik: schneller (t kleiner) → höherer Score. */
+function scoreFromTimeStep(seconds:number, rows:number[]): number{
+  for (let i=0; i<rows.length; i++){
+    if (seconds <= rows[i]) return Math.max(0, Math.min(100, 100 - i))
   }
-  return Math.max(0, Math.min(100, 100-idx))
+  return 0
 }
 function clamp(n:number,min:number,max:number){ return Math.max(min, Math.min(max, n)) }
 function normScore(st:Station, raw:number): number{
@@ -167,12 +166,17 @@ export default function ProjectDashboard(){
     return map
   }, [meas])
 
-  /* Scoring */
+  /* Alter/Scoring */
+  const eventYear = useMemo(()=>{
+    return project?.date ? Number(String(project.date).slice(0,4)) : new Date().getFullYear()
+  }, [project?.date])
+
   function resolveAge(by:number|null): number{
-    const eventYear = project?.date ? Number(String(project.date).slice(0,4)) : new Date().getFullYear()
     if (!by) return 16
     return Math.max(6, Math.min(49, eventYear - by))
   }
+
+  /** Nur S6 nutzt CSV (Zeit → Punkte), sonst Min/Max-Normierung */
   function scoreFor(st:Station, p:Player, raw:number): number{
     const n = st.name.toLowerCase()
     if (n.includes('schnelligkeit')){ // S6 via CSV (falls da), sonst Fallback
@@ -183,17 +187,19 @@ export default function ProjectDashboard(){
           if (keys.length){
             const bucket = nearestAgeBucket(resolveAge(p.birth_year), keys)
             const rows = map[bucket] || []
-            if (rows.length) return scoreFromTime(Number(raw), rows)
+            if (rows.length) return scoreFromTimeStep(Number(raw), rows)
           }
         }
       }
+      // Fallback: 4–20 s → 100–0 (weniger ist besser)
       return normScore({ ...st, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
     }
     if (n.includes('passgenauigkeit')) {
-      // Rohwert in Capture bereits 0–100 (11/17/33-Gewichtung) → direkt
+      // Rohwert kommt in Capture bereits 0–100 (11/17/33-Gewichtung) → direkt
       return Math.round(clamp(Number(raw), 0, 100))
     }
     if (n.includes('schusspräzision')) {
+      // 24 Punkte Max (oben 3x, unten 1x) → 0–100
       const pct = clamp(Number(raw)/24, 0, 1)
       return Math.round(pct*100)
     }
@@ -231,7 +237,7 @@ export default function ProjectDashboard(){
     })
     out.sort((a, b)=> b.avg - a.avg)
     return out
-  }, [players, sortedStations, measByPlayerStation, s6Female, s6Male, project])
+  }, [players, sortedStations, measByPlayerStation, s6Female, s6Male, project, eventYear])
 
   /* Helpers: Formular befüllen/Reset */
   function fillForm(p: Player){
@@ -273,7 +279,7 @@ export default function ProjectDashboard(){
 
     const updated = await fetch(`/api/projects/${projectId}/players`, { cache:'no-store' }).then(r=>r.json())
     setPlayers(updated.items || [])
-    if (!editId) resetForm() // bei neuem Spieler Formular leeren
+    if (!editId) resetForm()
   }
 
   async function deletePlayer(){
@@ -286,6 +292,13 @@ export default function ProjectDashboard(){
     setPlayers(updated.items || [])
     resetForm()
   }
+
+  // abgeleitetes Alter (unter dem Jahrgang anzeigen)
+  const derivedAge = useMemo(()=>{
+    if (!pYear || String(pYear).length!==4) return null
+    const a = Math.max(6, Math.min(49, eventYear - Number(pYear)))
+    return a
+  }, [pYear, eventYear])
 
   /* Render */
   return (
@@ -311,7 +324,6 @@ export default function ProjectDashboard(){
             <div className="text-lg font-semibold mb-3">{editId ? 'Spieler bearbeiten' : 'Spieler hinzufügen'}</div>
 
             <form onSubmit={addOrUpdatePlayer} className="grid gap-3 md:grid-cols-3">
-              {/* Jede Spalte gleich breit und bündig */}
               <div>
                 <label className="block text-xs font-semibold mb-1">Name *</label>
                 <input className="input" value={pName} onChange={e=>setPName(e.target.value)} placeholder="Vorname Nachname" />
@@ -320,6 +332,11 @@ export default function ProjectDashboard(){
                 <label className="block text-xs font-semibold mb-1">Jahrgang *</label>
                 <input className="input" inputMode="numeric" pattern="\d{4}" placeholder="YYYY"
                   value={pYear} onChange={e=>setPYear(e.target.value as any)} />
+                {derivedAge!==null && (
+                  <div style={{marginTop:4, fontSize:12, color:'rgba(255,255,255,.9)'}}>
+                    Alter am Eventdatum: <strong>{derivedAge}</strong>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1">Verein</label>
@@ -352,7 +369,7 @@ export default function ProjectDashboard(){
                 </select>
               </div>
 
-              {/* Spacing nach „Geschlecht“ */}
+              {/* Luft nach „Geschlecht“ */}
               <div className="md:col-span-3" />
 
               {/* Buttons mit Abstand, rechts ausgerichtet */}
@@ -362,14 +379,13 @@ export default function ProjectDashboard(){
                 </button>
                 <Link href={`/capture?project=${projectId}`} className="btn pill">Capture</Link>
                 {editId && (
-                  <button type="button" className="btn pill"
-                          onClick={deletePlayer}>
+                  <button type="button" className="btn pill" onClick={deletePlayer}>
                     Spieler löschen
                   </button>
                 )}
               </div>
 
-              {/* Zusätzliche Leerzeile nach dem Button-Block */}
+              {/* zusätzliche Leerzeile */}
               <div className="md:col-span-3 h-2" />
             </form>
           </div>
@@ -440,7 +456,7 @@ export default function ProjectDashboard(){
               </table>
             </div>
 
-            {/* F: Extra Abstand vor dem Hinweis */}
+            {/* Extra Abstand vor dem Hinweis */}
             {USE_S6_CSV && (
               <div className="mt-6 text-sm" style={{color:'rgba(255,255,255,.86)'}}>
                 S6-Tabellen: {s6Status==='ok' ? 'geladen ✅' : s6Status==='loading' ? 'lädt …' : 'nicht gefunden – Fallback aktiv ⚠️'}
