@@ -1,12 +1,9 @@
-// app/projects/[id]/page.tsx
-import Hero from '@/app/components/Hero'
-import TiledSection from '@/app/components/TiledSection'
-import BackFab from '@/app/components/BackFab'
-import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import Link from 'next/link'
-import PlayerForm from './PlayerForm'
+'use client'
 
-export const dynamic = 'force-dynamic'
+import React, { useEffect, useMemo, useState } from 'react'
+import { useParams } from 'next/navigation'
+import Hero from '../../components/Hero'
+import BackFab from '../../components/BackFab'
 
 type Station = {
   id: string
@@ -16,179 +13,271 @@ type Station = {
   max_value: number | null
   higher_is_better: boolean | null
 }
-
 type Player = {
   id: string
   display_name: string
   birth_year: number | null
   club: string | null
+  fav_number: number | null
   fav_position: string | null
+  nationality: string | null
+  gender?: 'male'|'female'|null
 }
+type Project = { id: string; name: string; date: string | null; logo_url?: string | null }
+type Measurement = { player_id: string; station_id: string; value: number }
 
-type Measurement = {
-  player_id: string
-  station_id: string
-  value: number
-}
+const ST_ORDER = [
+  'Beweglichkeit',
+  'Technik',
+  'Passgenauigkeit',
+  'Schusskraft',
+  'Schusspräzision',
+  'Schnelligkeit',
+]
+const ST_INDEX: Record<string, number> = ST_ORDER.reduce((acc, n, i)=>{ acc[n]=i; return acc }, {} as Record<string, number>)
 
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n))
-}
-
-function normScore(st: Station, raw: number): number {
-  const name = (st.name || '').toLowerCase()
-
-  // S3 – Passgenauigkeit: gewichtete Treffer 0..10
-  if (name.includes('passgenauigkeit')) {
-    const wHits = raw
-    return clamp((wHits / 10) * 100, 0, 100)
+/* ---------- CSV-Lader (global: /public/config/) – nur für S6 ---------- */
+async function loadS6Map(gender:'male'|'female'): Promise<Record<string, number[]>>{
+  const file = gender === 'male' ? '/config/s6_male.csv' : '/config/s6_female.csv'
+  const res = await fetch(file, { cache:'no-store' })
+  if(!res.ok) throw new Error('CSV fehlt: ' + file)
+  const text = await res.text()
+  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean)
+  if(lines.length < 2) throw new Error('CSV leer/ungültig')
+  const header = lines[0].split(';').map(s=>s.trim())
+  const ageCols = header.slice(1)
+  const out: Record<string, number[]> = {}
+  for(const age of ageCols) out[age] = []
+  for(let i=1;i<lines.length;i++){
+    const cols = lines[i].split(';').map(s=>s.trim())
+    for(let c=1;c<cols.length;c++){
+      const age = ageCols[c-1]
+      const sec = Number((cols[c]||'').replace(',', '.'))
+      if(Number.isFinite(sec)) out[age].push(sec) // index 0=100P … 100=0P
+    }
   }
-
-  // S5 – Schusspräzision: Punkte 0..24
-  if (name.includes('schusspräzision')) {
-    const pts = raw
-    return clamp((pts / 24) * 100, 0, 100)
+  return out
+}
+function nearestAgeBucket(age:number, keys:string[]): string{
+  const parsed = keys.map(k=>{
+    const nums = k.match(/\d+/g)?.map(Number) || []
+    const mid = nums.length===2 ? (nums[0]+nums[1])/2 : (nums[0]||0)
+    return { key:k, mid }
+  })
+  parsed.sort((a,b)=>Math.abs(a.mid-age)-Math.abs(b.mid-age))
+  return parsed[0]?.key || keys[0]
+}
+function scoreFromTime(seconds:number, rows:number[]): number{
+  let idx = 100, best = Infinity
+  for(let i=0;i<rows.length;i++){
+    const d = Math.abs(seconds-rows[i])
+    if(d<best){ best=d; idx=i }
   }
-
-  // S4 – Schusskraft: km/h, Cap 150
-  if (name.includes('schusskraft')) {
-    const kmh = raw
-    return clamp((Math.min(kmh, 150) / 150) * 100, 0, 100)
-  }
-
-  // Generisch min/max (+ higher_is_better)
-  const minv = st.min_value ?? 0
-  const maxv = st.max_value ?? 1
-  const hib = st.higher_is_better ?? true
-  if (maxv === minv) return 0
-
-  const sc = hib
-    ? ((raw - minv) / (maxv - minv)) * 100
-    : ((maxv - raw) / (maxv - minv)) * 100
-
-  return clamp(sc, 0, 100)
+  return Math.max(0, Math.min(100, 100-idx))
+}
+function clamp(n:number,min:number,max:number){ return Math.max(min, Math.min(max, n)) }
+function normScore(st:Station, raw:number): number{
+  const min = st.min_value ?? 0
+  const max = st.max_value ?? 100
+  if (max===min) return 0
+  if (st.higher_is_better) return Math.round(clamp((raw-min)/(max-min),0,1)*100)
+  return Math.round(clamp((max-raw)/(max-min),0,1)*100)
 }
 
-export default async function ProjectPage({ params }: { params: { id: string } }) {
+export default function ProjectDashboard(){
+  const params = useParams<{id:string}>()
   const projectId = params.id
 
-  // Daten parallel laden
-  const [
-    { data: project, error: pErr },
-    { data: stations, error: sErr },
-    { data: players, error: plErr },
-    { data: measurements, error: mErr },
-  ] = await Promise.all([
-    supabaseAdmin.from('projects').select('id,name,date,logo_url').eq('id', projectId).single(),
-    supabaseAdmin
-      .from('stations')
-      .select('id,name,unit,min_value,max_value,higher_is_better')
-      .eq('project_id', projectId)
-      .order('name', { ascending: true }),
-    supabaseAdmin
-      .from('players')
-      .select('id,display_name,birth_year,club,fav_position')
-      .eq('project_id', projectId)
-      .order('display_name', { ascending: true }),
-    supabaseAdmin
-      .from('measurements')
-      .select('player_id,station_id,value')
-      .eq('project_id', projectId),
-  ])
+  const [project, setProject] = useState<Project|null>(null)
+  const [stations, setStations] = useState<Station[]>([])
+  const [players, setPlayers] = useState<Player[]>([])
+  const [meas, setMeas] = useState<Measurement[]>([])
 
-  if (pErr) throw new Error(pErr.message)
-  if (sErr) throw new Error(sErr.message)
-  if (plErr) throw new Error(plErr.message)
-  if (mErr) throw new Error(mErr.message)
+  // S6 CSV Maps
+  const [s6Female, setS6Female] = useState<Record<string, number[]>|null>(null)
+  const [s6Male, setS6Male] = useState<Record<string, number[]>|null>(null)
+  const [s6Status, setS6Status] = useState<'ok'|'fail'|'loading'>('loading')
 
-  // Indexe
-  const stById = new Map<string, Station>()
-  ;(stations ?? []).forEach((s) => stById.set(s.id, s as Station))
+  // Laden
+  useEffect(()=>{
+    fetch(`/api/projects/${projectId}`, { cache:'no-store' }).then(r=>r.json()).then(res=> setProject(res.item || null)).catch(()=>setProject(null))
+    fetch(`/api/projects/${projectId}/stations`, { cache:'no-store' }).then(r=>r.json()).then(res=>{
+      const st: Station[] = (res.items ?? []).slice().sort((a,b)=>{
+        const ia = ST_ORDER.indexOf(a.name), ib = ST_ORDER.indexOf(b.name)
+        if(ia>=0 && ib>=0) return ia-ib
+        if(ia>=0) return -1
+        if(ib>=0) return 1
+        return a.name.localeCompare(b.name,'de')
+      })
+      setStations(st)
+    })
+    fetch(`/api/projects/${projectId}/players`, { cache:'no-store' }).then(r=>r.json()).then(res=> setPlayers(res.items || []))
+    fetch(`/api/projects/${projectId}/measurements`, { cache:'no-store' }).then(r=>r.json()).then(res=> setMeas(res.items || []))
+  }, [projectId])
 
-  const values: Record<string, Record<string, { raw: number; norm: number }>> = {}
-  for (const m of (measurements ?? []) as Measurement[]) {
-    const st = stById.get(m.station_id)
-    if (!st) continue
-    const raw = Number(m.value)
-    const norm = Math.round(normScore(st, raw))
-    values[m.player_id] ||= {}
-    values[m.player_id][m.station_id] = { raw, norm }
+  // CSV global laden (einmal)
+  useEffect(()=>{
+    setS6Status('loading')
+    Promise.allSettled([loadS6Map('female'), loadS6Map('male')]).then(([f, m])=>{
+      if (f.status==='fulfilled') setS6Female(f.value)
+      if (m.status==='fulfilled') setS6Male(m.value)
+      if (f.status==='fulfilled' || m.status==='fulfilled') setS6Status('ok')
+      else setS6Status('fail')
+    })
+  }, [])
+
+  const stationById = useMemo(()=>{
+    const map: Record<string, Station> = {}
+    stations.forEach(s=>{ map[s.id]=s })
+    return map
+  }, [stations])
+
+  const measByPlayerStation = useMemo(()=>{
+    const map: Record<string, Record<string, number>> = {}
+    for(const m of meas){
+      if(!map[m.player_id]) map[m.player_id] = {}
+      map[m.player_id][m.station_id] = Number(m.value || 0)
+    }
+    return map
+  }, [meas])
+
+  function resolveAge(by:number|null): number{
+    const eventYear = project?.date ? Number(String(project.date).slice(0,4)) : new Date().getFullYear()
+    if (!by) return 16
+    return Math.max(6, Math.min(49, eventYear - by))
   }
+
+  function scoreFor(st:Station, p:Player, raw:number): number{
+    const n = st.name.toLowerCase()
+    if (n.includes('schnelligkeit')){ // S6 via CSV
+      const map = p.gender==='male' ? s6Male : s6Female
+      if (map){
+        const keys = Object.keys(map)
+        if (keys.length){
+          const bucket = nearestAgeBucket(resolveAge(p.birth_year), keys)
+          const rows = map[bucket] || []
+          if (rows.length) return scoreFromTime(Number(raw), rows)
+        }
+      }
+      // Fallback 4–20 s (weniger ist besser)
+      return normScore({ ...st, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
+    }
+    if (n.includes('passgenauigkeit')) {
+      // Rohwert = gewichtete Punkte (11/17/33) – Score = clamp 0..100
+      return Math.round(clamp(Number(raw), 0, 100))
+    }
+    if (n.includes('schusspräzision')) {
+      // Rohwert = Punkte (max 24) – Score = (punkte/24)*100
+      const pct = clamp(Number(raw)/24, 0, 1)
+      return Math.round(pct*100)
+    }
+    return Math.round(normScore(st, Number(raw)))
+  }
+
+  // Spalten sortiert nach ST_ORDER
+  const sortedStations = useMemo(()=>{
+    return stations.slice().sort((a,b)=>{
+      const ia = ST_INDEX[a.name] ?? 99
+      const ib = ST_INDEX[b.name] ?? 99
+      return ia - ib
+    })
+  }, [stations])
+
+  // Spieler mit Ø berechnen + sortieren
+  const rows = useMemo(()=>{
+    return players.map(p=>{
+      const perStation: { id:string; name:string; raw:number|null; score:number|null; unit?:string|null }[] = []
+      let sum = 0
+      for(const st of sortedStations){
+        const raw = measByPlayerStation[p.id]?.[st.id]
+        let sc: number|null = null
+        if (typeof raw === 'number') {
+          sc = scoreFor(st, p, raw)
+          sum += sc
+        }
+        perStation.push({ id: st.id, name: st.name, raw: typeof raw==='number'?raw:null, score: sc, unit: st.unit })
+      }
+      const avg = Math.round(sum / (sortedStations.length || 1))
+      return { player: p, perStation, avg }
+    }).sort((a,b)=> b.avg - a.avg)
+  }, [players, sortedStations, measByPlayerStation, s6Female, s6Male, project])
 
   return (
     <main>
-      {/* Kopfbereich (player.jpg) */}
       <Hero
-        title={project?.name ?? 'Run'}
-        subtitle={project?.date ?? ''}
+        title={project ? project.name : 'Projekt'}
+        subtitle={project?.date ? String(project.date) : undefined}
         image="/player.jpg"
-        topRightLogoUrl={project?.logo_url ?? undefined}
-        align="top"
+        topRightLogoUrl={project?.logo_url || undefined}
       >
-        <div className="flex flex-col items-center gap-4 w-full">
-          <div className="pills">
-            <Link href={`/leaderboard?project=${projectId}`} className="btn pill">Rangliste</Link>
-            {/* BUTTON-FIX: jetzt auf /capture?project=... */}
-            <Link href={`/capture?project=${projectId}`} className="btn pill">Capture</Link>
-          </div>
-
-          {/* Spieleranlage */}
-          <div className="card glass w-full max-w-2xl text-left">
-            <PlayerForm projectId={projectId} />
-          </div>
+        {/* Infozeile S6 CSV Status */}
+        <div className="text-sm hero-sub">
+          S6-Tabellen: {s6Status==='ok' ? 'geladen ✅' : s6Status==='loading' ? 'lädt …' : 'nicht gefunden ❌'} (global aus /public/config)
         </div>
       </Hero>
 
-      {/* Matrix-Bereich (matrix.jpg) */}
-      <TiledSection image="/matrix.jpg">
-        <div className="card glass w-full text-left pb-8">
-          <div className="overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="sticky top-0 bg-white/90 backdrop-blur">
-                <tr className="border-b">
-                  <th className="text-left p-2">Spieler</th>
-                  {(stations ?? []).map((s) => (
-                    <th key={s.id} className="text-center p-2">{s.name}</th>
+      <section className="p-5 max-w-6xl mx-auto page-pad">
+        <div className="card">
+          <div className="mb-3">
+            <div className="text-lg font-semibold">Spieler-Matrix</div>
+            <div className="text-sm muted">Ø sortiert (absteigend). Rohwert steht jeweils klein unter dem Score.</div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left border-b">
+                  <th className="p-2 whitespace-nowrap">Spieler</th>
+                  {sortedStations.map(st=>(
+                    <th key={st.id} className="p-2 whitespace-nowrap">{st.name}</th>
                   ))}
+                  <th className="p-2 whitespace-nowrap text-right">Ø</th>
                 </tr>
               </thead>
               <tbody>
-                {(players ?? []).map((pl: Player) => (
-                  <tr key={pl.id} className="border-b">
+                {rows.map(({player, perStation, avg})=>(
+                  <tr key={player.id} className="border-b align-top">
                     <td className="p-2 whitespace-nowrap font-medium">
-                      {pl.display_name} {pl.birth_year ? `(${pl.birth_year})` : ''}
-                      <br />
+                      {player.display_name} {player.birth_year?`(${player.birth_year})`:''}
+                      <br/>
                       <span className="text-xs muted">
-                        {pl.club || '–'} {pl.fav_position ? `• ${pl.fav_position}` : ''}
+                        {player.gender ? (player.gender==='male'?'männlich':'weiblich') : '—'} • {player.club || '–'}
+                        {player.fav_position ? ` • ${player.fav_position}` : ''}
+                        {Number.isFinite(player.fav_number as any) ? ` • #${player.fav_number}` : ''}
                       </span>
                     </td>
 
-                    {(stations ?? []).map((st) => {
-                      const cell = values[pl.id]?.[st.id]
+                    {perStation.map(cell=>{
+                      const score = cell.score
+                      const raw = cell.raw
                       return (
-                        <td key={st.id} className="p-2 text-center">
-                          {cell ? (
-                            <span
-                              className="badge-green"
-                              title={`Rohwert: ${cell.raw}${st.unit ? ' ' + st.unit : ''}`}
-                            >
-                              {cell.norm}
-                            </span>
-                          ) : (
-                            <span className="badge-red" title="Noch nicht erfasst">×</span>
-                          )}
+                        <td key={cell.id} className="p-2">
+                          {typeof score === 'number' ? (
+                            <div>
+                              <span className="badge-green">{score}</span>
+                              <div className="text-[11px] muted mt-1">
+                                {typeof raw==='number' ? `${raw}${cell.unit ? ` ${cell.unit}` : ''}` : '—'}
+                              </div>
+                            </div>
+                          ) : <span className="text-xs muted">—</span>}
                         </td>
                       )
                     })}
+
+                    <td className="p-2 text-right">
+                      <span className="badge-green">{avg}</span>
+                    </td>
                   </tr>
                 ))}
+
+                {!rows.length && (
+                  <tr><td colSpan={2+sortedStations.length} className="p-3 text-center muted">Noch keine Spieler.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
         </div>
-
-        <div className="h-16" />
-      </TiledSection>
+      </section>
 
       <BackFab />
     </main>
