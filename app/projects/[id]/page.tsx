@@ -33,8 +33,10 @@ const ST_ORDER = [
   'Schusskraft',
   'Schusspräzision',
   'Schnelligkeit',
-]
-const ST_INDEX: Record<string, number> = ST_ORDER.reduce((acc, n, i)=>{ acc[n]=i; return acc }, {} as Record<string, number>)
+] as const
+
+const ST_INDEX: Record<string, number> =
+  ST_ORDER.reduce((acc, n, i)=>{ acc[n]=i; return acc }, {} as Record<string, number>)
 
 /* ---------- CSV-Lader (global: /public/config/) – nur für S6 ---------- */
 async function loadS6Map(gender:'male'|'female'): Promise<Record<string, number[]>>{
@@ -100,19 +102,29 @@ export default function ProjectDashboard(){
 
   // Laden
   useEffect(()=>{
-    fetch(`/api/projects/${projectId}`, { cache:'no-store' }).then(r=>r.json()).then(res=> setProject(res.item || null)).catch(()=>setProject(null))
-    fetch(`/api/projects/${projectId}/stations`, { cache:'no-store' }).then(r=>r.json()).then(res=>{
-      const st: Station[] = (res.items ?? []).slice().sort((a,b)=>{
-        const ia = ST_ORDER.indexOf(a.name), ib = ST_ORDER.indexOf(b.name)
-        if(ia>=0 && ib>=0) return ia-ib
-        if(ia>=0) return -1
-        if(ib>=0) return 1
-        return a.name.localeCompare(b.name,'de')
+    fetch(`/api/projects/${projectId}`, { cache:'no-store' })
+      .then(r=>r.json()).then(res=> setProject(res.item || null))
+      .catch(()=>setProject(null))
+
+    fetch(`/api/projects/${projectId}/stations`, { cache:'no-store' })
+      .then(r=>r.json()).then(res=>{
+        const items: Station[] = (res.items ?? [])
+        const st: Station[] = items.slice().sort((a: Station, b: Station)=>{
+          const ia = ST_ORDER.indexOf(a.name as typeof ST_ORDER[number])
+          const ib = ST_ORDER.indexOf(b.name as typeof ST_ORDER[number])
+          if(ia>=0 && ib>=0) return ia-ib
+          if(ia>=0) return -1
+          if(ib>=0) return 1
+          return a.name.localeCompare(b.name,'de')
+        })
+        setStations(st)
       })
-      setStations(st)
-    })
-    fetch(`/api/projects/${projectId}/players`, { cache:'no-store' }).then(r=>r.json()).then(res=> setPlayers(res.items || []))
-    fetch(`/api/projects/${projectId}/measurements`, { cache:'no-store' }).then(r=>r.json()).then(res=> setMeas(res.items || []))
+
+    fetch(`/api/projects/${projectId}/players`, { cache:'no-store' })
+      .then(r=>r.json()).then(res=> setPlayers(res.items || []))
+
+    fetch(`/api/projects/${projectId}/measurements`, { cache:'no-store' })
+      .then(r=>r.json()).then(res=> setMeas(res.items || []))
   }, [projectId])
 
   // CSV global laden (einmal)
@@ -128,7 +140,7 @@ export default function ProjectDashboard(){
 
   const stationById = useMemo(()=>{
     const map: Record<string, Station> = {}
-    stations.forEach(s=>{ map[s.id]=s })
+    stations.forEach((s: Station)=>{ map[s.id]=s })
     return map
   }, [stations])
 
@@ -163,7 +175,7 @@ export default function ProjectDashboard(){
       return normScore({ ...st, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
     }
     if (n.includes('passgenauigkeit')) {
-      // Rohwert = gewichtete Punkte (11/17/33) – Score = clamp 0..100
+      // Rohwert (0–100) kommt als gewichtete Punkte (11/17/33) rein → clamp 0..100
       return Math.round(clamp(Number(raw), 0, 100))
     }
     if (n.includes('schusspräzision')) {
@@ -175,8 +187,8 @@ export default function ProjectDashboard(){
   }
 
   // Spalten sortiert nach ST_ORDER
-  const sortedStations = useMemo(()=>{
-    return stations.slice().sort((a,b)=>{
+  const sortedStations = useMemo<Station[]>(()=>{
+    return stations.slice().sort((a: Station, b: Station)=>{
       const ia = ST_INDEX[a.name] ?? 99
       const ib = ST_INDEX[b.name] ?? 99
       return ia - ib
@@ -185,8 +197,13 @@ export default function ProjectDashboard(){
 
   // Spieler mit Ø berechnen + sortieren
   const rows = useMemo(()=>{
-    return players.map(p=>{
-      const perStation: { id:string; name:string; raw:number|null; score:number|null; unit?:string|null }[] = []
+    type Row = {
+      player: Player
+      perStation: { id:string; name:string; raw:number|null; score:number|null; unit?:string|null }[]
+      avg: number
+    }
+    const out: Row[] = players.map((p: Player)=>{
+      const perStation: Row['perStation'] = []
       let sum = 0
       for(const st of sortedStations){
         const raw = measByPlayerStation[p.id]?.[st.id]
@@ -199,7 +216,9 @@ export default function ProjectDashboard(){
       }
       const avg = Math.round(sum / (sortedStations.length || 1))
       return { player: p, perStation, avg }
-    }).sort((a,b)=> b.avg - a.avg)
+    })
+    out.sort((a: Row, b: Row)=> b.avg - a.avg)
+    return out
   }, [players, sortedStations, measByPlayerStation, s6Female, s6Male, project])
 
   return (
@@ -210,7 +229,6 @@ export default function ProjectDashboard(){
         image="/player.jpg"
         topRightLogoUrl={project?.logo_url || undefined}
       >
-        {/* Infozeile S6 CSV Status */}
         <div className="text-sm hero-sub">
           S6-Tabellen: {s6Status==='ok' ? 'geladen ✅' : s6Status==='loading' ? 'lädt …' : 'nicht gefunden ❌'} (global aus /public/config)
         </div>
@@ -228,7 +246,7 @@ export default function ProjectDashboard(){
               <thead>
                 <tr className="text-left border-b">
                   <th className="p-2 whitespace-nowrap">Spieler</th>
-                  {sortedStations.map(st=>(
+                  {sortedStations.map((st: Station)=>(
                     <th key={st.id} className="p-2 whitespace-nowrap">{st.name}</th>
                   ))}
                   <th className="p-2 whitespace-nowrap text-right">Ø</th>
