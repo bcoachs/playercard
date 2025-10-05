@@ -37,7 +37,7 @@ const ST_ORDER = [
 const ST_INDEX: Record<string, number> =
   ST_ORDER.reduce((acc, n, i)=>{ acc[n]=i; return acc }, {} as Record<string, number>)
 
-/* CSV Nutzung (S6) – global aus /public/config/, abschaltbar via Env */
+/* S6 via CSV global (optional) */
 const USE_S6_CSV = (() => {
   const v = process.env.NEXT_PUBLIC_USE_S6_CSV
   if (v === '0' || v === 'false') return false
@@ -102,7 +102,9 @@ export default function ProjectDashboard(){
   const [players, setPlayers] = useState<Player[]>([])
   const [meas, setMeas] = useState<Measurement[]>([])
 
-  // Spieler-Form
+  // Spieler-Form (Create/Update)
+  const [editId, setEditId] = useState<string|''>('')
+
   const [pName, setPName] = useState('')
   const [pYear, setPYear] = useState<number|''>('')
   const [pClub, setPClub] = useState('')
@@ -111,7 +113,7 @@ export default function ProjectDashboard(){
   const [pNat, setPNat] = useState('')
   const [pGender, setPGender] = useState<'male'|'female'|''>('')
 
-  // S6 CSV
+  // S6 CSV (global)
   const [s6Female, setS6Female] = useState<Record<string, number[]>|null>(null)
   const [s6Male, setS6Male] = useState<Record<string, number[]>|null>(null)
   const [s6Status, setS6Status] = useState<'ok'|'fail'|'off'|'loading'>(USE_S6_CSV ? 'loading' : 'off')
@@ -165,15 +167,15 @@ export default function ProjectDashboard(){
     return map
   }, [meas])
 
+  /* Scoring */
   function resolveAge(by:number|null): number{
     const eventYear = project?.date ? Number(String(project.date).slice(0,4)) : new Date().getFullYear()
     if (!by) return 16
     return Math.max(6, Math.min(49, eventYear - by))
   }
-
   function scoreFor(st:Station, p:Player, raw:number): number{
     const n = st.name.toLowerCase()
-    if (n.includes('schnelligkeit')){ // S6 via CSV (falls vorhanden), sonst Fallback
+    if (n.includes('schnelligkeit')){ // S6 via CSV (falls da), sonst Fallback
       if (USE_S6_CSV){
         const map = p.gender==='male' ? s6Male : s6Female
         if (map){
@@ -185,15 +187,13 @@ export default function ProjectDashboard(){
           }
         }
       }
-      // Fallback 4–20 s (weniger ist besser)
       return normScore({ ...st, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
     }
     if (n.includes('passgenauigkeit')) {
-      // 0–100 direkt (aus Capture mit 11/17/33-Gewichtung berechnet)
+      // Rohwert in Capture bereits 0–100 (11/17/33-Gewichtung) → direkt
       return Math.round(clamp(Number(raw), 0, 100))
     }
     if (n.includes('schusspräzision')) {
-      // Rohwert = Punkte (max 24) – Score = (punkte/24)*100
       const pct = clamp(Number(raw)/24, 0, 1)
       return Math.round(pct*100)
     }
@@ -233,10 +233,28 @@ export default function ProjectDashboard(){
     return out
   }, [players, sortedStations, measByPlayerStation, s6Female, s6Male, project])
 
-  async function addPlayer(e: React.FormEvent){
+  /* Helpers: Formular befüllen/Reset */
+  function fillForm(p: Player){
+    setEditId(p.id)
+    setPName(p.display_name || '')
+    setPYear(p.birth_year || '')
+    setPClub(p.club || '')
+    setPNum(typeof p.fav_number==='number' ? p.fav_number : '')
+    setPPos(p.fav_position || '')
+    setPNat(p.nationality || '')
+    setPGender((p.gender as any) || '')
+  }
+  function resetForm(){
+    setEditId('')
+    setPName(''); setPYear(''); setPClub(''); setPNum(''); setPPos(''); setPNat(''); setPGender('')
+  }
+
+  /* Actions: Create/Update/Delete */
+  async function addOrUpdatePlayer(e: React.FormEvent){
     e.preventDefault()
     if (!pName.trim()){ alert('Bitte Name eingeben'); return }
     if (!pYear || String(pYear).length!==4){ alert('Bitte Jahrgang (YYYY) eingeben'); return }
+
     const body = new FormData()
     body.append('display_name', pName.trim())
     body.append('birth_year', String(pYear))
@@ -246,14 +264,30 @@ export default function ProjectDashboard(){
     if (pNat) body.append('nationality', pNat)
     if (pGender) body.append('gender', pGender)
 
-    const res = await fetch(`/api/projects/${projectId}/players`, { method:'POST', body })
+    const method = editId ? 'PUT' : 'POST'
+    if (editId) body.append('id', editId)
+
+    const res = await fetch(`/api/projects/${projectId}/players`, { method, body })
     const js = await res.json().catch(()=> ({}))
-    if (!res.ok){ alert(js?.error || 'Fehler beim Anlegen'); return }
-    fetch(`/api/projects/${projectId}/players`, { cache:'no-store' })
-      .then(r=>r.json()).then(res=> setPlayers(res.items || []))
-    setPName(''); setPYear(''); setPClub(''); setPNum(''); setPPos(''); setPNat(''); setPGender('')
+    if (!res.ok){ alert(js?.error || 'Fehler beim Speichern'); return }
+
+    const updated = await fetch(`/api/projects/${projectId}/players`, { cache:'no-store' }).then(r=>r.json())
+    setPlayers(updated.items || [])
+    if (!editId) resetForm() // bei neuem Spieler Formular leeren
   }
 
+  async function deletePlayer(){
+    if (!editId) return
+    const yes = confirm('Willst du wirklich diesen Spieler löschen?')
+    if (!yes) return
+    const res = await fetch(`/api/projects/${projectId}/players?id=${encodeURIComponent(editId)}`, { method:'DELETE' })
+    if (!res.ok){ const t = await res.text(); alert(t || 'Fehler beim Löschen'); return }
+    const updated = await fetch(`/api/projects/${projectId}/players`, { cache:'no-store' }).then(r=>r.json())
+    setPlayers(updated.items || [])
+    resetForm()
+  }
+
+  /* Render */
   return (
     <main>
 
@@ -263,20 +297,21 @@ export default function ProjectDashboard(){
           <div className="flex items-start justify-between mb-5">
             <div>
               <h1 className="text-3xl md:text-4xl font-extrabold hero-text">
-                Run: {project?.name || '—'}
+                Run: {project?.name ?? '—'}
               </h1>
               {project?.date && <div className="hero-sub">{String(project.date)}</div>}
             </div>
-
             {project?.logo_url && (
               <img src={project.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
             )}
           </div>
 
-          {/* Formular auf dunklem Glas-Panel, helle Schrift */}
-          <div className="card-glass-dark max-w-4xl">
-            <div className="text-lg font-semibold mb-3">Spieler hinzufügen</div>
-            <form onSubmit={addPlayer} className="grid gap-3 md:grid-cols-3">
+          {/* Formular-Card (dunkles Glas) */}
+          <div className="card-glass-dark max-w-5xl">
+            <div className="text-lg font-semibold mb-3">{editId ? 'Spieler bearbeiten' : 'Spieler hinzufügen'}</div>
+
+            <form onSubmit={addOrUpdatePlayer} className="grid gap-3 md:grid-cols-3">
+              {/* Jede Spalte gleich breit und bündig */}
               <div>
                 <label className="block text-xs font-semibold mb-1">Name *</label>
                 <input className="input" value={pName} onChange={e=>setPName(e.target.value)} placeholder="Vorname Nachname" />
@@ -307,6 +342,7 @@ export default function ProjectDashboard(){
                 <label className="block text-xs font-semibold mb-1">Nationalität</label>
                 <input className="input" value={pNat} onChange={e=>setPNat(e.target.value)} placeholder="DE, FR, ..." />
               </div>
+
               <div>
                 <label className="block text-xs font-semibold mb-1">Geschlecht</label>
                 <select className="input" value={pGender} onChange={e=>setPGender(e.target.value as any)}>
@@ -316,32 +352,46 @@ export default function ProjectDashboard(){
                 </select>
               </div>
 
-              {/* Button-Reihe mit Abstand nach oben */}
-              <div className="md:col-span-3 mt-2 flex items-center gap-3 justify-end">
-                <button className="btn pill" type="submit">Spieler anlegen</button>
+              {/* Spacing nach „Geschlecht“ */}
+              <div className="md:col-span-3" />
+
+              {/* Buttons mit Abstand, rechts ausgerichtet */}
+              <div className="md:col-span-3 flex items-center gap-3 justify-end">
+                <button className="btn pill" type="submit">
+                  {editId ? 'Spieler speichern' : 'Spieler anlegen'}
+                </button>
                 <Link href={`/capture?project=${projectId}`} className="btn pill">Capture</Link>
+                {editId && (
+                  <button type="button" className="btn pill"
+                          onClick={deletePlayer}>
+                    Spieler löschen
+                  </button>
+                )}
               </div>
+
+              {/* Zusätzliche Leerzeile nach dem Button-Block */}
+              <div className="md:col-span-3 h-2" />
             </form>
           </div>
         </div>
       </section>
 
-      {/* Sektion 2: Matrix über matrix.jpg (mit kleinem Rand links/rechts/oben) */}
+      {/* Sektion 2: Matrix über matrix.jpg mit „Glass“-Rahmen + Abstand & Hover */}
       <section className="bg-matrix page-pad">
         <div className="container w-full px-5 py-8">
-          {/* kleiner äußerer Rand: */}
+          {/* kleiner äußerer Rand */}
           <div className="mx-2 md:mx-3 mt-2">
             <div className="card-glass-dark table-dark overflow-x-auto">
               <div className="mb-3">
                 <div className="text-lg font-semibold">Spieler-Matrix</div>
-                <div className="text-sm" style={{color:'rgba(255,255,255,.8)'}}>
-                  Ø steht für Durchschnitt über alle erfassten Stationen.
+                <div className="text-sm" style={{color:'rgba(255,255,255,.82)'}}>
+                  Ø = Durchschnitt über alle erfassten Stationen. Klick auf einen Spieler lädt die Daten oben ins Formular.
                 </div>
               </div>
 
-              <table className="w-full text-sm">
+              <table className="w-full text-sm matrix-table">
                 <thead>
-                  <tr className="text-left" style={{borderBottom:'1px solid rgba(255,255,255,.15)'}}>
+                  <tr className="text-left">
                     <th className="p-2 whitespace-nowrap">Spieler</th>
                     <th className="p-2 whitespace-nowrap">Ø</th>
                     {stations.length ? ST_ORDER.map(n=>{
@@ -352,7 +402,10 @@ export default function ProjectDashboard(){
                 </thead>
                 <tbody>
                   {rows.map(({player, perStation, avg})=>(
-                    <tr key={player.id} style={{borderBottom:'1px solid rgba(255,255,255,.12)'}} className="align-top">
+                    <tr key={player.id}
+                        className="align-top hoverable-row"
+                        onClick={()=>fillForm(player)}
+                        style={{cursor:'pointer'}}>
                       <td className="p-2 whitespace-nowrap font-medium">
                         {player.display_name}{Number.isFinite(player.fav_number as any) ? ` #${player.fav_number}` : ''}
                       </td>
@@ -376,21 +429,24 @@ export default function ProjectDashboard(){
                       })}
                     </tr>
                   ))}
-
                   {!rows.length && (
-                    <tr><td colSpan={2+stations.length} className="p-3 text-center" style={{color:'rgba(255,255,255,.8)'}}>Noch keine Spieler.</td></tr>
+                    <tr>
+                      <td colSpan={2+stations.length} className="p-3 text-center" style={{color:'rgba(255,255,255,.85)'}}>
+                        Noch keine Spieler.
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
             </div>
-          </div>
 
-          {/* S6-Hinweis ganz am Seitenende */}
-          {USE_S6_CSV && (
-            <div className="mt-4 text-sm" style={{color:'rgba(255,255,255,.8)'}}>
-              S6-Tabellen: {s6Status==='ok' ? 'geladen ✅' : s6Status==='loading' ? 'lädt …' : 'nicht gefunden – Fallback aktiv ⚠️'}
-            </div>
-          )}
+            {/* F: Extra Abstand vor dem Hinweis */}
+            {USE_S6_CSV && (
+              <div className="mt-6 text-sm" style={{color:'rgba(255,255,255,.86)'}}>
+                S6-Tabellen: {s6Status==='ok' ? 'geladen ✅' : s6Status==='loading' ? 'lädt …' : 'nicht gefunden – Fallback aktiv ⚠️'}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
