@@ -37,14 +37,13 @@ const ST_ORDER = [
 const ST_INDEX: Record<string, number> =
   ST_ORDER.reduce((acc, n, i)=>{ acc[n]=i; return acc }, {} as Record<string, number>)
 
-/* ------- Optionaler CSV-Use-Switch (Default: true) ------- */
+/* CSV Nutzung (S6) – global aus /public/config/, abschaltbar via Env */
 const USE_S6_CSV = (() => {
   const v = process.env.NEXT_PUBLIC_USE_S6_CSV
   if (v === '0' || v === 'false') return false
   return true
 })()
 
-/* ---------- CSV-Lader (global: /public/config/) – nur für S6 ---------- */
 async function loadS6Map(gender:'male'|'female'): Promise<Record<string, number[]>|null>{
   try{
     const file = gender === 'male' ? '/config/s6_male.csv' : '/config/s6_female.csv'
@@ -62,7 +61,7 @@ async function loadS6Map(gender:'male'|'female'): Promise<Record<string, number[
       for(let c=1;c<cols.length;c++){
         const age = ageCols[c-1]
         const sec = Number((cols[c]||'').replace(',', '.'))
-        if(Number.isFinite(sec)) out[age].push(sec) // index 0 = 100P … 100 = 0P
+        if(Number.isFinite(sec)) out[age].push(sec) // Index 0 = 100 Punkte … 100 = 0 Punkte
       }
     }
     return out
@@ -103,8 +102,7 @@ export default function ProjectDashboard(){
   const [players, setPlayers] = useState<Player[]>([])
   const [meas, setMeas] = useState<Measurement[]>([])
 
-  // Spieler-Form (Neu anlegen)
-  const [formOpen, setFormOpen] = useState(true)
+  // Spieler-Form
   const [pName, setPName] = useState('')
   const [pYear, setPYear] = useState<number|''>('')
   const [pClub, setPClub] = useState('')
@@ -113,7 +111,7 @@ export default function ProjectDashboard(){
   const [pNat, setPNat] = useState('')
   const [pGender, setPGender] = useState<'male'|'female'|''>('')
 
-  // S6 CSV Maps
+  // S6 CSV
   const [s6Female, setS6Female] = useState<Record<string, number[]>|null>(null)
   const [s6Male, setS6Male] = useState<Record<string, number[]>|null>(null)
   const [s6Status, setS6Status] = useState<'ok'|'fail'|'off'|'loading'>(USE_S6_CSV ? 'loading' : 'off')
@@ -145,7 +143,7 @@ export default function ProjectDashboard(){
       .then(r=>r.json()).then(res=> setMeas(res.items || []))
   }, [projectId])
 
-  // CSV global laden (einmal), aber nur wenn aktiviert
+  // CSV global laden
   useEffect(()=>{
     if (!USE_S6_CSV){ setS6Status('off'); return }
     setS6Status('loading')
@@ -191,7 +189,7 @@ export default function ProjectDashboard(){
       return normScore({ ...st, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
     }
     if (n.includes('passgenauigkeit')) {
-      // Rohwert bereits 0–100 (11/17/33 Gewichtung) → clamp 0..100
+      // Deine 11/17/33-Logik ist bereits in capture umgesetzt → hier kommt ein normierter 0–100-Wert an.
       return Math.round(clamp(Number(raw), 0, 100))
     }
     if (n.includes('schusspräzision')) {
@@ -202,7 +200,6 @@ export default function ProjectDashboard(){
     return Math.round(normScore(st, Number(raw)))
   }
 
-  // Spalten sortiert nach ST_ORDER
   const sortedStations = useMemo<Station[]>(()=>{
     return stations.slice().sort((a: Station, b: Station)=>{
       const ia = ST_INDEX[a.name] ?? 99
@@ -211,7 +208,6 @@ export default function ProjectDashboard(){
     })
   }, [stations])
 
-  // Spieler mit Ø berechnen + sortieren
   const rows = useMemo(()=>{
     type Row = {
       player: Player
@@ -220,20 +216,20 @@ export default function ProjectDashboard(){
     }
     const out: Row[] = players.map((p: Player)=>{
       const perStation: Row['perStation'] = []
-      let sum = 0
+      let sum = 0, count = 0
       for(const st of sortedStations){
         const raw = measByPlayerStation[p.id]?.[st.id]
         let sc: number|null = null
         if (typeof raw === 'number') {
           sc = scoreFor(st, p, raw)
-          sum += sc
+          sum += sc; count++
         }
         perStation.push({ id: st.id, name: st.name, raw: typeof raw==='number'?raw:null, score: sc, unit: st.unit })
       }
-      const avg = Math.round(sum / (sortedStations.length || 1))
+      const avg = count ? Math.round(sum / count) : 0
       return { player: p, perStation, avg }
     })
-    out.sort((a: Row, b: Row)=> b.avg - a.avg)
+    out.sort((a, b)=> b.avg - a.avg)
     return out
   }, [players, sortedStations, measByPlayerStation, s6Female, s6Male, project])
 
@@ -253,38 +249,31 @@ export default function ProjectDashboard(){
     const res = await fetch(`/api/projects/${projectId}/players`, { method:'POST', body })
     const js = await res.json().catch(()=> ({}))
     if (!res.ok){ alert(js?.error || 'Fehler beim Anlegen'); return }
-    // Liste aktualisieren
     fetch(`/api/projects/${projectId}/players`, { cache:'no-store' })
       .then(r=>r.json()).then(res=> setPlayers(res.items || []))
-    // Formular leeren
     setPName(''); setPYear(''); setPClub(''); setPNum(''); setPPos(''); setPNat(''); setPGender('')
   }
 
   return (
     <main>
-      <Hero
-        title={project ? project.name : 'Projekt'}
-        subtitle={project?.date ? String(project.date) : undefined}
-        image="/player.jpg"
-        topRightLogoUrl={project?.logo_url || undefined}
-      >
-        {/* CSV-Status nur dezent und nur wenn explizit aktiv */}
-        {USE_S6_CSV && (
-          <div className="text-sm hero-sub">
-            S6-Tabellen: {s6Status==='ok' ? 'geladen ✅' : s6Status==='loading' ? 'lädt …' : 'nicht gefunden – Fallback aktiv ⚠️'}
-          </div>
-        )}
-      </Hero>
 
-      <section className="p-5 max-w-6xl mx-auto page-pad">
-        {/* Spieler hinzufügen */}
-        <div className="card bg-white shadow-sm mb-5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-lg font-semibold">Spieler hinzufügen</div>
-            <button className="text-sm btn" onClick={()=>setFormOpen(v=>!v)}>{formOpen?'Schließen':'Öffnen'}</button>
+      {/* Sektion 1: Spieler-Eingabe über player.jpg */}
+      <section className="hero-full safe-area bg-player">
+        <div className="container w-full px-5">
+          <div className="flex items-start justify-between mb-5">
+            <h1 className="text-3xl md:text-4xl font-extrabold hero-text">
+              {project?.name || 'Projekt'}
+            </h1>
+            {project?.logo_url && (
+              // Vereinslogo oben rechts
+              <img src={project.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
+            )}
           </div>
+          {project?.date && <div className="hero-sub mb-6">{String(project.date)}</div>}
 
-          {formOpen && (
+          {/* Formular auf dunklem Glas-Panel, helle Schrift */}
+          <div className="card-glass-dark max-w-4xl">
+            <div className="text-lg font-semibold mb-3">Spieler hinzufügen</div>
             <form onSubmit={addPlayer} className="grid gap-3 md:grid-cols-3">
               <div>
                 <label className="block text-xs font-semibold mb-1">Name *</label>
@@ -329,34 +318,42 @@ export default function ProjectDashboard(){
                 <button className="btn pill" type="submit">Spieler anlegen</button>
               </div>
             </form>
-          )}
-        </div>
-
-        {/* Matrix */}
-        <div className="card bg-white shadow-sm">
-          <div className="mb-3">
-            <div className="text-lg font-semibold">Spieler-Matrix</div>
-            <div className="text-sm muted">Ø sortiert (absteigend). Rohwert steht jeweils klein unter dem Score.</div>
           </div>
+        </div>
+      </section>
 
-          <div className="overflow-x-auto">
+      {/* kleiner Abstand zwischen Formular und Matrix */}
+      <div style={{height:'28px'}} />
+
+      {/* Sektion 2: Matrix über matrix.jpg (wiederholend), helles Theme */}
+      <section className="bg-matrix page-pad">
+        <div className="container w-full px-5 py-8">
+          <div className="card-glass-dark table-dark overflow-x-auto">
+            <div className="mb-3">
+              <div className="text-lg font-semibold">Spieler-Matrix</div>
+              <div className="text-sm" style={{color:'rgba(255,255,255,.8)'}}>
+                Ø sortiert (absteigend). Rohwert steht jeweils klein unter dem Score.
+              </div>
+            </div>
+
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left border-b">
+                <tr className="text-left" style={{borderBottom:'1px solid rgba(255,255,255,.15)'}}>
                   <th className="p-2 whitespace-nowrap">Spieler</th>
-                  {sortedStations.map((st: Station)=>(
-                    <th key={st.id} className="p-2 whitespace-nowrap">{st.name}</th>
-                  ))}
+                  {stations.length ? ST_ORDER.map(n=>{
+                    const st = stations.find(s=>s.name===n)
+                    return st ? <th key={st.id} className="p-2 whitespace-nowrap">{st.name}</th> : null
+                  }) : null}
                   <th className="p-2 whitespace-nowrap text-right">Ø</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map(({player, perStation, avg})=>(
-                  <tr key={player.id} className="border-b align-top">
+                  <tr key={player.id} style={{borderBottom:'1px solid rgba(255,255,255,.12)'}} className="align-top">
                     <td className="p-2 whitespace-nowrap font-medium">
                       {player.display_name} {player.birth_year?`(${player.birth_year})`:''}
                       <br/>
-                      <span className="text-xs muted">
+                      <span className="text-[11px]" style={{color:'rgba(255,255,255,.75)'}}>
                         {player.gender ? (player.gender==='male'?'männlich':'weiblich') : '—'} • {player.club || '–'}
                         {player.fav_position ? ` • ${player.fav_position}` : ''}
                         {Number.isFinite(player.fav_number as any) ? ` • #${player.fav_number}` : ''}
@@ -371,11 +368,11 @@ export default function ProjectDashboard(){
                           {typeof score === 'number' ? (
                             <div>
                               <span className="badge-green">{score}</span>
-                              <div className="text-[11px] muted mt-1">
+                              <div className="text-[11px]" style={{color:'rgba(255,255,255,.75)'}}>
                                 {typeof raw==='number' ? `${raw}${cell.unit ? ` ${cell.unit}` : ''}` : '—'}
                               </div>
                             </div>
-                          ) : <span className="text-xs muted">—</span>}
+                          ) : <span className="text-xs" style={{color:'rgba(255,255,255,.7)'}}>—</span>}
                         </td>
                       )
                     })}
@@ -387,11 +384,18 @@ export default function ProjectDashboard(){
                 ))}
 
                 {!rows.length && (
-                  <tr><td colSpan={2+sortedStations.length} className="p-3 text-center muted">Noch keine Spieler.</td></tr>
+                  <tr><td colSpan={2+stations.length} className="p-3 text-center" style={{color:'rgba(255,255,255,.8)'}}>Noch keine Spieler.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {/* S6-Hinweis ganz am Seitenende */}
+          {USE_S6_CSV && (
+            <div className="mt-4 text-sm" style={{color:'rgba(255,255,255,.8)'}}>
+              S6-Tabellen: {s6Status==='ok' ? 'geladen ✅' : s6Status==='loading' ? 'lädt …' : 'nicht gefunden – Fallback aktiv ⚠️'}
+            </div>
+          )}
         </div>
       </section>
 
