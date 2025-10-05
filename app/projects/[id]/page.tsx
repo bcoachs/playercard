@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import Hero from '../../components/Hero'
 import BackFab from '../../components/BackFab'
 
 type Station = {
@@ -189,7 +189,7 @@ export default function ProjectDashboard(){
       return normScore({ ...st, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
     }
     if (n.includes('passgenauigkeit')) {
-      // Deine 11/17/33-Logik ist bereits in capture umgesetzt → hier kommt ein normierter 0–100-Wert an.
+      // 0–100 direkt (aus Capture mit 11/17/33-Gewichtung berechnet)
       return Math.round(clamp(Number(raw), 0, 100))
     }
     if (n.includes('schusspräzision')) {
@@ -202,8 +202,8 @@ export default function ProjectDashboard(){
 
   const sortedStations = useMemo<Station[]>(()=>{
     return stations.slice().sort((a: Station, b: Station)=>{
-      const ia = ST_INDEX[a.name] ?? 99
-      const ib = ST_INDEX[b.name] ?? 99
+      const ia = (ST_INDEX as any)[a.name] ?? 99
+      const ib = (ST_INDEX as any)[b.name] ?? 99
       return ia - ib
     })
   }, [stations])
@@ -261,15 +261,22 @@ export default function ProjectDashboard(){
       <section className="hero-full safe-area bg-player">
         <div className="container w-full px-5">
           <div className="flex items-start justify-between mb-5">
-            <h1 className="text-3xl md:text-4xl font-extrabold hero-text">
-              {project?.name || 'Projekt'}
-            </h1>
-            {project?.logo_url && (
-              // Vereinslogo oben rechts
-              <img src={project.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
-            )}
+            <div>
+              <h1 className="text-3xl md:text-4xl font-extrabold hero-text">
+                {project?.name || 'Projekt'}
+              </h1>
+              {project?.date && <div className="hero-sub">{String(project.date)}</div>}
+            </div>
+
+            <div className="flex items-start gap-3">
+              {/* Capture-Button (zur Stationseingabe) */}
+              <Link href={`/capture?project=${projectId}`} className="btn pill">Capture</Link>
+              {/* Vereinslogo oben rechts */}
+              {project?.logo_url && (
+                <img src={project.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
+              )}
+            </div>
           </div>
-          {project?.date && <div className="hero-sub mb-6">{String(project.date)}</div>}
 
           {/* Formular auf dunklem Glas-Panel, helle Schrift */}
           <div className="card-glass-dark max-w-4xl">
@@ -322,10 +329,9 @@ export default function ProjectDashboard(){
         </div>
       </section>
 
-      {/* kleiner Abstand zwischen Formular und Matrix */}
-      <div style={{height:'28px'}} />
+      {/* Kein Abstand zwischen player.jpg und matrix.jpg gewünscht → Spacer entfernt */}
 
-      {/* Sektion 2: Matrix über matrix.jpg (wiederholend), helles Theme */}
+      {/* Sektion 2: Matrix über matrix.jpg (wiederholend) + gleicher Glass-Rahmen */}
       <section className="bg-matrix page-pad">
         <div className="container w-full px-5 py-8">
           <div className="card-glass-dark table-dark overflow-x-auto">
