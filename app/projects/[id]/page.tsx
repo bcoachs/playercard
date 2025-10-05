@@ -34,31 +34,39 @@ const ST_ORDER = [
   'Schusspräzision',
   'Schnelligkeit',
 ] as const
-
 const ST_INDEX: Record<string, number> =
   ST_ORDER.reduce((acc, n, i)=>{ acc[n]=i; return acc }, {} as Record<string, number>)
 
+/* ------- Optionaler CSV-Use-Switch (Default: true) ------- */
+const USE_S6_CSV = (() => {
+  const v = process.env.NEXT_PUBLIC_USE_S6_CSV
+  if (v === '0' || v === 'false') return false
+  return true
+})()
+
 /* ---------- CSV-Lader (global: /public/config/) – nur für S6 ---------- */
-async function loadS6Map(gender:'male'|'female'): Promise<Record<string, number[]>>{
-  const file = gender === 'male' ? '/config/s6_male.csv' : '/config/s6_female.csv'
-  const res = await fetch(file, { cache:'no-store' })
-  if(!res.ok) throw new Error('CSV fehlt: ' + file)
-  const text = await res.text()
-  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean)
-  if(lines.length < 2) throw new Error('CSV leer/ungültig')
-  const header = lines[0].split(';').map(s=>s.trim())
-  const ageCols = header.slice(1)
-  const out: Record<string, number[]> = {}
-  for(const age of ageCols) out[age] = []
-  for(let i=1;i<lines.length;i++){
-    const cols = lines[i].split(';').map(s=>s.trim())
-    for(let c=1;c<cols.length;c++){
-      const age = ageCols[c-1]
-      const sec = Number((cols[c]||'').replace(',', '.'))
-      if(Number.isFinite(sec)) out[age].push(sec) // index 0=100P … 100=0P
+async function loadS6Map(gender:'male'|'female'): Promise<Record<string, number[]>|null>{
+  try{
+    const file = gender === 'male' ? '/config/s6_male.csv' : '/config/s6_female.csv'
+    const res = await fetch(file, { cache:'no-store' })
+    if(!res.ok) return null
+    const text = await res.text()
+    const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean)
+    if(lines.length < 2) return null
+    const header = lines[0].split(';').map(s=>s.trim())
+    const ageCols = header.slice(1)
+    const out: Record<string, number[]> = {}
+    for(const age of ageCols) out[age] = []
+    for(let i=1;i<lines.length;i++){
+      const cols = lines[i].split(';').map(s=>s.trim())
+      for(let c=1;c<cols.length;c++){
+        const age = ageCols[c-1]
+        const sec = Number((cols[c]||'').replace(',', '.'))
+        if(Number.isFinite(sec)) out[age].push(sec) // index 0 = 100P … 100 = 0P
+      }
     }
-  }
-  return out
+    return out
+  }catch{ return null }
 }
 function nearestAgeBucket(age:number, keys:string[]): string{
   const parsed = keys.map(k=>{
@@ -95,12 +103,22 @@ export default function ProjectDashboard(){
   const [players, setPlayers] = useState<Player[]>([])
   const [meas, setMeas] = useState<Measurement[]>([])
 
+  // Spieler-Form (Neu anlegen)
+  const [formOpen, setFormOpen] = useState(true)
+  const [pName, setPName] = useState('')
+  const [pYear, setPYear] = useState<number|''>('')
+  const [pClub, setPClub] = useState('')
+  const [pNum, setPNum] = useState<number|''>('')
+  const [pPos, setPPos] = useState('')
+  const [pNat, setPNat] = useState('')
+  const [pGender, setPGender] = useState<'male'|'female'|''>('')
+
   // S6 CSV Maps
   const [s6Female, setS6Female] = useState<Record<string, number[]>|null>(null)
   const [s6Male, setS6Male] = useState<Record<string, number[]>|null>(null)
-  const [s6Status, setS6Status] = useState<'ok'|'fail'|'loading'>('loading')
+  const [s6Status, setS6Status] = useState<'ok'|'fail'|'off'|'loading'>(USE_S6_CSV ? 'loading' : 'off')
 
-  // Laden
+  /* Laden */
   useEffect(()=>{
     fetch(`/api/projects/${projectId}`, { cache:'no-store' })
       .then(r=>r.json()).then(res=> setProject(res.item || null))
@@ -127,22 +145,18 @@ export default function ProjectDashboard(){
       .then(r=>r.json()).then(res=> setMeas(res.items || []))
   }, [projectId])
 
-  // CSV global laden (einmal)
+  // CSV global laden (einmal), aber nur wenn aktiviert
   useEffect(()=>{
+    if (!USE_S6_CSV){ setS6Status('off'); return }
     setS6Status('loading')
     Promise.allSettled([loadS6Map('female'), loadS6Map('male')]).then(([f, m])=>{
-      if (f.status==='fulfilled') setS6Female(f.value)
-      if (m.status==='fulfilled') setS6Male(m.value)
-      if (f.status==='fulfilled' || m.status==='fulfilled') setS6Status('ok')
-      else setS6Status('fail')
+      const fOK = f.status==='fulfilled' && f.value
+      const mOK = m.status==='fulfilled' && m.value
+      if (fOK) setS6Female(f.value)
+      if (mOK) setS6Male(m.value)
+      setS6Status((fOK || mOK) ? 'ok' : 'fail')
     })
   }, [])
-
-  const stationById = useMemo(()=>{
-    const map: Record<string, Station> = {}
-    stations.forEach((s: Station)=>{ map[s.id]=s })
-    return map
-  }, [stations])
 
   const measByPlayerStation = useMemo(()=>{
     const map: Record<string, Record<string, number>> = {}
@@ -161,21 +175,23 @@ export default function ProjectDashboard(){
 
   function scoreFor(st:Station, p:Player, raw:number): number{
     const n = st.name.toLowerCase()
-    if (n.includes('schnelligkeit')){ // S6 via CSV
-      const map = p.gender==='male' ? s6Male : s6Female
-      if (map){
-        const keys = Object.keys(map)
-        if (keys.length){
-          const bucket = nearestAgeBucket(resolveAge(p.birth_year), keys)
-          const rows = map[bucket] || []
-          if (rows.length) return scoreFromTime(Number(raw), rows)
+    if (n.includes('schnelligkeit')){ // S6 via CSV (falls vorhanden), sonst Fallback
+      if (USE_S6_CSV){
+        const map = p.gender==='male' ? s6Male : s6Female
+        if (map){
+          const keys = Object.keys(map)
+          if (keys.length){
+            const bucket = nearestAgeBucket(resolveAge(p.birth_year), keys)
+            const rows = map[bucket] || []
+            if (rows.length) return scoreFromTime(Number(raw), rows)
+          }
         }
       }
       // Fallback 4–20 s (weniger ist besser)
       return normScore({ ...st, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
     }
     if (n.includes('passgenauigkeit')) {
-      // Rohwert (0–100) kommt als gewichtete Punkte (11/17/33) rein → clamp 0..100
+      // Rohwert bereits 0–100 (11/17/33 Gewichtung) → clamp 0..100
       return Math.round(clamp(Number(raw), 0, 100))
     }
     if (n.includes('schusspräzision')) {
@@ -221,6 +237,29 @@ export default function ProjectDashboard(){
     return out
   }, [players, sortedStations, measByPlayerStation, s6Female, s6Male, project])
 
+  async function addPlayer(e: React.FormEvent){
+    e.preventDefault()
+    if (!pName.trim()){ alert('Bitte Name eingeben'); return }
+    if (!pYear || String(pYear).length!==4){ alert('Bitte Jahrgang (YYYY) eingeben'); return }
+    const body = new FormData()
+    body.append('display_name', pName.trim())
+    body.append('birth_year', String(pYear))
+    if (pClub) body.append('club', pClub)
+    if (pNum!=='') body.append('fav_number', String(pNum))
+    if (pPos) body.append('fav_position', pPos)
+    if (pNat) body.append('nationality', pNat)
+    if (pGender) body.append('gender', pGender)
+
+    const res = await fetch(`/api/projects/${projectId}/players`, { method:'POST', body })
+    const js = await res.json().catch(()=> ({}))
+    if (!res.ok){ alert(js?.error || 'Fehler beim Anlegen'); return }
+    // Liste aktualisieren
+    fetch(`/api/projects/${projectId}/players`, { cache:'no-store' })
+      .then(r=>r.json()).then(res=> setPlayers(res.items || []))
+    // Formular leeren
+    setPName(''); setPYear(''); setPClub(''); setPNum(''); setPPos(''); setPNat(''); setPGender('')
+  }
+
   return (
     <main>
       <Hero
@@ -229,13 +268,72 @@ export default function ProjectDashboard(){
         image="/player.jpg"
         topRightLogoUrl={project?.logo_url || undefined}
       >
-        <div className="text-sm hero-sub">
-          S6-Tabellen: {s6Status==='ok' ? 'geladen ✅' : s6Status==='loading' ? 'lädt …' : 'nicht gefunden ❌'} (global aus /public/config)
-        </div>
+        {/* CSV-Status nur dezent und nur wenn explizit aktiv */}
+        {USE_S6_CSV && (
+          <div className="text-sm hero-sub">
+            S6-Tabellen: {s6Status==='ok' ? 'geladen ✅' : s6Status==='loading' ? 'lädt …' : 'nicht gefunden – Fallback aktiv ⚠️'}
+          </div>
+        )}
       </Hero>
 
       <section className="p-5 max-w-6xl mx-auto page-pad">
-        <div className="card">
+        {/* Spieler hinzufügen */}
+        <div className="card bg-white shadow-sm mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-lg font-semibold">Spieler hinzufügen</div>
+            <button className="text-sm btn" onClick={()=>setFormOpen(v=>!v)}>{formOpen?'Schließen':'Öffnen'}</button>
+          </div>
+
+          {formOpen && (
+            <form onSubmit={addPlayer} className="grid gap-3 md:grid-cols-3">
+              <div>
+                <label className="block text-xs font-semibold mb-1">Name *</label>
+                <input className="input" value={pName} onChange={e=>setPName(e.target.value)} placeholder="Vorname Nachname" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">Jahrgang *</label>
+                <input className="input" inputMode="numeric" pattern="\d{4}" placeholder="YYYY"
+                  value={pYear} onChange={e=>setPYear(e.target.value as any)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">Verein</label>
+                <input className="input" value={pClub} onChange={e=>setPClub(e.target.value)} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold mb-1">Lieblingsnummer</label>
+                <input className="input" inputMode="numeric"
+                  value={pNum} onChange={e=>setPNum(e.target.value===''? '' : Number(e.target.value))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">Position</label>
+                <select className="input" value={pPos} onChange={e=>setPPos(e.target.value)}>
+                  <option value="">–</option>
+                  {['TS','IV','AV','ZM','OM','LOM','ROM','ST'].map(x=> <option key={x} value={x}>{x}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">Nationalität</label>
+                <input className="input" value={pNat} onChange={e=>setPNat(e.target.value)} placeholder="DE, FR, ..." />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">Geschlecht</label>
+                <select className="input" value={pGender} onChange={e=>setPGender(e.target.value as any)}>
+                  <option value="">–</option>
+                  <option value="male">männlich</option>
+                  <option value="female">weiblich</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-3">
+                <button className="btn pill" type="submit">Spieler anlegen</button>
+              </div>
+            </form>
+          )}
+        </div>
+
+        {/* Matrix */}
+        <div className="card bg-white shadow-sm">
           <div className="mb-3">
             <div className="text-lg font-semibold">Spieler-Matrix</div>
             <div className="text-sm muted">Ø sortiert (absteigend). Rohwert steht jeweils klein unter dem Score.</div>
