@@ -153,10 +153,8 @@ export default function CaptureClient() {
   const [players, setPlayers] = useState<Player[]>([])
   const [selected, setSelected] = useState<string>(qStation)
 
-  // Messwerte, die bereits gespeichert sind (vom Server)
+  // Messwerte (Server) + Eingabepuffer
   const [meas, setMeas] = useState<Record<string, Record<string, number>>>({}) // playerId -> stationId -> raw
-
-  // Eingabepuffer (noch nicht gespeichert)
   const [values, setValues] = useState<Record<string, any>>({})
 
   // CSV-Maps für S6 + Status
@@ -243,46 +241,7 @@ export default function CaptureClient() {
     return Math.round(normScore(st, Number(raw)))
   }
 
-  function averageScoreForPlayer(p: Player): number | null {
-    if (!stations.length) return null
-    let sum = 0, cnt = 0
-    for (const st of stations) {
-      // Pending-Wert für aktuelle Station bevorzugen
-      const pending = values[p.id]
-      let raw: number | null = null
-      if (pending && st.id === selected) {
-        raw = resolveRaw(st, pending)
-      } else {
-        const byStation = meas[p.id] || {}
-        const savedRaw = byStation[st.id]
-        if (typeof savedRaw === 'number') raw = savedRaw
-      }
-      if (raw !== null && raw !== undefined) {
-        sum += scoreFor(st, p, Number(raw))
-        cnt++
-      }
-    }
-    if (!cnt) return null
-    return Math.round(sum / cnt)
-  }
-
-  function sortPlayersByAverage() {
-    setPlayers(prev => {
-      const arr = [...prev]
-      arr.sort((a, b) => {
-        const aa = averageScoreForPlayer(a)
-        const bb = averageScoreForPlayer(b)
-        // fehlende Ø ans Ende
-        if (aa === null && bb === null) return a.display_name.localeCompare(b.display_name, 'de')
-        if (aa === null) return 1
-        if (bb === null) return -1
-        return bb - aa
-      })
-      return arr
-    })
-  }
-
-  // ---- UI-Komponenten ----
+  /* UI: Buttons & Rows */
   function ProjectsSelect() {
     const qProject = sp.get('project') || ''
     if (qProject) return null
@@ -310,7 +269,7 @@ export default function CaptureClient() {
       <div className="pills">
         {stations.map(s => (
           <button key={s.id} className="btn pill"
-            onClick={() => { setSelected(s.id); router.replace(projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`); sortPlayersByAverage() }}
+            onClick={() => { setSelected(s.id); router.replace(projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`) }}
             style={s.id === selected ? { filter: 'brightness(1.15)' } : {}}>
             {s.name}
           </button>
@@ -332,11 +291,11 @@ export default function CaptureClient() {
       inputs = (
         <div className="grid grid-cols-3 gap-2">
           <NumberCommitInput label="10 m (0–3)" value={h10} min={0} max={3}
-            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h10: x } })); sortPlayersByAverage() }} />
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h10: x } }))} />
           <NumberCommitInput label="14 m (0–2)" value={h14} min={0} max={2}
-            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h14: x } })); sortPlayersByAverage() }} />
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h14: x } }))} />
           <NumberCommitInput label="18 m (0–1)" value={h18} min={0} max={1}
-            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h18: x } })); sortPlayersByAverage() }} />
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], h18: x } }))} />
         </div>
       )
       raw = h10 * 11 + h14 * 17 + h18 * 33
@@ -345,13 +304,13 @@ export default function CaptureClient() {
       inputs = (
         <div className="grid grid-cols-4 gap-2">
           <NumberCommitInput label="oben L (0–3)" value={ul} min={0} max={3}
-            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ul: x } })); sortPlayersByAverage() }} />
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ul: x } }))} />
           <NumberCommitInput label="oben R (0–3)" value={ur} min={0} max={3}
-            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ur: x } })); sortPlayersByAverage() }} />
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ur: x } }))} />
           <NumberCommitInput label="unten L (0–3)" value={ll} min={0} max={3}
-            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ll: x } })); sortPlayersByAverage() }} />
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], ll: x } }))} />
           <NumberCommitInput label="unten R (0–3)" value={lr} min={0} max={3}
-            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], lr: x } })); sortPlayersByAverage() }} />
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], lr: x } }))} />
         </div>
       )
       raw = (ul + ur) * 3 + (ll + lr) * 1
@@ -365,15 +324,14 @@ export default function CaptureClient() {
             label={`Messwert ${st.unit ? `(${st.unit})` : ''}`}
             value={val}
             placeholder={st.unit || 'Wert'}
-            onCommit={x => { setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: x } })); sortPlayersByAverage() }}
+            onCommit={x => setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: x } }))}
           />
         </div>
       )
       raw = Number(val || 0)
     }
 
-    const score = scoreFor(st, p, raw)
-    const avg = averageScoreForPlayer(p)
+    const score = (() => scoreFor(st, p, raw))()
 
     async function saveOne() {
       const body = new FormData()
@@ -390,9 +348,8 @@ export default function CaptureClient() {
         next[p.id][st.id] = Number(raw)
         return next
       })
-      // Eingabepuffer für diese Station optional leeren
+      // Eingabepuffer optional leeren
       setValues(prev => ({ ...prev, [p.id]: {} }))
-      sortPlayersByAverage()
     }
 
     return (
@@ -405,7 +362,6 @@ export default function CaptureClient() {
         </td>
         <td className="p-2">{inputs}</td>
         <td className="p-2 text-center"><span className="badge-green">{score}</span></td>
-        <td className="p-2 text-center">{avg === null ? <span className="badge-red">—</span> : <span className="badge-green">{avg}</span>}</td>
         <td className="p-2 text-right"><button className="btn pill" onClick={saveOne}>Speichern</button></td>
       </tr>
     )
@@ -414,7 +370,6 @@ export default function CaptureClient() {
   const currentIndex = currentStation ? Math.max(1, ST_ORDER.indexOf(currentStation.name) + 1) : 1
   const sketchHref = `/station${currentIndex}.pdf`
 
-  // Page
   return (
     <main>
       <Hero title="Stationseingabe" subtitle={project ? project.name : 'Projekt wählen'} image="/base.jpg">
@@ -460,7 +415,7 @@ export default function CaptureClient() {
           <div className="card">
             <div className="mb-3">
               <div className="text-lg font-semibold">{currentStation?.name || 'Station'}</div>
-              <div className="text-sm muted">Werte eintragen. Punkte werden nach Enter/Blur berechnet. Sortierung nach Ø-Score (alle Stationen).</div>
+              <div className="text-sm muted">Werte eintragen. Punkte werden nach Enter/Blur berechnet. </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -470,14 +425,13 @@ export default function CaptureClient() {
                     <th className="p-2">Spieler</th>
                     <th className="p-2">Messung</th>
                     <th className="p-2 text-center">Score</th>
-                    <th className="p-2 text-center">Ø Score (alle)</th>
                     <th className="p-2 text-right">Aktion</th>
                   </tr>
                 </thead>
                 <tbody>
                   {players.map(p => <PlayerRow key={p.id} p={p} />)}
                   {!players.length && (
-                    <tr><td colSpan={5} className="p-3 text-center muted">Noch keine Spieler in diesem Projekt.</td></tr>
+                    <tr><td colSpan={4} className="p-3 text-center muted">Noch keine Spieler in diesem Projekt.</td></tr>
                   )}
                 </tbody>
               </table>
