@@ -1,333 +1,456 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-
-type Project = {
-  id: string
-  name: string
-  date?: string | null
-  logo_url?: string | null
-}
-
-type Player = {
-  id: string
-  project_id: string
-  display_name: string
-  birth_year: number | null
-  club?: string | null
-  fav_number?: number | null
-  fav_position?: string | null
-  nationality?: string | null
-  gender?: 'male' | 'female' | null
-  created_at?: string
-}
+import { useParams } from 'next/navigation'
+import BackFab from '../../components/BackFab'
 
 type Station = {
   id: string
-  project_id: string
   name: string
-  unit?: string | null
-  min_value?: number | null
-  max_value?: number | null
-  higher_is_better?: boolean | null
+  unit: string | null
+  min_value: number | null
+  max_value: number | null
+  higher_is_better: boolean | null
+}
+type Player = {
+  id: string
+  display_name: string
+  birth_year: number | null
+  club: string | null
+  fav_number: number | null
+  fav_position: string | null
+  nationality: string | null
+  gender?: 'male'|'female'|null
+}
+type Project = { id: string; name: string; date: string | null; logo_url?: string | null }
+type Measurement = { player_id: string; station_id: string; value: number }
+
+const ST_ORDER = [
+  'Beweglichkeit',
+  'Technik',
+  'Passgenauigkeit',
+  'Schusskraft',
+  'Schusspräzision',
+  'Schnelligkeit',
+] as const
+const ST_INDEX: Record<string, number> =
+  ST_ORDER.reduce((acc, n, i)=>{ acc[n]=i; return acc }, {} as Record<string, number>)
+
+/* S6 via CSV global (optional) */
+const USE_S6_CSV = (() => {
+  const v = process.env.NEXT_PUBLIC_USE_S6_CSV
+  if (v === '0' || v === 'false') return false
+  return true
+})()
+
+async function loadS6Map(gender:'male'|'female'): Promise<Record<string, number[]>|null>{
+  try{
+    const file = gender === 'male' ? '/config/s6_male.csv' : '/config/s6_female.csv'
+    const res = await fetch(file, { cache:'no-store' })
+    if(!res.ok) return null
+    const text = await res.text()
+    const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean)
+    if(lines.length < 2) return null
+    const header = lines[0].split(';').map(s=>s.trim())
+    const ageCols = header.slice(1)
+    const out: Record<string, number[]> = {}
+    for(const age of ageCols) out[age] = []
+    for(let i=1;i<lines.length;i++){
+      const cols = lines[i].split(';').map(s=>s.trim())
+      for(let c=1;c<cols.length;c++){
+        const age = ageCols[c-1]
+        const sec = Number((cols[c]||'').replace(',', '.'))
+        if(Number.isFinite(sec)) out[age].push(sec) // Index 0 = 100 Punkte … 100 = 0 Punkte
+      }
+    }
+    return out
+  }catch{ return null }
+}
+function nearestAgeBucket(age:number, keys:string[]): string{
+  const parsed = keys.map(k=>{
+    const nums = k.match(/\d+/g)?.map(Number) || []
+    const mid = nums.length===2 ? (nums[0]+nums[1])/2 : (nums[0]||0)
+    return { key:k, mid }
+  })
+  parsed.sort((a,b)=>Math.abs(a.mid-age)-Math.abs(b.mid-age))
+  return parsed[0]?.key || keys[0]
+}
+function scoreFromTime(seconds:number, rows:number[]): number{
+  let idx = 100, best = Infinity
+  for(let i=0;i<rows.length;i++){
+    const d = Math.abs(seconds-rows[i])
+    if(d<best){ best=d; idx=i }
+  }
+  return Math.max(0, Math.min(100, 100-idx))
+}
+function clamp(n:number,min:number,max:number){ return Math.max(min, Math.min(max, n)) }
+function normScore(st:Station, raw:number): number{
+  const min = st.min_value ?? 0
+  const max = st.max_value ?? 100
+  if (max===min) return 0
+  if (st.higher_is_better) return Math.round(clamp((raw-min)/(max-min),0,1)*100)
+  return Math.round(clamp((max-raw)/(max-min),0,1)*100)
 }
 
-const POSITIONS = ['TS','IV','AV','ZM','OM','LOM','ROM','ST']
+export default function ProjectDashboard(){
+  const params = useParams<{id:string}>()
+  const projectId = params.id
 
-export default function ProjectPage(){
-  const params = useParams<{ id: string }>()
-  const router = useRouter()
-  const projectId = params?.id
-
-  const [project, setProject] = useState<Project | null>(null)
+  const [project, setProject] = useState<Project|null>(null)
   const [stations, setStations] = useState<Station[]>([])
   const [players, setPlayers] = useState<Player[]>([])
-  const [loading, setLoading] = useState(true)
+  const [meas, setMeas] = useState<Measurement[]>([])
 
-  // --- Form State (Create/Update) ---
-  const [editId, setEditId] = useState<string | null>(null)
-  const [displayName, setDisplayName] = useState('')
-  const [birthYear, setBirthYear] = useState<string>('') // string für Eingabe
-  const [club, setClub] = useState('')
-  const [favNumber, setFavNumber] = useState<string>('') // string für Eingabe
-  const [favPosition, setFavPosition] = useState('')
-  const [nationality, setNationality] = useState('')
-  const [gender, setGender] = useState<'male'|'female'|''>('')
+  // Spieler-Form (Create/Update)
+  const [editId, setEditId] = useState<string|''>('')
 
-  // --- Laden Projekt / Stationen / Spieler ---
+  const [pName, setPName] = useState('')
+  const [pYear, setPYear] = useState<number|''>('')
+  const [pClub, setPClub] = useState('')
+  const [pNum, setPNum] = useState<number|''>('')
+  const [pPos, setPPos] = useState('')
+  const [pNat, setPNat] = useState('')
+  const [pGender, setPGender] = useState<'male'|'female'|''>('')
+
+  // S6 CSV (global)
+  const [s6Female, setS6Female] = useState<Record<string, number[]>|null>(null)
+  const [s6Male, setS6Male] = useState<Record<string, number[]>|null>(null)
+  const [s6Status, setS6Status] = useState<'ok'|'fail'|'off'|'loading'>(USE_S6_CSV ? 'loading' : 'off')
+
+  /* Laden */
   useEffect(()=>{
-    if (!projectId) return
-    setLoading(true)
-    Promise.all([
-      fetch(`/api/projects/${projectId}`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>({item:null})),
-      fetch(`/api/projects/${projectId}/stations`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>({items:[] as Station[]})),
-      fetch(`/api/projects/${projectId}/players`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>({items:[] as Player[]})),
-    ]).then(([pRes, sRes, plRes])=>{
-      setProject(pRes?.item ?? null)
-      setStations((sRes?.items ?? []).slice())
-      setPlayers((plRes?.items ?? []).slice())
-    }).finally(()=>setLoading(false))
+    fetch(`/api/projects/${projectId}`, { cache:'no-store' })
+      .then(r=>r.json()).then(res=> setProject(res.item || null))
+      .catch(()=>setProject(null))
+
+    fetch(`/api/projects/${projectId}/stations`, { cache:'no-store' })
+      .then(r=>r.json()).then(res=>{
+        const items: Station[] = (res.items ?? [])
+        const st: Station[] = items.slice().sort((a: Station, b: Station)=>{
+          const ia = ST_ORDER.indexOf(a.name as typeof ST_ORDER[number])
+          const ib = ST_ORDER.indexOf(b.name as typeof ST_ORDER[number])
+          if(ia>=0 && ib>=0) return ia-ib
+          if(ia>=0) return -1
+          if(ib>=0) return 1
+          return a.name.localeCompare(b.name,'de')
+        })
+        setStations(st)
+      })
+
+    fetch(`/api/projects/${projectId}/players`, { cache:'no-store' })
+      .then(r=>r.json()).then(res=> setPlayers(res.items || []))
+
+    fetch(`/api/projects/${projectId}/measurements`, { cache:'no-store' })
+      .then(r=>r.json()).then(res=> setMeas(res.items || []))
   }, [projectId])
 
-  // --- Helpers ---
-  const title = useMemo(()=> `Run: ${project?.name ?? '–'}`, [project?.name])
+  // CSV global laden
+  useEffect(()=>{
+    if (!USE_S6_CSV){ setS6Status('off'); return }
+    setS6Status('loading')
+    Promise.allSettled([loadS6Map('female'), loadS6Map('male')]).then(([f, m])=>{
+      const fOK = f.status==='fulfilled' && f.value
+      const mOK = m.status==='fulfilled' && m.value
+      if (fOK) setS6Female(f.value)
+      if (mOK) setS6Male(m.value)
+      setS6Status((fOK || mOK) ? 'ok' : 'fail')
+    })
+  }, [])
 
-  function resetForm(){
-    setEditId(null)
-    setDisplayName('')
-    setBirthYear('')
-    setClub('')
-    setFavNumber('')
-    setFavPosition('')
-    setNationality('')
-    setGender('')
+  const measByPlayerStation = useMemo(()=>{
+    const map: Record<string, Record<string, number>> = {}
+    for(const m of meas){
+      if(!map[m.player_id]) map[m.player_id] = {}
+      map[m.player_id][m.station_id] = Number(m.value || 0)
+    }
+    return map
+  }, [meas])
+
+  /* Scoring */
+  function resolveAge(by:number|null): number{
+    const eventYear = project?.date ? Number(String(project.date).slice(0,4)) : new Date().getFullYear()
+    if (!by) return 16
+    return Math.max(6, Math.min(49, eventYear - by))
+  }
+  function scoreFor(st:Station, p:Player, raw:number): number{
+    const n = st.name.toLowerCase()
+    if (n.includes('schnelligkeit')){ // S6 via CSV (falls da), sonst Fallback
+      if (USE_S6_CSV){
+        const map = p.gender==='male' ? s6Male : s6Female
+        if (map){
+          const keys = Object.keys(map)
+          if (keys.length){
+            const bucket = nearestAgeBucket(resolveAge(p.birth_year), keys)
+            const rows = map[bucket] || []
+            if (rows.length) return scoreFromTime(Number(raw), rows)
+          }
+        }
+      }
+      return normScore({ ...st, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
+    }
+    if (n.includes('passgenauigkeit')) {
+      // Rohwert in Capture bereits 0–100 (11/17/33-Gewichtung) → direkt
+      return Math.round(clamp(Number(raw), 0, 100))
+    }
+    if (n.includes('schusspräzision')) {
+      const pct = clamp(Number(raw)/24, 0, 1)
+      return Math.round(pct*100)
+    }
+    return Math.round(normScore(st, Number(raw)))
   }
 
-  function loadIntoForm(p: Player){
+  const sortedStations = useMemo<Station[]>(()=>{
+    return stations.slice().sort((a: Station, b: Station)=>{
+      const ia = (ST_INDEX as any)[a.name] ?? 99
+      const ib = (ST_INDEX as any)[b.name] ?? 99
+      return ia - ib
+    })
+  }, [stations])
+
+  const rows = useMemo(()=>{
+    type Row = {
+      player: Player
+      perStation: { id:string; name:string; raw:number|null; score:number|null; unit?:string|null }[]
+      avg: number
+    }
+    const out: Row[] = players.map((p: Player)=>{
+      const perStation: Row['perStation'] = []
+      let sum = 0, count = 0
+      for(const st of sortedStations){
+        const raw = measByPlayerStation[p.id]?.[st.id]
+        let sc: number|null = null
+        if (typeof raw === 'number') {
+          sc = scoreFor(st, p, raw)
+          sum += sc; count++
+        }
+        perStation.push({ id: st.id, name: st.name, raw: typeof raw==='number'?raw:null, score: sc, unit: st.unit })
+      }
+      const avg = count ? Math.round(sum / count) : 0
+      return { player: p, perStation, avg }
+    })
+    out.sort((a, b)=> b.avg - a.avg)
+    return out
+  }, [players, sortedStations, measByPlayerStation, s6Female, s6Male, project])
+
+  /* Helpers: Formular befüllen/Reset */
+  function fillForm(p: Player){
     setEditId(p.id)
-    setDisplayName(p.display_name || '')
-    setBirthYear(p.birth_year ? String(p.birth_year) : '')
-    setClub(p.club || '')
-    setFavNumber(p.fav_number!=null ? String(p.fav_number) : '')
-    setFavPosition(p.fav_position || '')
-    setNationality(p.nationality || '')
-    setGender(p.gender ?? '')
-    // Scroll etwas nach oben, damit das Formular im Fokus ist
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setPName(p.display_name || '')
+    setPYear(p.birth_year || '')
+    setPClub(p.club || '')
+    setPNum(typeof p.fav_number==='number' ? p.fav_number : '')
+    setPPos(p.fav_position || '')
+    setPNat(p.nationality || '')
+    setPGender((p.gender as any) || '')
+  }
+  function resetForm(){
+    setEditId('')
+    setPName(''); setPYear(''); setPClub(''); setPNum(''); setPPos(''); setPNat(''); setPGender('')
   }
 
-  async function submitPlayer(e: React.FormEvent){
+  /* Actions: Create/Update/Delete */
+  async function addOrUpdatePlayer(e: React.FormEvent){
     e.preventDefault()
-    if (!projectId) return
+    if (!pName.trim()){ alert('Bitte Name eingeben'); return }
+    if (!pYear || String(pYear).length!==4){ alert('Bitte Jahrgang (YYYY) eingeben'); return }
 
-    const fd = new FormData()
-    fd.append('display_name', displayName.trim())
-    if (birthYear) fd.append('birth_year', birthYear.trim())
-    if (club) fd.append('club', club.trim())
-    if (favNumber) fd.append('fav_number', favNumber.trim())
-    if (favPosition) fd.append('fav_position', favPosition.trim())
-    if (nationality) fd.append('nationality', nationality.trim())
-    if (gender) fd.append('gender', gender)
+    const body = new FormData()
+    body.append('display_name', pName.trim())
+    body.append('birth_year', String(pYear))
+    if (pClub) body.append('club', pClub)
+    if (pNum!=='') body.append('fav_number', String(pNum))
+    if (pPos) body.append('fav_position', pPos)
+    if (pNat) body.append('nationality', pNat)
+    if (pGender) body.append('gender', pGender)
 
-    const url = `/api/projects/${projectId}/players`
     const method = editId ? 'PUT' : 'POST'
-    if (editId) fd.append('id', editId)
+    if (editId) body.append('id', editId)
 
-    const res = await fetch(url, { method, body: fd })
-    const js = await res.json().catch(()=>null)
-    if (!res.ok){
-      alert(js?.error || 'Fehler beim Speichern')
-      return
-    }
-    // Liste neu laden
-    const list = await fetch(`/api/projects/${projectId}/players`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>({items:[]}))
-    setPlayers(list.items || [])
-    if (!editId) resetForm() // nach Neuanlage leeren
+    const res = await fetch(`/api/projects/${projectId}/players`, { method, body })
+    const js = await res.json().catch(()=> ({}))
+    if (!res.ok){ alert(js?.error || 'Fehler beim Speichern'); return }
+
+    const updated = await fetch(`/api/projects/${projectId}/players`, { cache:'no-store' }).then(r=>r.json())
+    setPlayers(updated.items || [])
+    if (!editId) resetForm() // bei neuem Spieler Formular leeren
   }
 
-  async function deletePlayer(id: string){
-    if (!projectId) return
-    const ok = confirm('Willst du diesen Spieler wirklich löschen?')
-    if (!ok) return
-    const res = await fetch(`/api/projects/${projectId}/players?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
-    if (!res.ok){
-      const t = await res.text(); alert(t || 'Fehler beim Löschen'); return
-    }
-    // Liste aktualisieren
-    setPlayers(prev => prev.filter(p => p.id !== id))
-    // falls wir gerade editiert haben -> Formular leeren
-    if (editId === id) resetForm()
+  async function deletePlayer(){
+    if (!editId) return
+    const yes = confirm('Willst du wirklich diesen Spieler löschen?')
+    if (!yes) return
+    const res = await fetch(`/api/projects/${projectId}/players?id=${encodeURIComponent(editId)}`, { method:'DELETE' })
+    if (!res.ok){ const t = await res.text(); alert(t || 'Fehler beim Löschen'); return }
+    const updated = await fetch(`/api/projects/${projectId}/players`, { cache:'no-store' }).then(r=>r.json())
+    setPlayers(updated.items || [])
+    resetForm()
   }
 
-  // --- Durchschnittsscore (Platzhalter / später Messungen aggregieren) ---
-  // Hier brauchst du später echte Aggregation (z. B. GET /leaderboard?project=... oder Messungen joinen).
-  // Für die UI-Struktur lassen wir ihn erst einmal leer bzw.  "–".
-  function averageScorePlaceholder(_p: Player){ return '–' }
-
+  /* Render */
   return (
     <main>
-      {/* Kopfbereich mit player.jpg */}
-      <section
-        className="hero-full safe-area bg-cover bg-center text-white"
-        style={{ backgroundImage: "url('/player.jpg')" }}
-      >
+
+      {/* Sektion 1: Spieler-Eingabe über player.jpg */}
+      <section className="hero-full safe-area bg-player">
         <div className="container w-full px-5">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start justify-between mb-5">
             <div>
-              <h1 className="text-3xl md:text-4xl font-extrabold hero-text">{title}</h1>
-              {project?.date && (
-                <p className="hero-sub mt-1">Datum: {project.date}</p>
-              )}
+              <h1 className="text-3xl md:text-4xl font-extrabold hero-text">
+                Run: {project?.name ?? '—'}
+              </h1>
+              {project?.date && <div className="hero-sub">{String(project.date)}</div>}
             </div>
-            {!!project?.logo_url && (
-              <img
-                src={project.logo_url}
-                alt="Logo"
-                className="w-16 h-16 md:w-20 md:h-20 object-contain rounded-lg border border-white/40 shadow"
-              />
+            {project?.logo_url && (
+              <img src={project.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
             )}
           </div>
 
-          {/* Formular-Card */}
-          <form onSubmit={submitPlayer} className="card card-glass-dark mt-6 max-w-3xl">
-            <h2 className="text-xl font-bold mb-3">{editId ? 'Spieler bearbeiten' : 'Spieler anlegen'}</h2>
+          {/* Formular-Card (dunkles Glas) */}
+          <div className="card-glass-dark max-w-5xl">
+            <div className="text-lg font-semibold mb-3">{editId ? 'Spieler bearbeiten' : 'Spieler hinzufügen'}</div>
 
-            <div className="grid md:grid-cols-2 gap-3">
+            <form onSubmit={addOrUpdatePlayer} className="grid gap-3 md:grid-cols-3">
+              {/* Jede Spalte gleich breit und bündig */}
               <div>
-                <label className="block text-sm font-semibold mb-1">Name *</label>
-                <input className="input" required value={displayName} onChange={e=>setDisplayName(e.target.value)} placeholder="z. B. Nila" />
+                <label className="block text-xs font-semibold mb-1">Name *</label>
+                <input className="input" value={pName} onChange={e=>setPName(e.target.value)} placeholder="Vorname Nachname" />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-1">Jahrgang *</label>
-                <input className="input" required type="number" inputMode="numeric" min={1950} max={2100} value={birthYear} onChange={e=>setBirthYear(e.target.value)} placeholder="YYYY" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold mb-1">Verein (optional)</label>
-                <input className="input" value={club} onChange={e=>setClub(e.target.value)} placeholder="Verein" />
+                <label className="block text-xs font-semibold mb-1">Jahrgang *</label>
+                <input className="input" inputMode="numeric" pattern="\d{4}" placeholder="YYYY"
+                  value={pYear} onChange={e=>setPYear(e.target.value as any)} />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-1">Lieblingsnummer (optional)</label>
-                <input className="input" type="number" inputMode="numeric" min={0} max={999} value={favNumber} onChange={e=>setFavNumber(e.target.value)} placeholder="z. B. 13" />
+                <label className="block text-xs font-semibold mb-1">Verein</label>
+                <input className="input" value={pClub} onChange={e=>setPClub(e.target.value)} />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-1">Position (optional)</label>
-                <select className="input" value={favPosition} onChange={e=>setFavPosition(e.target.value)}>
-                  <option value="">Bitte wählen</option>
-                  {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                <label className="block text-xs font-semibold mb-1">Lieblingsnummer</label>
+                <input className="input" inputMode="numeric"
+                  value={pNum} onChange={e=>setPNum(e.target.value===''? '' : Number(e.target.value))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">Position</label>
+                <select className="input" value={pPos} onChange={e=>setPPos(e.target.value)}>
+                  <option value="">–</option>
+                  {['TS','IV','AV','ZM','OM','LOM','ROM','ST'].map(x=> <option key={x} value={x}>{x}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-1">Nationalität (optional)</label>
-                <input className="input" value={nationality} onChange={e=>setNationality(e.target.value)} placeholder="DE, FR, ..." />
+                <label className="block text-xs font-semibold mb-1">Nationalität</label>
+                <input className="input" value={pNat} onChange={e=>setPNat(e.target.value)} placeholder="DE, FR, ..." />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-1">Geschlecht (für S6-CSV)</label>
-                <select className="input" value={gender} onChange={e=>setGender(e.target.value as any)}>
-                  <option value="">ohne Angabe</option>
+                <label className="block text-xs font-semibold mb-1">Geschlecht</label>
+                <select className="input" value={pGender} onChange={e=>setPGender(e.target.value as any)}>
+                  <option value="">–</option>
                   <option value="male">männlich</option>
                   <option value="female">weiblich</option>
                 </select>
               </div>
-            </div>
 
-            {/* Luft nach dem letzten Feld */}
-            <div className="h-2" />
+              {/* Spacing nach „Geschlecht“ */}
+              <div className="md:col-span-3" />
 
-            {/* Buttons mit Abstand */}
-            <div className="flex flex-wrap items-center gap-3">
-              <button type="submit" className="btn pill">
-                {editId ? 'Änderungen speichern' : 'Spieler anlegen'}
-              </button>
-
-              {/* Capture rechts daneben */}
-              <Link href={`/capture?project=${projectId}`} className="btn pill">
-                Capture
-              </Link>
-
-              {/* Löschen nur im Edit-Modus */}
-              {editId && (
-                <button
-                  type="button"
-                  className="btn pill"
-                  onClick={()=> deletePlayer(editId)}
-                  style={{ background: 'linear-gradient(180deg,#991b1b,#7f1d1d)' }}
-                >
-                  Spieler löschen
+              {/* Buttons mit Abstand, rechts ausgerichtet */}
+              <div className="md:col-span-3 flex items-center gap-3 justify-end">
+                <button className="btn pill" type="submit">
+                  {editId ? 'Spieler speichern' : 'Spieler anlegen'}
                 </button>
-              )}
+                <Link href={`/capture?project=${projectId}`} className="btn pill">Capture</Link>
+                {editId && (
+                  <button type="button" className="btn pill"
+                          onClick={deletePlayer}>
+                    Spieler löschen
+                  </button>
+                )}
+              </div>
 
-              {/* Zurücksetzen */}
-              {editId && (
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={resetForm}
-                  style={{ border: '1px solid rgba(255,255,255,.45)', color:'#fff' }}
-                >
-                  Abbrechen
-                </button>
-              )}
-            </div>
-
-            {/* Extra Luft nach Button-Block */}
-            <div className="h-3" />
-          </form>
+              {/* Zusätzliche Leerzeile nach dem Button-Block */}
+              <div className="md:col-span-3 h-2" />
+            </form>
+          </div>
         </div>
       </section>
 
-      {/* Matrix-Bereich mit eigenem dunklen Hintergrund (matrix.jpg), heller Card & dezente Borders */}
-      <section
-        className="bg-repeat-y bg-top text-white page-pad"
-        style={{
-          backgroundImage: "url('/matrix.jpg')",
-          backgroundSize: '100% auto'
-        }}
-      >
-        <div className="container px-5 py-6">
-          <div className="card card-glass-dark" style={{ borderColor: 'rgba(255,255,255,.18)', borderWidth: 1 }}>
-            <h3 className="text-lg font-bold mb-3">Spieler-Matrix</h3>
+      {/* Sektion 2: Matrix über matrix.jpg mit „Glass“-Rahmen + Abstand & Hover */}
+      <section className="bg-matrix page-pad">
+        <div className="container w-full px-5 py-8">
+          {/* kleiner äußerer Rand */}
+          <div className="mx-2 md:mx-3 mt-2">
+            <div className="card-glass-dark table-dark overflow-x-auto">
+              <div className="mb-3">
+                <div className="text-lg font-semibold">Spieler-Matrix</div>
+                <div className="text-sm" style={{color:'rgba(255,255,255,.82)'}}>
+                  Ø = Durchschnitt über alle erfassten Stationen. Klick auf einen Spieler lädt die Daten oben ins Formular.
+                </div>
+              </div>
 
-            <div className="overflow-auto rounded-xl" style={{ border: '1px solid rgba(255,255,255,.16)' }}>
-              <table className="min-w-full text-sm">
+              <table className="w-full text-sm matrix-table">
                 <thead>
-                  <tr className="bg-white/5 text-left">
-                    <th className="px-3 py-2 border-b border-white/10">Ø-Score</th>
-                    <th className="px-3 py-2 border-b border-white/10">Name</th>
-                    <th className="px-3 py-2 border-b border-white/10">#</th>
-                    <th className="px-3 py-2 border-b border-white/10">Position</th>
-                    <th className="px-3 py-2 border-b border-white/10">Jg.</th>
-                    <th className="px-3 py-2 border-b border-white/10">Verein</th>
+                  <tr className="text-left">
+                    <th className="p-2 whitespace-nowrap">Spieler</th>
+                    <th className="p-2 whitespace-nowrap">Ø</th>
+                    {stations.length ? ST_ORDER.map(n=>{
+                      const st = stations.find(s=>s.name===n)
+                      return st ? <th key={st.id} className="p-2 whitespace-nowrap">{st.name}</th> : null
+                    }) : null}
                   </tr>
                 </thead>
                 <tbody>
-                  {players.map(p=>(
-                    <tr
-                      key={p.id}
-                      className="hover:bg-white/6 cursor-pointer"
-                      onClick={()=> loadIntoForm(p)}
-                    >
-                      <td className="px-3 py-2 border-b border-white/10">
-                        <span className="badge-green">{averageScorePlaceholder(p)}</span>
+                  {rows.map(({player, perStation, avg})=>(
+                    <tr key={player.id}
+                        className="align-top hoverable-row"
+                        onClick={()=>fillForm(player)}
+                        style={{cursor:'pointer'}}>
+                      <td className="p-2 whitespace-nowrap font-medium">
+                        {player.display_name}{Number.isFinite(player.fav_number as any) ? ` #${player.fav_number}` : ''}
                       </td>
-                      <td className="px-3 py-2 border-b border-white/10">
-                        {p.display_name}
-                      </td>
-                      <td className="px-3 py-2 border-b border-white/10">
-                        {p.fav_number!=null ? `#${p.fav_number}` : '–'}
-                      </td>
-                      <td className="px-3 py-2 border-b border-white/10">{p.fav_position || '–'}</td>
-                      <td className="px-3 py-2 border-b border-white/10">{p.birth_year ?? '–'}</td>
-                      <td className="px-3 py-2 border-b border-white/10">{p.club || '–'}</td>
+                      <td className="p-2"><span className="badge-green">{avg}</span></td>
+
+                      {perStation.map(cell=>{
+                        const score = cell.score
+                        const raw = cell.raw
+                        return (
+                          <td key={cell.id} className="p-2">
+                            {typeof score === 'number' ? (
+                              <div>
+                                <span className="badge-green">{score}</span>
+                                <div className="text-[11px]" style={{color:'rgba(255,255,255,.75)'}}>
+                                  {typeof raw==='number' ? `${raw}${cell.unit ? ` ${cell.unit}` : ''}` : '—'}
+                                </div>
+                              </div>
+                            ) : <span className="text-xs" style={{color:'rgba(255,255,255,.7)'}}>—</span>}
+                          </td>
+                        )
+                      })}
                     </tr>
                   ))}
-                  {!players.length && !loading && (
+                  {!rows.length && (
                     <tr>
-                      <td className="px-3 py-4 text-white/80" colSpan={6}>Noch keine Spieler erfasst.</td>
-                    </tr>
-                  )}
-                  {loading && (
-                    <tr>
-                      <td className="px-3 py-4 text-white/80" colSpan={6}>Lade…</td>
+                      <td colSpan={2+stations.length} className="p-3 text-center" style={{color:'rgba(255,255,255,.85)'}}>
+                        Noch keine Spieler.
+                      </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
 
-            {/* etwas Luft zum unteren Bildschirmrand ist durch .page-pad bereits da */}
+            {/* F: Extra Abstand vor dem Hinweis */}
+            {USE_S6_CSV && (
+              <div className="mt-6 text-sm" style={{color:'rgba(255,255,255,.86)'}}>
+                S6-Tabellen: {s6Status==='ok' ? 'geladen ✅' : s6Status==='loading' ? 'lädt …' : 'nicht gefunden – Fallback aktiv ⚠️'}
+              </div>
+            )}
           </div>
-
-          {/* Info-Hinweis ganz ans Ende verschoben */}
-          <p className="mt-6 text-xs text-white/80">
-            Hinweis: S6-Tabellen (CSV) werden global aus <code>/public/config</code> geladen.
-          </p>
         </div>
       </section>
+
+      <BackFab />
     </main>
   )
 }
