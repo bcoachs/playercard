@@ -321,21 +321,24 @@ setProject(res.item||null)).catch(()=>setProject(null))
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold mb-1">10 m (0–3)</label>
-              <input className="input" type="number" min={0} max={3} value={h10}
-                onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],h10:Number(e.target.value)}}))}
-              />
+                   <input className="input" type="number" min={0} max={3} value={h10}
+                     onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],h10:Number(e.target.value)}}))}
+                     onKeyDown={e=> e.stopPropagation()}
+                   />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">14 m (0–2)</label>
-              <input className="input" type="number" min={0} max={2} value={h14}
-                onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],h14:Number(e.target.value)}}))}
-              />
+                   <input className="input" type="number" min={0} max={2} value={h14}
+                     onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],h14:Number(e.target.value)}}))}
+                     onKeyDown={e=> e.stopPropagation()}
+                   />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">18 m (0–1)</label>
-              <input className="input" type="number" min={0} max={1} value={h18}
-                onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],h18:Number(e.target.value)}}))}
-              />
+                   <input className="input" type="number" min={0} max={1} value={h18}
+                     onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],h18:Number(e.target.value)}}))}
+                     onKeyDown={e=> e.stopPropagation()}
+                   />
             </div>
           </div>
           <div className="mt-4 text-right">
@@ -356,26 +359,30 @@ setProject(res.item||null)).catch(()=>setProject(null))
           <div className="grid grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-semibold mb-1">oben L (0–3)</label>
-              <input className="input" type="number" min={0} max={3} value={ul}
+                   <input className="input" type="number" min={0} max={3} value={ul}
                 onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],ul:Number(e.target.value)}}))}
+                onKeyDown={e=> e.stopPropagation()}
               />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">oben R (0–3)</label>
-              <input className="input" type="number" min={0} max={3} value={ur}
+                   <input className="input" type="number" min={0} max={3} value={ur}
                 onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],ur:Number(e.target.value)}}))}
+                onKeyDown={e=> e.stopPropagation()}
               />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">unten L (0–3)</label>
-              <input className="input" type="number" min={0} max={3} value={ll}
+                   <input className="input" type="number" min={0} max={3} value={ll}
                 onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],ll:Number(e.target.value)}}))}
+                onKeyDown={e=> e.stopPropagation()}
               />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">unten R (0–3)</label>
-              <input className="input" type="number" min={0} max={3} value={lr}
+                   <input className="input" type="number" min={0} max={3} value={lr}
                 onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],lr:Number(e.target.value)}}))}
+                onKeyDown={e=> e.stopPropagation()}
               />
             </div>
           </div>
@@ -415,6 +422,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
                 setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: sanitized } }))
               }}
+              onKeyDown={e => e.stopPropagation()}
               placeholder={st.unit || 'Wert'}
             />
           </div>
