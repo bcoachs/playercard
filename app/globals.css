@@ -160,3 +160,15 @@ a, .btn { text-decoration: none; }
 /* Kleiner Unterkanten-Puffer für lange Seiten */
 .page-pad{ padding-bottom: 6rem; }
 
+/* exakt gleiche Größe für alle Action-Buttons */
+.btn--wide{
+  width: 280px;         /* feste gleiche Breite */
+  height: 52px;         /* gleiche Höhe */
+  font-size: 1rem;
+  display: inline-flex; /* <a> und <button> verhalten sich identisch */
+  align-items: center;
+  justify-content: flex-start; /* Text links im Button */
+  line-height: 1;       /* verhindert Höhen-Differenzen bei <a> */
+}
+
+
