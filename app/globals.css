@@ -139,3 +139,24 @@ a, .btn { text-decoration: none; }
 /* Abstand unten für lange Seiten */
 .page-pad { padding-bottom: 6rem; }
 
+/* Einheitliche breite Buttons für Capture */
+.btn--wide{
+  min-width: 260px;
+  height: 52px;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start; /* Text linksbündig im Button */
+}
+
+/* Fixierter Zurück-Button (bleibt sichtbar) */
+.back-fab-fixed{
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 50;
+}
+
+/* Kleiner Unterkanten-Puffer für lange Seiten */
+.page-pad{ padding-bottom: 6rem; }
+
