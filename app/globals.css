@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* -------------------------------------------------
+   Farb- & Design-Token
+--------------------------------------------------- */
+:root {
+  --brand:  #ec0347;   /* Primär */
+  --brand2: #ab0000;   /* Sekundär */
+  --ink:    #f1f5f9;   /* Heller Text auf dunklem BG */
+  --muted:  #94a3b8;
+  --ring:   rgba(236,3,71,.35);
+  --btn-wide: 300px;           /* Standardbreite Buttons */
+  --btn-wide-height: 52px;     /* Standardhöhe Buttons */
+}
+
+/* -------------------------------------------------
+   Grundlayout
+--------------------------------------------------- */
+html, body {
+  height: 100%;
+  background: #000;
+  color: var(--ink);
+  font-family: 'Inter', sans-serif;
+}
+
+/* Weißer Text mit dezentem Schatten auf Foto-Hintergründen */
+.hero-text {
+  text-shadow: 0 2px 14px rgba(0,0,0,.35);
+  color: #fff;
+}
+.hero-sub {
+  text-shadow: 0 1px 8px rgba(0,0,0,.3);
+  color: rgba(255,255,255,.92);
+}
+
+/* Vollbild-Hero */
+.hero-full {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+}
+.safe-area {
+  padding-top: calc(24px + env(safe-area-inset-top));
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+/* -------------------------------------------------
+   Cards & Inputs
+--------------------------------------------------- */
+.card {
+  @apply rounded-2xl border border-gray-200/20 p-5 bg-black/40 backdrop-blur-sm shadow-md;
+  transition: box-shadow .2s ease, transform .05s ease;
+}
+.card:hover {
+  box-shadow: 0 10px 28px rgba(0,0,0,.15);
+}
+
+.input, select {
+  @apply w-full border border-gray-600 rounded-xl p-3 bg-black/60 text-white;
+}
+.input:focus, select:focus {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------
+   Buttons
+--------------------------------------------------- */
+a, .btn {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center font-semibold rounded-xl px-4 py-2 transition;
+  text-align: center;
+}
+
+.btn.pill {
+  border-radius: 9999px;
+  background: linear-gradient(180deg, var(--brand), var(--brand2));
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.5);
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+}
+.btn.pill:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+/* Einheitliche Breite & Höhe für alle Capture-Buttons */
+.btn--wide {
+  width: var(--btn-wide);
+  height: var(--btn-wide-height);
+  box-sizing: border-box;
+  padding: 0 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+
+/*
+  Größere Buttons für mobile/touch‑freundliche Oberflächen.
+  Durch Verwendung der CSS‑Variablen var(--btn-wide) und var(--btn-wide-height)
+  passen sich Breite und Höhe automatisch an kleinere Viewports an.
+*/
+.btn-lg {
+  padding: 0.75rem 1.5rem;
+  font-size: 1.125rem;
+  min-width: var(--btn-wide);
+  height: var(--btn-wide-height);
+}
+
+/* Für kleine Screens: Buttons etwas schmaler */
+@media (max-width: 640px) {
+  :root {
+    --btn-wide: 240px;
+    --btn-wide-height: 48px;
+  }
+}
+
+/* -------------------------------------------------
+   Matrix / Tabellen / Layout
+--------------------------------------------------- */
+.badge-green {
+  background: #16a34a;
+  color: #fff;
+  border-radius: 9999px;
+  padding: .25rem .6rem;
+  font-weight: 700;
+}
+.badge-red {
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.table-wrapper {
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 1rem;
+  backdrop-filter: blur(8px);
+}
+
+.table-wrapper table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-wrapper th,
+.table-wrapper td {
+  padding: .6rem .8rem;
+  text-align: left;
+  color: #f8fafc;
+}
+
+.table-wrapper tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.05);
+}
+.table-wrapper tr:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* -------------------------------------------------
+   Spacing-Utilities
+--------------------------------------------------- */
+.page-pad {
+  padding-bottom: 6rem;
+}
+
+/* -------------------------------------------------
+   Pills (z. B. Landingpage)
+--------------------------------------------------- */
+.pills {
+  display: grid;
+  gap: 14px;
+  justify-content: center;
+  justify-items: center;
+}
+@media (min-width: 640px) {
+  .pills { grid-template-columns: repeat(2, max-content); }
+}
+@media (min-width: 768px) {
+  .pills { grid-template-columns: repeat(4, max-content); }
+}
