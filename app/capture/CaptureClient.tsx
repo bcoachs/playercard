@@ -63,6 +63,114 @@ function normScore(st: Station, raw: number){
   return Math.round(Math.max(0, Math.min(100, raw)))
 }
 
+/*
+ * CSV‑Bewertungen
+ *
+ * Um in der Capture‑Ansicht identische Scores wie im Dashboard zu verwenden, laden wir
+ * optionale S4‑ und S6‑Tabellen aus dem Ordner /public/config. Diese Dateien enthalten
+ * altersabhängige Schwellenwerte für Schnelligkeit (S6, separat für weiblich/männlich)
+ * sowie Schusskraft (S4, ohne Geschlechtsunterschied). Die Funktionen und
+ * Hilfsvariablen darunter sind an page.tsx angelehnt.
+ */
+
+// Flags aus Umgebungsvariablen lesen (standardmäßig aktiv)
+const USE_S6_CSV_CAPTURE = (() => {
+  const v = process.env.NEXT_PUBLIC_USE_S6_CSV
+  if (v === '0' || v === 'false') return false
+  return true
+})()
+const USE_S4_CSV_CAPTURE = (() => {
+  const v = process.env.NEXT_PUBLIC_USE_S4_CSV
+  if (v === '0' || v === 'false') return false
+  return true
+})()
+
+async function loadS6MapCapture(gender: 'male' | 'female'): Promise<Record<string, number[]> | null> {
+  try {
+    const file = gender === 'male' ? '/config/s6_male.csv' : '/config/s6_female.csv'
+    const res = await fetch(file, { cache: 'no-store' })
+    if (!res.ok) return null
+    const text = await res.text()
+    const lines = text
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(Boolean)
+    if (lines.length < 2) return null
+    const header = lines[0].split(';').map(s => s.trim())
+    const ageCols = header.slice(1)
+    const out: Record<string, number[]> = {}
+    for (const age of ageCols) out[age] = []
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(';').map(s => s.trim())
+      for (let c = 1; c < cols.length; c++) {
+        const age = ageCols[c - 1]
+        const sec = Number((cols[c] || '').replace(',', '.'))
+        if (Number.isFinite(sec)) out[age].push(sec)
+      }
+    }
+    return out
+  } catch {
+    return null
+  }
+}
+
+async function loadS4MapCapture(): Promise<Record<string, number[]> | null> {
+  try {
+    const file = '/config/s4.csv'
+    const res = await fetch(file, { cache: 'no-store' })
+    if (!res.ok) return null
+    const text = await res.text()
+    const lines = text
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(Boolean)
+    if (lines.length < 3) return null
+    const header = lines[0].split(';').map(s => s.trim())
+    const ageCols = header.slice(1)
+    const out: Record<string, number[]> = {}
+    for (const age of ageCols) out[age] = []
+    // skip second row (index 1) as header-like
+    for (let i = 2; i < lines.length; i++) {
+      const cols = lines[i].split(';').map(s => s.trim())
+      for (let c = 1; c < cols.length; c++) {
+        const age = ageCols[c - 1]
+        const kmh = Number((cols[c] || '').replace(',', '.'))
+        if (Number.isFinite(kmh)) out[age].push(kmh)
+      }
+    }
+    return out
+  } catch {
+    return null
+  }
+}
+
+function nearestAgeBucketCapture(age: number, keys: string[]): string {
+  const parsed = keys.map(k => {
+    const nums = k.match(/\d+/g)?.map(Number) || []
+    const mid = nums.length === 2 ? (nums[0] + nums[1]) / 2 : nums[0] || 0
+    return { key: k, mid }
+  })
+  parsed.sort((a, b) => Math.abs(a.mid - age) - Math.abs(b.mid - age))
+  return parsed[0]?.key || keys[0]
+}
+
+/** Schrittlogik: schneller (Zeit kleiner) → höherer Score. */
+function scoreFromTimeStepCapture(seconds: number, rows: number[]): number {
+  for (let i = 0; i < rows.length; i++) {
+    if (seconds <= rows[i]) return Math.max(0, Math.min(100, 100 - i))
+  }
+  return 0
+}
+
+/** Schrittlogik für S4: schneller (km/h größer) → höherer Score. */
+function scoreFromSpeedStepCapture(speed: number, rows: number[]): number {
+  for (let i = 0; i < rows.length; i++) {
+    if (speed >= rows[i]) return Math.max(0, Math.min(100, 100 - i))
+  }
+  return 0
+}
+
+
 /** S5 Standard-Bewertung (wenn keine CSV genutzt wird) */
 function s5Score(ageYears: number, topHits: number, bottomHits: number){
   const olderOrEq10 = ageYears >= 10
@@ -109,6 +217,12 @@ export default function CaptureClient(){
   // Werte pro Spieler (pro Station unterschiedlich aufgebaut)
   const [values, setValues] = useState<Record<string, any>>({}) // key = playerId
   const [saved, setSaved]   = useState<Record<string, number>>({}) // gespeicherter Score (zur Info)
+
+  // CSV Maps für S4/S6 (analog Dashboard). Wir laden sie einmalig, um im Capture die
+  // gleichen Bewertungstabellen zu verwenden wie in der Spieler-Matrix.
+  const [s6FemaleMap, setS6FemaleMap] = useState<Record<string, number[]> | null>(null)
+  const [s6MaleMap, setS6MaleMap] = useState<Record<string, number[]> | null>(null)
+  const [s4Map, setS4Map] = useState<Record<string, number[]> | null>(null)
 
   /* Daten holen */
   useEffect(()=>{ fetch('/api/projects').then(r=>r.json()).then(res=> setProjects(res.items||[])) },[])
@@ -174,7 +288,53 @@ setProject(res.item||null)).catch(()=>setProject(null))
   }
 
   function scoreFor(st: Station, p: Player, raw: number){
-    // Fallback-Normierung, wenn keine CSV-Tabellen genutzt werden
+    const n = (st.name || '').toLowerCase()
+    // Sonderfall Schnelligkeit (S6): zuerst CSV schauen, sonst Fallback (4–20 s)
+    if (n.includes('schnelligkeit')) {
+      if (USE_S6_CSV_CAPTURE) {
+        const map = p.gender === 'male' ? s6MaleMap : s6FemaleMap
+        if (map) {
+          const keys = Object.keys(map)
+          if (keys.length) {
+            const age = resolveAge(p.birth_year)
+            const bucket = nearestAgeBucketCapture(age, keys)
+            const rows = map[bucket] || []
+            if (rows.length) return scoreFromTimeStepCapture(Number(raw), rows)
+          }
+        }
+      }
+      // Fallback: 4–20 s → 0–100 (weniger ist besser)
+      // min=4, max=20
+      const min = 4, max = 20
+      return Math.round(Math.max(0, Math.min(100, 100 * (max - Number(raw)) / (max - min))))
+    }
+    // Sonderfall Schusskraft (S4): CSV oder Fallback
+    if (n.includes('schusskraft')) {
+      if (USE_S4_CSV_CAPTURE && s4Map) {
+        const keys = Object.keys(s4Map)
+        if (keys.length) {
+          const age = resolveAge(p.birth_year)
+          const bucket = nearestAgeBucketCapture(age, keys)
+          const rows = s4Map[bucket] || []
+          if (rows.length) return scoreFromSpeedStepCapture(Number(raw), rows)
+        }
+      }
+      // Fallback: 0–150 km/h → 0–100 (mehr ist besser)
+      const val = Number(raw)
+      return Math.round(Math.max(0, Math.min(100, (val / 150) * 100)))
+    }
+    // Passgenauigkeit: Score = Raw (0–100) direkt
+    if (n.includes('passgenauigkeit')) {
+      const v = Number(raw)
+      return Math.round(Math.max(0, Math.min(100, v)))
+    }
+    // Schusspräzision: Raw = 0–24 → Score = raw/24*100
+    if (n.includes('schusspräzision')) {
+      const v = Number(raw)
+      const pct = Math.max(0, Math.min(1, v / 24))
+      return Math.round(pct * 100)
+    }
+    // Beweglichkeit, Technik oder generisch → Fallback definieren
     return normScore(st, raw)
   }
 
@@ -188,15 +348,8 @@ setProject(res.item||null)).catch(()=>setProject(null))
     const res = await fetch(`/api/projects/${projectId}/measurements`, { method:'POST', body })
     const txt = await res.text()
     if (!res.ok){ alert(txt || 'Fehler beim Speichern'); return }
-    // Score für Anzeige berechnen: für Schusspräzision auf 0–100 normieren, sonst generische Normierung
-    let score = 0
-    const nameLower = st.name.toLowerCase()
-    if (nameLower.includes('schusspräzision')) {
-      score = Math.round(Math.max(0, Math.min(100, (Number(raw) / 24) * 100)))
-    } else {
-      // Fallback mit normScore: z.B. Passgenauigkeit, Schusskraft etc.
-      score = Math.round(normScore(st, Number(raw)))
-    }
+    // Score für Anzeige berechnen: identisch zur Matrix-Logik (inklusive CSV-Auswertung)
+    const score = scoreFor(st, p, raw)
     setSaved(prev => ({ ...prev, [p.id]: score }))
     alert('Gespeichert.')
   }
@@ -213,20 +366,15 @@ setProject(res.item||null)).catch(()=>setProject(null))
         if (m && typeof m.value === 'number') {
           const rawVal = Number(m.value)
           const st = stations.find(s => s.id === selected)
-          if (st) {
-            const nameLower = (st.name || '').toLowerCase()
-            let score = 0
-            if (nameLower.includes('schusspräzision')) {
-              score = Math.round(Math.max(0, Math.min(100, (rawVal / 24) * 100)))
-            } else {
-              score = Math.round(normScore(st, rawVal))
-            }
-            setSaved(prev => ({ ...prev, [currentPlayerId]: score }))
+          const p = players.find(pl => pl.id === currentPlayerId)
+          if (st && p) {
+            const sc = scoreFor(st, p, rawVal)
+            setSaved(prev => ({ ...prev, [currentPlayerId]: sc }))
           }
         } else {
           // Keine Messung vorhanden → gespeicherten Score entfernen
           setSaved(prev => {
-            const copy = { ...prev }
+            const copy: Record<string, number> = { ...prev }
             delete copy[currentPlayerId]
             return copy
           })
@@ -234,6 +382,22 @@ setProject(res.item||null)).catch(()=>setProject(null))
       })
       .catch(() => {})
   }, [projectId, selected, currentPlayerId, stations])
+
+  // CSV Maps laden (nur einmal). Bei Fehler bleibt Map null → Fallback in Score.
+  useEffect(() => {
+    if (USE_S6_CSV_CAPTURE) {
+      // beide Gender parallel laden
+      Promise.allSettled([loadS6MapCapture('female'), loadS6MapCapture('male')]).then(([f, m]) => {
+        if (f.status === 'fulfilled' && f.value) setS6FemaleMap(f.value)
+        if (m.status === 'fulfilled' && m.value) setS6MaleMap(m.value)
+      })
+    }
+    if (USE_S4_CSV_CAPTURE) {
+      loadS4MapCapture().then(map => {
+        if (map) setS4Map(map)
+      })
+    }
+  }, [])
 
   /* UI-Bausteine */
   function ProjectsSelect(){
