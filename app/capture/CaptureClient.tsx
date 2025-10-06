@@ -425,7 +425,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
             <div key={s.id} className="grid grid-cols-2 gap-3 justify-start w-full max-w-3xl">
               {/* left: Station */}
               <button
-                className="btn pill text-sm"
+                className="btn pill btn-lg"
                 onClick={()=>{
                   setSelected(s.id)
                   setCurrentPlayerId('')
@@ -438,7 +438,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
               {/* right: Sketch */}
               <a
-                className="btn pill text-sm"
+                className="btn pill btn-lg"
                 href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
                 target="_blank"
                 rel="noreferrer"
@@ -706,11 +706,11 @@ setProject(res.item||null)).catch(()=>setProject(null))
             {isTimeStation && (
               <div className="flex items-center gap-2 mb-2">
                 {!running ? (
-                  <button className="btn pill" type="button" onClick={startStopwatch}>
+                  <button className="btn pill btn-lg" type="button" onClick={startStopwatch}>
                     Start
                   </button>
                 ) : (
-                  <button className="btn pill" type="button" onClick={stopStopwatch}>
+                  <button className="btn pill btn-lg" type="button" onClick={stopStopwatch}>
                     Stop
                   </button>
                 )}
@@ -719,7 +719,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                   {st.unit || 's'}
                 </span>
                 <button
-                  className="btn pill"
+                  className="btn pill btn-lg"
                   type="button"
                   onClick={resetStopwatch}
                   disabled={running && !localVal}
@@ -748,7 +748,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
           </div>
         </div>
         <div className="mt-4 text-right">
-          <button className="btn pill" onClick={() => saveOne(st, p)}>Speichern</button>
+          <button className="btn pill btn-lg" onClick={() => saveOne(st, p)}>Speichern</button>
         </div>
       </div>
     )
@@ -775,7 +775,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
           }
         }}
         style={{ position: 'fixed', right: '16px', bottom: '16px', zIndex: 9999 }}
-        className="btn pill"
+        className="btn pill btn-sm"
         aria-label="Zurück"
         title="Zurück"
       >
