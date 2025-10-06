@@ -4,8 +4,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import BackFab from '../components/BackFab'
 
-/* ------------------------------- Types ------------------------------- */
-
 type Project = {
   id: string
   name: string
@@ -35,8 +33,7 @@ type Player = {
   fav_position?: string | null
 }
 
-/* -------------------------- Stationen-Reihenfolge -------------------------- */
-
+/* Reihenfolge/Index */
 const ST_INDEX: Record<string, number> = {
   Beweglichkeit: 1,
   Technik: 2,
@@ -45,18 +42,14 @@ const ST_INDEX: Record<string, number> = {
   Schusspräzision: 5,
   Schnelligkeit: 6,
 }
-
 const ORDER = ['Beweglichkeit','Technik','Passgenauigkeit','Schusskraft','Schusspräzision','Schnelligkeit']
+const stationIdxByName = (name:string)=> ST_INDEX[name] ?? 1
 
-function stationIdxByName(name: string){ return ST_INDEX[name] ?? 1 }
-
-/* --------------------------- CSV (S6) – Helpers --------------------------- */
-
+/* --- S6 CSV Helfer (global /public/config/s6_*.csv, Semikolon, Komma->Punkt) --- */
 const AGE_BUCKETS = [
   '6 bis 7','8 bis 9','10 bis 11','12 bis 13','14 bis 15','16 bis 17',
   '18 bis 19','20 bis 24','25 bis 29','30 bis 34','35 bis 39','40 bis 44','45 bis 49'
 ] as const
-
 type CSVMap = Record<string, number[]> // bucket → [sec@100, sec@99, ... sec@0]
 
 function parseCSVMap(csv: string): CSVMap {
@@ -80,7 +73,6 @@ function parseCSVMap(csv: string): CSVMap {
   }
   return out
 }
-
 function nearestAgeBucket(age: number): typeof AGE_BUCKETS[number] {
   if (age <= 7) return '6 bis 7'
   if (age <= 9) return '8 bis 9'
@@ -96,7 +88,6 @@ function nearestAgeBucket(age: number): typeof AGE_BUCKETS[number] {
   if (age <= 44) return '40 bis 44'
   return '45 bis 49'
 }
-
 function scoreFromTime(timeSec: number, row: number[]): number {
   for (let i=0; i<row.length; i++){
     const threshold = row[i]
@@ -105,9 +96,8 @@ function scoreFromTime(timeSec: number, row: number[]): number {
   return 0
 }
 
-/* ---------------------- Norm-Score (Fallback ohne CSV) --------------------- */
-
-function clamp01(x:number){ return Math.max(0, Math.min(1, x)) }
+/* --- Fallback Normalisierung (wenn keine CSV) --- */
+const clamp01 = (x:number)=> Math.max(0, Math.min(1, x))
 function normScore(st: Station, raw: number): number {
   const minV = st.min_value ?? 0
   const maxV = st.max_value ?? 100
@@ -118,28 +108,24 @@ function normScore(st: Station, raw: number): number {
   return Math.round(v*100)
 }
 
-/* ------------------------- S5 – Altersabhängige Regeln --------------------- */
-
-function clampInt(n:number, min:number, max:number){ return Math.max(min, Math.min(max, Math.round(n))) }
-
+/* --- S5 Altersregeln (ohne CSV) --- */
+const clampInt = (n:number,min:number,max:number)=> Math.max(min, Math.min(max, Math.round(n)))
 function s5UpperPoints(upperHits:number, ageYears:number): number {
   const n = clampInt(upperHits, 0, 6)
   if (ageYears >= 10){
-    // 1–3: 15, 4–5: 10, 6: 5 → max 70
     const first3 = Math.min(n,3) * 15
     const next2  = Math.max(0, Math.min(n-3,2)) * 10
     const last1  = n>=6 ? 5 : 0
-    return first3 + next2 + last1
+    return first3 + next2 + last1 // max 70
   } else {
-    // 1–5: 10, 6: 8 → max 58
     const first5 = Math.min(n,5) * 10
     const last1  = n>=6 ? 8 : 0
-    return first5 + last1
+    return first5 + last1 // max 58
   }
 }
 function s5LowerPoints(lowerHits:number, ageYears:number): number {
   const n = clampInt(lowerHits, 0, 6)
-  return ageYears >= 10 ? n*5 : n*7 // max 30 bzw. 42
+  return ageYears >= 10 ? n*5 : n*7 // max 30 / 42
 }
 function s5Score(ul:number, ur:number, ll:number, lr:number, ageYears:number): number {
   const up = s5UpperPoints((ul??0)+(ur??0), ageYears)
@@ -166,8 +152,8 @@ export default function CaptureClient(){
   const [selectedStationId, setSelectedStationId] = useState<string>('')
   const [selectedPlayerId,  setSelectedPlayerId]  = useState<string>('')
 
-  // Eingabe-States je Spieler (nur für das aktuell angezeigte Formular relevant)
-  const [valueStr, setValueStr] = useState<string>('')  // generische Zahl
+  // Eingaben (für die aktuell gewählte Station/Spieler)
+  const [valueStr, setValueStr] = useState<string>('')  // generisch / S6 Sekunden
   const [s3_h10, setS3_h10] = useState<number>(0)
   const [s3_h14, setS3_h14] = useState<number>(0)
   const [s3_h18, setS3_h18] = useState<number>(0)
@@ -181,8 +167,7 @@ export default function CaptureClient(){
   const [mapMale,   setMapMale]   = useState<CSVMap | null>(null)
   const [csvStatus, setCsvStatus] = useState<'ok'|'fallback'|'loading'>('loading')
 
-  /* ---------------------------- initial fetches ---------------------------- */
-
+  /* Daten laden */
   useEffect(()=>{
     fetch('/api/projects', { cache:'no-store' })
       .then(r=>r.json()).then(res=> setProjects(res.items||[]))
@@ -219,7 +204,6 @@ export default function CaptureClient(){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[])
 
-  // CSV laden (global: /public/config/*)
   useEffect(()=>{
     let cancel=false
     async function load(){
@@ -245,33 +229,26 @@ export default function CaptureClient(){
     return ()=>{ cancel=true }
   },[])
 
-  /* ------------------------------ Derived state ----------------------------- */
-
+  /* abgeleitet */
   const currentStation = useMemo(()=> stations.find(s=>s.id===selectedStationId), [stations, selectedStationId])
   const currentIndex   = currentStation ? stationIdxByName(currentStation.name) : 1
   const sketchHref     = `/station${currentIndex}.pdf`
-
   const currentPlayer  = useMemo(()=> players.find(p=>p.id===selectedPlayerId), [players, selectedPlayerId])
 
-  /* --------------------------------- Helpers -------------------------------- */
-
+  /* Helpers */
   function resolveAge(birthYear:number|null): number {
     const eventYear = project?.date ? Number(String(project.date).slice(0,4)) : new Date().getFullYear()
     if (!birthYear || birthYear<1900) return 16
     const a = eventYear - birthYear
     return Math.max(6, Math.min(49, a))
   }
-
   function s6ScoreFromCSV(sec:number, gender:'male'|'female'|null|undefined, ageYears:number): number {
     const bucket = nearestAgeBucket(ageYears)
     const map = (gender==='male' ? mapMale : mapFemale) || mapFemale || mapMale
     const row = map ? (map[bucket] || []) : []
-    if (!row.length) return -1 // Signal: kein CSV → Fallback verwenden
+    if (!row.length) return -1
     return scoreFromTime(sec, row)
   }
-
-  /* --------------------------------- Save API -------------------------------- */
-
   async function saveMeasurement(player:Player, station:Station, numericValue:number){
     const fd = new FormData()
     fd.append('player_id', player.id)
@@ -283,35 +260,25 @@ export default function CaptureClient(){
     alert('Gespeichert.')
   }
 
-  /* ----------------------------- Eingabe-UI (one) ---------------------------- */
-
+  /* Eingabe-Panel (eine Person) */
   function StationForm(){
     const st = currentStation
     if (!st) return null
-
     const stName = st.name.toLowerCase()
-
-    // Score live nur zur Anzeige (gespeichert wird onClick)
     let liveScore: number | null = null
 
     if (currentPlayer){
       const age = resolveAge(currentPlayer.birth_year)
-
       if (stName.includes('passgenauigkeit')){
-        // 3×10m (0..3) → 11, 2×14m (0..2) → 17, 1×18m (0..1) → 33 → max 100
-        const raw = (s3_h10*11) + (s3_h14*17) + (s3_h18*33)
+        const raw = (s3_h10*11) + (s3_h14*17) + (s3_h18*33) // 0..100
         liveScore = Math.max(0, Math.min(100, Math.round(raw)))
-      }
-      else if (stName.includes('schusspräzision')){
+      } else if (stName.includes('schusspräzision')){
         liveScore = s5Score(s5_ul, s5_ur, s5_ll, s5_lr, age)
-      }
-      else if (stName.includes('schnelligkeit')){
+      } else if (stName.includes('schnelligkeit')){
         const sec = Number(valueStr.replace(',','.')) || 0
         const csvPts = s6ScoreFromCSV(sec, currentPlayer.gender, age)
-        if (csvPts >= 0) liveScore = csvPts
-        else liveScore = normScore(st, sec) // Fallback
-      }
-      else {
+        liveScore = csvPts >= 0 ? csvPts : normScore(st, sec)
+      } else {
         const val = Number(valueStr.replace(',','.')) || 0
         liveScore = normScore(st, val)
       }
@@ -321,7 +288,7 @@ export default function CaptureClient(){
       if (!currentPlayer || !st) return
       const n = stName
       if (n.includes('passgenauigkeit')){
-        const rawScore = (s3_h10*11) + (s3_h14*17) + (s3_h18*33) // 0..100
+        const rawScore = (s3_h10*11) + (s3_h14*17) + (s3_h18*33)
         await saveMeasurement(currentPlayer, st, Math.round(rawScore))
       } else if (n.includes('schusspräzision')){
         const age = resolveAge(currentPlayer.birth_year)
@@ -356,7 +323,6 @@ export default function CaptureClient(){
             value={selectedPlayerId}
             onChange={(e)=>{
               setSelectedPlayerId(e.target.value)
-              // Eingaben zurücksetzen, damit man „sauber“ startet
               setValueStr('')
               setS3_h10(0); setS3_h14(0); setS3_h18(0)
               setS5_ul(0); setS5_ur(0); setS5_ll(0); setS5_lr(0)
@@ -371,11 +337,10 @@ export default function CaptureClient(){
           </select>
         </div>
 
-        {/* Eingabemaske (nur wenn Player gewählt) */}
+        {/* Eingabe (nur wenn Spieler gewählt) */}
         {!!currentPlayer && (
           <div className="space-y-3">
-            {/* S3 */}
-            {stName.includes('passgenauigkeit') && (
+            {st.name.toLowerCase().includes('passgenauigkeit') && (
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold mb-1">10 m (0–3)</label>
@@ -395,8 +360,7 @@ export default function CaptureClient(){
               </div>
             )}
 
-            {/* S5 */}
-            {stName.includes('schusspräzision') && (
+            {st.name.toLowerCase().includes('schusspräzision') && (
               <div className="grid grid-cols-4 gap-3">
                 <div>
                   <label className="block text-xs font-semibold mb-1">oben L (0–3)</label>
@@ -421,8 +385,8 @@ export default function CaptureClient(){
               </div>
             )}
 
-            {/* andere Stationen (inkl. S6 Rohwert in s) */}
-            {!stName.includes('passgenauigkeit') && !stName.includes('schusspräzision') && (
+            {!st.name.toLowerCase().includes('passgenauigkeit') &&
+             !st.name.toLowerCase().includes('schusspräzision') && (
               <div>
                 <label className="block text-xs font-semibold mb-1">
                   Messwert {st.unit ? `(${st.unit})` : ''}
@@ -437,13 +401,11 @@ export default function CaptureClient(){
               </div>
             )}
 
-            {/* Score-Anzeige */}
             <div className="text-sm">
               <span className="muted">Live-Score: </span>
               <span className="badge-green">{liveScore ?? '–'}</span>
             </div>
 
-            {/* Speichern */}
             <div className="pt-2">
               <button className="btn pill" onClick={onSave}>Speichern</button>
             </div>
@@ -453,8 +415,7 @@ export default function CaptureClient(){
     )
   }
 
-  /* ---------------------------------- View ---------------------------------- */
-
+  /* View */
   return (
     <div
       className="hero-full safe-area page-pad"
@@ -465,13 +426,11 @@ export default function CaptureClient(){
       }}
     >
       <div className="container w-full px-4">
-        {/* Kopf */}
         <div className="text-center mb-6">
           <h1 className="text-3xl md:text-4xl font-extrabold hero-text">Stationseingabe</h1>
           <p className="hero-sub mt-1">{project ? `Run: ${project.name}` : 'Bitte Run auswählen'}</p>
         </div>
 
-        {/* Projekt wählen (wenn nicht via ?project=… vorgewählt) */}
         {!qProject && (
           <div className="card glass w-full max-w-2xl mx-auto text-left mb-6">
             <label className="block text-sm font-semibold mb-2">Projekt wählen</label>
@@ -497,50 +456,60 @@ export default function CaptureClient(){
           </div>
         )}
 
-        {/* Stations-Zeilen: links Station-Button, rechts Skizzen-Button (gleich groß) */}
-        <div className="max-w-3xl mx-auto flex flex-col gap-2">
-          {stations.map(s=>{
-            const idx = stationIdxByName(s.name)
-            const isActive = s.id === selectedStationId
-            return (
-              <React.Fragment key={s.id}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <button
-                      className="btn pill"
-                      style={{
-                        minWidth: 240,
-                        height: 48,
-                        filter: isActive ? 'brightness(1.15)' : undefined
-                      }}
-                      onClick={()=>{
-                        setSelectedStationId(s.id)
-                        setSelectedPlayerId('')
-                        setValueStr('')
-                        setS3_h10(0); setS3_h14(0); setS3_h18(0)
-                        setS5_ul(0); setS5_ur(0); setS5_ll(0); setS5_lr(0)
-                        router.replace(projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`)
-                      }}
-                    >
-                      {`S${idx} – ${s.name}`}
-                    </button>
-                  </div>
-
-                  <a
+        {/* ZWEI SPALTEN: links Sx-Buttons, rechts Skizzen-Buttons (gleich groß) */}
+        <div className="max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+            {/* linke Spalte: Station-Buttons */}
+            <div className="flex flex-col gap-3">
+              {stations.map(s=>{
+                const idx = stationIdxByName(s.name)
+                const isActive = s.id === selectedStationId
+                return (
+                  <button
+                    key={`st-${s.id}`}
                     className="btn pill"
-                    style={{ minWidth: 240, height: 48 }}
+                    style={{
+                      minWidth: 260,
+                      height: 52,
+                      justifyContent: 'flex-start',
+                      filter: isActive ? 'brightness(1.15)' : undefined
+                    }}
+                    onClick={()=>{
+                      setSelectedStationId(s.id)
+                      setSelectedPlayerId('')
+                      setValueStr('')
+                      setS3_h10(0); setS3_h14(0); setS3_h18(0)
+                      setS5_ul(0); setS5_ur(0); setS5_ll(0); setS5_lr(0)
+                      router.replace(projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`)
+                    }}
+                  >
+                    {`S${idx} – ${s.name}`}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* rechte Spalte: Skizzen-Buttons */}
+            <div className="flex flex-col gap-3">
+              {stations.map(s=>{
+                const idx = stationIdxByName(s.name)
+                return (
+                  <a
+                    key={`sk-${s.id}`}
+                    className="btn pill"
+                    style={{ minWidth: 260, height: 52, justifyContent:'flex-start' }}
                     href={`/station${idx}.pdf`}
                     target="_blank" rel="noopener noreferrer"
                   >
                     {`S${idx} – Stationsskizze`}
                   </a>
-                </div>
+                )
+              })}
+            </div>
+          </div>
 
-                {/* Panel nur für aktive Station */}
-                {isActive && <StationForm/>}
-              </React.Fragment>
-            )
-          })}
+          {/* Panel NUR für aktive Station */}
+          {currentStation && <StationForm/>}
         </div>
 
         {/* CSV-Status */}
