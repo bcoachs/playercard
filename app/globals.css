@@ -106,7 +106,7 @@ a, .btn {
 @media (max-width: 640px) {
   :root {
     --btn-wide: 240px;
-    --btn-wide-height: 48px;
+    --btn-wide-height: 100px;
   }
 }
 
