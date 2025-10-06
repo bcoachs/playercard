@@ -665,12 +665,13 @@ setProject(res.item||null)).catch(()=>setProject(null))
             <input
               className="input"
               type="tel"
-              value={val}
+              defaultValue={val}
               onChange={e => {
                 // Nur numerische Zeichen und Punkt zulassen
                 const inputVal = e.target.value
                 const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
-                // Wert lokal im State halten, um Re-Renders zu vermeiden, global erst beim Speichern setzen
+                // Wert im State aktualisieren. Da das Input uncontrolled ist (defaultValue),
+                // verliert es bei State-Updates nicht den Fokus.
                 setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: sanitized } }))
               }}
               onKeyDown={e => e.stopPropagation()}
