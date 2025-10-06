@@ -656,22 +656,30 @@ setProject(res.item||null)).catch(()=>setProject(null))
             <label className="block text-xs font-semibold mb-1">
               Messwert {st.unit ? `(${st.unit})` : ''}
             </label>
-            {/*
-              Wir verwenden type="text" statt type="number", um zu vermeiden,
-              dass das Eingabefeld bei unvollständiger Zahl als invalid markiert wird
-              (rote Umrandung) und um mehrstellige Eingaben zu ermöglichen, ohne dass der
-              Fokus verloren geht.
-            */}
+            {/* Erstes Eingabefeld */}
             <input
               className="input"
               type="tel"
               defaultValue={val}
               onChange={e => {
-                // Nur numerische Zeichen und Punkt zulassen
                 const inputVal = e.target.value
                 const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
-                // Wert im State aktualisieren. Da das Input uncontrolled ist (defaultValue),
-                // verliert es bei State-Updates nicht den Fokus.
+                setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: sanitized } }))
+              }}
+              onKeyDown={e => e.stopPropagation()}
+              onKeyDownCapture={e => e.stopPropagation()}
+              onKeyUp={e => e.stopPropagation()}
+              onKeyPress={e => e.stopPropagation()}
+              placeholder={st.unit || 'Wert'}
+            />
+            {/* Zweites Eingabefeld: überschreibt den gleichen Wert */}
+            <input
+              className="input mt-2"
+              type="tel"
+              defaultValue={val}
+              onChange={e => {
+                const inputVal = e.target.value
+                const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
                 setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: sanitized } }))
               }}
               onKeyDown={e => e.stopPropagation()}
