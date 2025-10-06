@@ -643,12 +643,59 @@ setProject(res.item||null)).catch(()=>setProject(null))
       )
     }
 
-    // Generische Messung (z.B. Schusskraft, Schnelligkeit Fallback)
+    // Generische Messung (z.B. Schusskraft, Schnelligkeit Fallback) oder zeitbasierte Stationen.
     const val = v.value ?? ''
+    // Zeitstationen: Beweglichkeit (S1), Technik (S2), Schnelligkeit (S6) → Stoppuhr nutzen
+    const isTimeStation = n.includes('beweglichkeit') || n.includes('technik') || n.includes('schnelligkeit')
+    // Lokaler Zustand für das Eingabefeld / Stoppuhr
+    const [localVal, setLocalVal] = React.useState<string>(val)
+    const [stopwatchStart, setStopwatchStart] = React.useState<number | null>(null)
+    const [elapsed, setElapsed] = React.useState<number>(0)
+    const [timerId, setTimerId] = React.useState<any>(null)
+    const running = stopwatchStart !== null
+    // synchronisiere lokalen Wert, wenn externe Messung geändert wird
+    React.useEffect(() => {
+      setLocalVal(val)
+    }, [val])
+    // cleanup bei unmount/wechsel
+    React.useEffect(() => {
+      return () => {
+        if (timerId) clearInterval(timerId)
+      }
+    }, [timerId])
+    const startStopwatch = () => {
+      if (running) return
+      const start = Date.now()
+      setStopwatchStart(start)
+      const id = setInterval(() => {
+        const now = Date.now()
+        const diff = (now - start) / 1000
+        setElapsed(diff)
+      }, 100)
+      setTimerId(id)
+    }
+    const stopStopwatch = () => {
+      if (!running) return
+      if (timerId) clearInterval(timerId)
+      const finalVal = (Date.now() - (stopwatchStart || Date.now())) / 1000
+      const valStr = finalVal.toFixed(2)
+      setStopwatchStart(null)
+      setElapsed(finalVal)
+      setLocalVal(valStr)
+      // Wert auch im globalen State aktualisieren
+      setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: valStr } }))
+    }
+    const resetStopwatch = () => {
+      if (timerId) clearInterval(timerId)
+      setStopwatchStart(null)
+      setElapsed(0)
+      setLocalVal('')
+      setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: '' } }))
+    }
     return (
       <div className="card glass w-full max-w-3xl mx-auto">
         {/* Score anzeigen, falls vorhanden */}
-        {saved[p.id]!==undefined && (
+        {saved[p.id] !== undefined && (
           <div className="mb-2 text-sm">Bisheriger Score: {saved[p.id]}</div>
         )}
         <div className="grid grid-cols-2 gap-3">
@@ -656,30 +703,40 @@ setProject(res.item||null)).catch(()=>setProject(null))
             <label className="block text-xs font-semibold mb-1">
               Messwert {st.unit ? `(${st.unit})` : ''}
             </label>
-            {/* Erstes Eingabefeld */}
+            {isTimeStation && (
+              <div className="flex items-center gap-2 mb-2">
+                {!running ? (
+                  <button className="btn pill" type="button" onClick={startStopwatch}>
+                    Start
+                  </button>
+                ) : (
+                  <button className="btn pill" type="button" onClick={stopStopwatch}>
+                    Stop
+                  </button>
+                )}
+                <span className="text-sm font-mono" style={{ minWidth: '60px' }}>
+                  {running ? elapsed.toFixed(2) : localVal || ''}
+                  {st.unit || 's'}
+                </span>
+                <button
+                  className="btn pill"
+                  type="button"
+                  onClick={resetStopwatch}
+                  disabled={running && !localVal}
+                >
+                  Reset
+                </button>
+              </div>
+            )}
+            {/* Eingabefeld für manuelle Eingabe oder zur Anzeige des gemessenen Werts */}
             <input
               className="input"
               type="tel"
-              defaultValue={val}
+              value={localVal}
               onChange={e => {
                 const inputVal = e.target.value
                 const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
-                setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: sanitized } }))
-              }}
-              onKeyDown={e => e.stopPropagation()}
-              onKeyDownCapture={e => e.stopPropagation()}
-              onKeyUp={e => e.stopPropagation()}
-              onKeyPress={e => e.stopPropagation()}
-              placeholder={st.unit || 'Wert'}
-            />
-            {/* Zweites Eingabefeld: überschreibt den gleichen Wert */}
-            <input
-              className="input mt-2"
-              type="tel"
-              defaultValue={val}
-              onChange={e => {
-                const inputVal = e.target.value
-                const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
+                setLocalVal(sanitized)
                 setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: sanitized } }))
               }}
               onKeyDown={e => e.stopPropagation()}
@@ -691,7 +748,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
           </div>
         </div>
         <div className="mt-4 text-right">
-          <button className="btn pill" onClick={()=>saveOne(st, p)}>Speichern</button>
+          <button className="btn pill" onClick={() => saveOne(st, p)}>Speichern</button>
         </div>
       </div>
     )
