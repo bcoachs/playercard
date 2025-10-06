@@ -321,23 +321,57 @@ setProject(res.item||null)).catch(()=>setProject(null))
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold mb-1">10 m (0–3)</label>
-                   <input className="input" type="number" min={0} max={3} value={h10}
-                     onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],h10:Number(e.target.value)}}))}
-                     onKeyDown={e=> e.stopPropagation()}
+                   <input
+                     className="input"
+                     type="number"
+                     min={0}
+                     max={3}
+                     value={h10}
+                     onChange={e => setValues(prev => ({
+                       ...prev,
+                       [p.id]: { ...prev[p.id], h10: Number(e.target.value) },
+                     }))}
+                     // stop key events in both capture and bubble phase so that global hotkeys do not interfere
+                     onKeyDown={e => e.stopPropagation()}
+                     onKeyDownCapture={e => e.stopPropagation()}
+                     onKeyUp={e => e.stopPropagation()}
+                     onKeyPress={e => e.stopPropagation()}
                    />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">14 m (0–2)</label>
-                   <input className="input" type="number" min={0} max={2} value={h14}
-                     onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],h14:Number(e.target.value)}}))}
-                     onKeyDown={e=> e.stopPropagation()}
+                   <input
+                     className="input"
+                     type="number"
+                     min={0}
+                     max={2}
+                     value={h14}
+                     onChange={e => setValues(prev => ({
+                       ...prev,
+                       [p.id]: { ...prev[p.id], h14: Number(e.target.value) },
+                     }))}
+                     onKeyDown={e => e.stopPropagation()}
+                     onKeyDownCapture={e => e.stopPropagation()}
+                     onKeyUp={e => e.stopPropagation()}
+                     onKeyPress={e => e.stopPropagation()}
                    />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">18 m (0–1)</label>
-                   <input className="input" type="number" min={0} max={1} value={h18}
-                     onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],h18:Number(e.target.value)}}))}
-                     onKeyDown={e=> e.stopPropagation()}
+                   <input
+                     className="input"
+                     type="number"
+                     min={0}
+                     max={1}
+                     value={h18}
+                     onChange={e => setValues(prev => ({
+                       ...prev,
+                       [p.id]: { ...prev[p.id], h18: Number(e.target.value) },
+                     }))}
+                     onKeyDown={e => e.stopPropagation()}
+                     onKeyDownCapture={e => e.stopPropagation()}
+                     onKeyUp={e => e.stopPropagation()}
+                     onKeyPress={e => e.stopPropagation()}
                    />
             </div>
           </div>
@@ -359,30 +393,82 @@ setProject(res.item||null)).catch(()=>setProject(null))
           <div className="grid grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-semibold mb-1">oben L (0–3)</label>
-                   <input className="input" type="number" min={0} max={3} value={ul}
-                onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],ul:Number(e.target.value)}}))}
-                onKeyDown={e=> e.stopPropagation()}
+                   <input
+                className="input"
+                type="number"
+                min={0}
+                max={3}
+                value={ul}
+                onChange={e =>
+                  setValues(prev => ({
+                    ...prev,
+                    [p.id]: { ...prev[p.id], ul: Number(e.target.value) },
+                  }))
+                }
+                onKeyDown={e => e.stopPropagation()}
+                onKeyDownCapture={e => e.stopPropagation()}
+                onKeyUp={e => e.stopPropagation()}
+                onKeyPress={e => e.stopPropagation()}
               />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">oben R (0–3)</label>
-                   <input className="input" type="number" min={0} max={3} value={ur}
-                onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],ur:Number(e.target.value)}}))}
-                onKeyDown={e=> e.stopPropagation()}
+                   <input
+                className="input"
+                type="number"
+                min={0}
+                max={3}
+                value={ur}
+                onChange={e =>
+                  setValues(prev => ({
+                    ...prev,
+                    [p.id]: { ...prev[p.id], ur: Number(e.target.value) },
+                  }))
+                }
+                onKeyDown={e => e.stopPropagation()}
+                onKeyDownCapture={e => e.stopPropagation()}
+                onKeyUp={e => e.stopPropagation()}
+                onKeyPress={e => e.stopPropagation()}
               />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">unten L (0–3)</label>
-                   <input className="input" type="number" min={0} max={3} value={ll}
-                onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],ll:Number(e.target.value)}}))}
-                onKeyDown={e=> e.stopPropagation()}
+                   <input
+                className="input"
+                type="number"
+                min={0}
+                max={3}
+                value={ll}
+                onChange={e =>
+                  setValues(prev => ({
+                    ...prev,
+                    [p.id]: { ...prev[p.id], ll: Number(e.target.value) },
+                  }))
+                }
+                onKeyDown={e => e.stopPropagation()}
+                onKeyDownCapture={e => e.stopPropagation()}
+                onKeyUp={e => e.stopPropagation()}
+                onKeyPress={e => e.stopPropagation()}
               />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">unten R (0–3)</label>
-                   <input className="input" type="number" min={0} max={3} value={lr}
-                onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],lr:Number(e.target.value)}}))}
-                onKeyDown={e=> e.stopPropagation()}
+                   <input
+                className="input"
+                type="number"
+                min={0}
+                max={3}
+                value={lr}
+                onChange={e =>
+                  setValues(prev => ({
+                    ...prev,
+                    [p.id]: { ...prev[p.id], lr: Number(e.target.value) },
+                  }))
+                }
+                onKeyDown={e => e.stopPropagation()}
+                onKeyDownCapture={e => e.stopPropagation()}
+                onKeyUp={e => e.stopPropagation()}
+                onKeyPress={e => e.stopPropagation()}
               />
             </div>
           </div>
@@ -415,14 +501,18 @@ setProject(res.item||null)).catch(()=>setProject(null))
             <input
               className="input"
               type="tel"
-              defaultValue={val}
+              value={val}
               onChange={e => {
                 // Nur numerische Zeichen und Punkt zulassen
                 const inputVal = e.target.value
                 const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
+                // Wert lokal im State halten, um Re-Renders zu vermeiden, global erst beim Speichern setzen
                 setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: sanitized } }))
               }}
               onKeyDown={e => e.stopPropagation()}
+              onKeyDownCapture={e => e.stopPropagation()}
+              onKeyUp={e => e.stopPropagation()}
+              onKeyPress={e => e.stopPropagation()}
               placeholder={st.unit || 'Wert'}
             />
           </div>
