@@ -2,173 +2,175 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Theme Tokens */
-:root{
+/* -------------------------------------------------
+   Farb- & Design-Token
+--------------------------------------------------- */
+:root {
   --brand:  #ec0347;   /* Primär */
   --brand2: #ab0000;   /* Sekundär */
-  --ink:    #0f172a;   /* Standard-Text */
-  --muted:  #64748b;   /* Untertexte */
-  --ring:   rgba(236,3,71,.35); /* Fokus-Ring */
+  --ink:    #f1f5f9;   /* Heller Text auf dunklem BG */
+  --muted:  #94a3b8;
+  --ring:   rgba(236,3,71,.35);
+  --btn-wide: 300px;           /* Standardbreite Buttons */
+  --btn-wide-height: 52px;     /* Standardhöhe Buttons */
 }
 
-html, body { height: 100%; background: #fff; color: var(--ink); }
+/* -------------------------------------------------
+   Grundlayout
+--------------------------------------------------- */
+html, body {
+  height: 100%;
+  background: #000;
+  color: var(--ink);
+  font-family: 'Inter', sans-serif;
+}
 
 /* Weißer Text mit dezentem Schatten auf Foto-Hintergründen */
-.hero-text{ text-shadow: 0 2px 14px rgba(0,0,0,.35); color:#fff; }
-.hero-sub { text-shadow: 0 1px 8px  rgba(0,0,0,.30); color:rgba(255,255,255,.92); }
-
-/* Vollbild-Hero + iOS Safe Area */
-.hero-full{
-  min-height: 100vh;   /* Fallback */
-  min-height: 100dvh;  /* moderne Mobile-Browser */
-  display: flex;
-  align-items: center; /* vertikal zentriert */
+.hero-text {
+  text-shadow: 0 2px 14px rgba(0,0,0,.35);
+  color: #fff;
 }
-.safe-area{
+.hero-sub {
+  text-shadow: 0 1px 8px rgba(0,0,0,.3);
+  color: rgba(255,255,255,.92);
+}
+
+/* Vollbild-Hero */
+.hero-full {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+}
+.safe-area {
   padding-top: calc(24px + env(safe-area-inset-top));
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
 
-/* Cards & Inputs */
-.card{
-  @apply rounded-2xl border border-gray-200 p-5 bg-white shadow-sm;
+/* -------------------------------------------------
+   Cards & Inputs
+--------------------------------------------------- */
+.card {
+  @apply rounded-2xl border border-gray-200/20 p-5 bg-black/40 backdrop-blur-sm shadow-md;
   transition: box-shadow .2s ease, transform .05s ease;
 }
-.card:hover{ box-shadow: 0 10px 28px rgba(0,0,0,.08); }
-
-.input, select{
-  @apply w-full border border-gray-200 rounded-xl p-3 bg-white;
+.card:hover {
+  box-shadow: 0 10px 28px rgba(0,0,0,.15);
 }
-.input:focus, select:focus{
+
+.input, select {
+  @apply w-full border border-gray-600 rounded-xl p-3 bg-black/60 text-white;
+}
+.input:focus, select:focus {
   outline: 3px solid var(--ring);
   outline-offset: 2px;
 }
 
-/* Buttons */
-a, .btn { text-decoration: none; }
-
-.btn{
-  @apply inline-flex items-center justify-center font-semibold rounded-xl px-4 py-2 transition;
+/* -------------------------------------------------
+   Buttons
+--------------------------------------------------- */
+a, .btn {
+  text-decoration: none;
+  cursor: pointer;
 }
 
-.btn.pill{
+.btn {
+  @apply inline-flex items-center justify-center font-semibold rounded-xl px-4 py-2 transition;
+  text-align: center;
+}
+
+.btn.pill {
   border-radius: 9999px;
-  padding: 14px 22px;
   background: linear-gradient(180deg, var(--brand), var(--brand2));
   color: #fff;
   border: 1px solid rgba(255,255,255,.5);
-  box-shadow: 0 10px 22px rgba(0,0,0,.25);
-  text-align: center;
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
 }
-.btn.pill:hover{
+.btn.pill:hover {
   transform: translateY(-1px);
   filter: brightness(1.05);
 }
 
-/* Pill-Grid: exakt mittig & content-breit */
-.pills{
-  display: grid;
-  gap: 14px;
-  justify-content: center;  /* Grid mittig */
-  justify-items: center;    /* Items mittig */
-}
-@media (min-width: 640px){ .pills{ grid-template-columns: repeat(2, max-content); } }
-@media (min-width: 768px){ .pills{ grid-template-columns: repeat(4, max-content); } }
-
-/* Badges (Matrix) */
-.badge-green{
-  background:#16a34a;
-  color:#fff;
-  border-radius:9999px;
-  padding:.25rem .6rem;
-  font-weight:700;
-}
-.badge-red{
-  color:#dc2626;
-  font-weight:800;
-}
-
-/* Utilities */
-.muted{ color: var(--muted); }
-.container{ max-width: 1100px; margin: 0 auto; }
-
-/* --- NEU: mehr Luft am Seitenende für Tabellen/Listen --- */
-.page-pad{ padding-bottom: 6rem; }
-
-/* Hintergrund-Utilities */
-.bg-player{
-  background-image: url('/player.jpg');
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
-  color: #fff;
-}
-.bg-matrix{
-  /* Wiederholender Hintergrund für lange Tabellen */
-  background-image: url('/matrix.jpg');
-  background-position: center top;
-  /* Höhe einer „Kachel“ – passt das Optik-Gefühl ggf. an */
-  background-size: auto 480px;
-  background-repeat: repeat;
-  color: #fff;
-}
-
-/* Dunkles „Glas“-Panel für gute Lesbarkeit auf dunklem Bild */
-.card-glass-dark{
-  border-radius: 16px;
-  background: rgba(0,0,0,.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  border: 1px solid rgba(255,255,255,.12);
-  padding: 16px;
-  color: #fff;
-}
-
-/* Tabelle auf dunklem Panel */
-.table-dark th,
-.table-dark td{
-  border-color: rgba(255,255,255,.15) !important;
-}
-.table-dark thead th{
-  color: rgba(255,255,255,.9);
-}
-.table-dark tbody td{
-  color: rgba(255,255,255,.92);
-}
-
-/* Abstand unten für lange Seiten */
-.page-pad { padding-bottom: 6rem; }
-
-/* Einheitliche breite Buttons für Capture */
-.btn--wide{
-  min-width: 260px;
-  height: 52px;
-  font-size: 1rem;
+/* Einheitliche Breite & Höhe für alle Capture-Buttons */
+.btn--wide {
+  width: var(--btn-wide);
+  height: var(--btn-wide-height);
+  box-sizing: border-box;
+  padding: 0 22px;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start; /* Text linksbündig im Button */
+  justify-content: center;
+  line-height: 1.2;
 }
 
-/* Fixierter Zurück-Button (bleibt sichtbar) */
-.back-fab-fixed{
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 50;
+/* Für kleine Screens: Buttons etwas schmaler */
+@media (max-width: 640px) {
+  :root {
+    --btn-wide: 240px;
+    --btn-wide-height: 48px;
+  }
 }
 
-/* Kleiner Unterkanten-Puffer für lange Seiten */
-.page-pad{ padding-bottom: 6rem; }
-
-/* exakt gleiche Größe für alle Action-Buttons */
-.btn--wide{
-  width: 280px;         /* feste gleiche Breite */
-  height: 52px;         /* gleiche Höhe */
-  font-size: 1rem;
-  display: inline-flex; /* <a> und <button> verhalten sich identisch */
-  align-items: center;
-  justify-content: flex-start; /* Text links im Button */
-  line-height: 1;       /* verhindert Höhen-Differenzen bei <a> */
+/* -------------------------------------------------
+   Matrix / Tabellen / Layout
+--------------------------------------------------- */
+.badge-green {
+  background: #16a34a;
+  color: #fff;
+  border-radius: 9999px;
+  padding: .25rem .6rem;
+  font-weight: 700;
+}
+.badge-red {
+  color: #dc2626;
+  font-weight: 800;
 }
 
+.table-wrapper {
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 1rem;
+  backdrop-filter: blur(8px);
+}
 
+.table-wrapper table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-wrapper th,
+.table-wrapper td {
+  padding: .6rem .8rem;
+  text-align: left;
+  color: #f8fafc;
+}
+
+.table-wrapper tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.05);
+}
+.table-wrapper tr:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* -------------------------------------------------
+   Spacing-Utilities
+--------------------------------------------------- */
+.page-pad {
+  padding-bottom: 6rem;
+}
+
+/* -------------------------------------------------
+   Pills (z. B. Landingpage)
+--------------------------------------------------- */
+.pills {
+  display: grid;
+  gap: 14px;
+  justify-content: center;
+  justify-items: center;
+}
+@media (min-width: 640px) {
+  .pills { grid-template-columns: repeat(2, max-content); }
+}
+@media (min-width: 768px) {
+  .pills { grid-template-columns: repeat(4, max-content); }
+}
