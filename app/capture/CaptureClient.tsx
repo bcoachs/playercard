@@ -407,12 +407,13 @@ setProject(res.item||null)).catch(()=>setProject(null))
             */}
             <input
               className="input"
-              type="text"
-              inputMode="decimal"
+              type="tel"
               value={val}
               onChange={e => {
-                const newVal = e.target.value
-                setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: newVal } }))
+                // Nur numerische Zeichen und Punkt zulassen
+                const inputVal = e.target.value
+                const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
+                setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: sanitized } }))
               }}
               placeholder={st.unit || 'Wert'}
             />
