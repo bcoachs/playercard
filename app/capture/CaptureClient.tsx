@@ -399,8 +399,21 @@ setProject(res.item||null)).catch(()=>setProject(null))
             <label className="block text-xs font-semibold mb-1">
               Messwert {st.unit ? `(${st.unit})` : ''}
             </label>
-            <input className="input" inputMode="decimal" value={val}
-              onChange={e=> setValues(prev=>({...prev,[p.id]:{...prev[p.id],value:e.target.value}}))}
+            {/*
+              Wir verwenden type="text" statt type="number", um zu vermeiden,
+              dass das Eingabefeld bei unvollständiger Zahl als invalid markiert wird
+              (rote Umrandung) und um mehrstellige Eingaben zu ermöglichen, ohne dass der
+              Fokus verloren geht.
+            */}
+            <input
+              className="input"
+              type="text"
+              inputMode="decimal"
+              value={val}
+              onChange={e => {
+                const newVal = e.target.value
+                setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: newVal } }))
+              }}
               placeholder={st.unit || 'Wert'}
             />
           </div>
