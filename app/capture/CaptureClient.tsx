@@ -425,7 +425,8 @@ setProject(res.item||null)).catch(()=>setProject(null))
             <div key={s.id} className="grid grid-cols-2 gap-3 justify-start w-full max-w-3xl">
               {/* left: Station */}
               <button
-                className="btn pill btn-lg"
+                // Verwende zusätzlich btn--wide, damit beide Stationen gleich breit und hoch sind
+                className="btn pill btn-lg btn--wide"
                 onClick={()=>{
                   setSelected(s.id)
                   setCurrentPlayerId('')
@@ -438,7 +439,8 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
               {/* right: Sketch */}
               <a
-                className="btn pill btn-lg"
+                // Verwende zusätzlich btn--wide, damit beide Stationen gleich breit und hoch sind
+                className="btn pill btn-lg btn--wide"
                 href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
                 target="_blank"
                 rel="noreferrer"
