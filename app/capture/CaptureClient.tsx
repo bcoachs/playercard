@@ -207,33 +207,38 @@ export default function CaptureClient(){
   }
 
   function StationButtonRow(){
-    if (!stations.length) return null
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {stations.map(s=>(
-          <React.Fragment key={s.id}>
-            {/* linke Spalte: Stations-Button */}
-            <button
-              className="btn pill btn--wide"
-              onClick={()=>{
-                setSelected(s.id)
-                setCurrentPlayerId('') // Auswahl zurücksetzen
-                router.replace(projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`)
-              }}
-              style={s.id===selected ? {filter:'brightness(1.12)'} : {}}
-            >
-              {`S${ST_INDEX[s.name] ?? '?'} - ${s.name}`}
-            </button>
+  if (!stations.length) return null
+  return (
+    <div className="grid gap-3">
+      {stations.map((s)=>(
+        <div key={s.id} className="grid grid-cols-2 gap-3 justify-start w-full max-w-3xl">
+          {/* linke Spalte: Stations-Button */}
+          <button
+            className="btn pill btn--wide"
+            onClick={()=>{
+              setSelected(s.id)
+              setCurrentPlayerId('')
+              router.replace(projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`)
+            }}
+            style={s.id===selected ? {filter:'brightness(1.12)'} : {}}
+          >
+            {`S${ST_INDEX[s.name] ?? '?'} - ${s.name}`}
+          </button>
 
-            {/* rechte Spalte: Skizzen-Button */}
-            <a className="btn pill btn--wide md:ml-3" href={`/station${ST_INDEX[s.name] ?? 1}.pdf`} target="_blank" rel="noreferrer">
-              {`S${ST_INDEX[s.name] ?? '?'} - Stationsskizze`}
-            </a>
-          </React.Fragment>
-        ))}
-      </div>
-    )
-  }
+          {/* rechte Spalte: Skizzen-Button */}
+          <a
+            className="btn pill btn--wide"
+            href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
+            target="_blank" rel="noreferrer"
+          >
+            {`S${ST_INDEX[s.name] ?? '?'} - Stationsskizze`}
+          </a>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 
   function PlayerPicker(){
     if (!currentStation) return null
