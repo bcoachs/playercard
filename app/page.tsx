@@ -5,7 +5,7 @@ import BackFab from './components/BackFab'
 // Landing Page für die Playercard-Anwendung. Hier werden vier
 // Hauptaktionen angeboten: einen neuen Run anlegen, einen bestehenden
 // Run laden, die Rangliste ansehen oder direkt zur Base/Capture-Ansicht
-// springen. Die Buttons nutzen `btn-lg`, um besser klickbar zu sein.
+// springen. Die Buttons greifen auf das Standard-Buttonlayout zurück.
 
 export default function Home() {
   return (

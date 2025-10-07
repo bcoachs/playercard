@@ -18,9 +18,9 @@ export default async function ProjectsPage() {
       <Hero title="Runs" subtitle="Wähle einen bestehenden Run" image="/player.jpg">
         <div className="pills">
           {recent.map(p => (
-            <Link key={p.id} href={`/projects/${p.id}`} className="btn pill">{p.name}</Link>
+            <Link key={p.id} href={`/projects/${p.id}`} className="btn">{p.name}</Link>
           ))}
-          <a href="#all" className="btn pill">Weitere Projekte</a>
+          <a href="#all" className="btn">Weitere Projekte</a>
         </div>
       </Hero>
       {/* …restliche Liste… */}
