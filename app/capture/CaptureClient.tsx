@@ -414,43 +414,64 @@ setProject(res.item||null)).catch(()=>setProject(null))
     )
   }
 
-  function StationButtonRow(){
-    if (!stations.length) return null
-    return (
-      <div className="w-fit mx-auto grid grid-cols-1 sm:grid-cols-2 gap-8">
-        {stations.map((s) => {
-          // Wenn eine Station gewählt ist, werden alle anderen Buttons ausgeblendet
-          if (selected && s.id !== selected) return null
-          return (
-            <div
-              key={s.id}
-              className="flex items-center justify-center gap-8"
-            >
-              {/* Hauptbutton für die Station */}
-              <button
-                className="btn pill btn-lg btn--wide"
-                onClick={() => {
-                  setSelected(s.id)
-                  setCurrentPlayerId('')
-                  router.replace(projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`)
-                }}
-                style={s.id === selected ? { filter: 'brightness(1.12)' } : {}}
-              >
-                {`S${ST_INDEX[s.name] ?? '?' } - ${s.name}`}
-              </button>
-              {/* Lange Stationsskizzen-Schaltfläche für sm und größere Bildschirme */}
-             
-              <a
-              className="flex sm:hidden items-center justify-center btn pill btn-sm rounded-full p-0"
-              style={{ width: 'var(--btn-wide-height)', height: 'var(--btn-wide-height)' }}
-              href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`Stationsskizze S${ST_INDEX[s.name] ?? '?'}`}
-            >
-              📄
-            </a>
 
+
+  function StationButtonRow() {
+  if (!stations.length) return null
+
+  // Stufe 2: Wenn eine Station gewählt ist, nur diese anzeigen – sonst alle
+  const visibleStations = selected
+    ? stations.filter(s => s.id === selected)
+    : stations
+
+  return (
+    // Outer grid: zentriert, mit Abstand zwischen Zeilen
+    <div className="w-fit mx-auto grid grid-cols-1 sm:grid-cols-2 gap-8">
+      {visibleStations.map((s) => (
+        // Zeilen-Container: Buttons/Icons zentriert + Abstand
+        <div key={s.id} className="flex items-center justify-center gap-8">
+
+          {/* Hauptbutton für die Station */}
+          <button
+            className="btn pill btn-lg btn--wide"
+            onClick={() => {
+              setSelected(s.id)
+              setCurrentPlayerId('')
+              router.replace(
+                projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`
+              )
+            }}
+            style={s.id === selected ? { filter: 'brightness(1.12)' } : {}}
+          >
+            {`S${ST_INDEX[s.name] ?? '?' } - ${s.name}`}
+          </button>
+
+          {/* Lange Stationsskizzen-Schaltfläche ab sm (≥640px) */}
+          <a
+            className="hidden sm:flex btn pill btn-lg btn--wide items-center justify-center"
+            href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {`S${ST_INDEX[s.name] ?? '?' } - Stationsskizze`}
+          </a>
+
+          {/* Rundes PDF-Icon unter sm */}
+          <a
+            className="flex sm:hidden items-center justify-center btn pill btn-sm rounded-full p-0"
+            style={{ width: 'var(--btn-wide-height)', height: 'var(--btn-wide-height)' }}
+            href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Stationsskizze S${ST_INDEX[s.name] ?? '?'}`}
+          >
+            📄
+          </a>
+        </div>
+      ))}
+    </div>
+  )
+}
               
              
             </div>
