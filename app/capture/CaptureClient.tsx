@@ -433,7 +433,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
           {/* Hauptbutton für die Station */}
           <button
-            className="btn pill btn-lg btn--wide"
+            className="btn"
             onClick={() => {
               setSelected(s.id)
               setCurrentPlayerId('')
@@ -448,7 +448,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
           {/* Lange Stationsskizzen-Schaltfläche ab sm (≥640px) */}
           <a
-            className="hidden sm:flex btn pill btn-lg btn--wide items-center justify-center"
+            className="hidden sm:inline-flex btn"
             href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
             target="_blank"
             rel="noreferrer"
@@ -458,8 +458,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
           {/* Rundes PDF-Icon unter sm */}
           <a
-            className="flex sm:hidden items-center justify-center btn pill btn-sm rounded-full p-0"
-            style={{ width: 'var(--btn-wide-height)', height: 'var(--btn-wide-height)' }}
+            className="sm:hidden inline-flex btn"
             href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
             target="_blank"
             rel="noreferrer"
@@ -472,14 +471,6 @@ setProject(res.item||null)).catch(()=>setProject(null))
     </div>
   )
 }
-              
-             
-            </div>
-          )
-        })}
-      </div>
-    )
-  }
 
   function PlayerPicker(){
     if (!currentStation) return null
@@ -572,8 +563,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
             </div>
           </div>
           <div className="mt-4 text-right">
-            {/* Verwende die zentrale btn-lg Klasse für größere Buttons */}
-            <button className="btn pill btn-lg" onClick={()=>saveOne(st, p)}>Speichern</button>
+            <button className="btn" onClick={()=>saveOne(st, p)}>Speichern</button>
           </div>
         </div>
       )
@@ -670,8 +660,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
             </div>
           </div>
           <div className="mt-4 text-right">
-            {/* Verwende die zentrale btn-lg Klasse für größere Buttons */}
-            <button className="btn pill btn-lg" onClick={()=>saveOne(st, p)}>Speichern</button>
+            <button className="btn" onClick={()=>saveOne(st, p)}>Speichern</button>
           </div>
         </div>
       )
@@ -740,11 +729,11 @@ setProject(res.item||null)).catch(()=>setProject(null))
             {isTimeStation && (
               <div className="flex items-center gap-2 mb-2">
                 {!running ? (
-                  <button className="btn pill btn-lg" type="button" onClick={startStopwatch}>
+                  <button className="btn" type="button" onClick={startStopwatch}>
                     Start
                   </button>
                 ) : (
-                  <button className="btn pill btn-lg" type="button" onClick={stopStopwatch}>
+                  <button className="btn" type="button" onClick={stopStopwatch}>
                     Stop
                   </button>
                 )}
@@ -753,7 +742,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                   {st.unit || 's'}
                 </span>
                 <button
-                  className="btn pill btn-lg"
+                  className="btn"
                   type="button"
                   onClick={resetStopwatch}
                   disabled={running && !localVal}
@@ -783,8 +772,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
           </div>
         </div>
         <div className="mt-4 text-right">
-          {/* Verwende die zentrale btn-lg Klasse für größere Buttons */}
-          <button className="btn pill btn-lg" onClick={() => saveOne(st, p)}>Speichern</button>
+          <button className="btn" onClick={() => saveOne(st, p)}>Speichern</button>
         </div>
       </div>
     )
@@ -796,25 +784,25 @@ setProject(res.item||null)).catch(()=>setProject(null))
    * springt der Button zur vorherigen Seite zurück.
    */
   function CaptureBackFab(){
-    return (
-      <button
-        onClick={() => {
-          if (selected) {
-            // Station abwählen → alle Stationen wieder anzeigen
-            setSelected('')
-            setCurrentPlayerId('')
-            if (projectId) router.replace(`?project=${projectId}`)
-            else router.replace('')
-          } else {
-            // Keine Station gewählt → zurück zur vorherigen Seite
-            router.back()
-          }
-        }}
-        style={{ position: 'fixed', right: '16px', bottom: '16px', zIndex: 9999 }}
-        className="btn pill btn-sm"
-        aria-label="Zurück"
-        title="Zurück"
-      >
+      return (
+        <button
+          onClick={() => {
+            if (selected) {
+              // Station abwählen → alle Stationen wieder anzeigen
+              setSelected('')
+              setCurrentPlayerId('')
+              if (projectId) router.replace(`?project=${projectId}`)
+              else router.replace('')
+            } else {
+              // Keine Station gewählt → zurück zur vorherigen Seite
+              router.back()
+            }
+          }}
+          style={{ position: 'fixed', right: '16px', bottom: '16px', zIndex: 9999 }}
+          className="btn btn-back"
+          aria-label="Zurück"
+          title="Zurück"
+        >
         ← Zurück
       </button>
     )

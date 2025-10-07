@@ -482,14 +482,14 @@ export default function ProjectDashboard() {
               <div className="md:col-span-3" />
               {/* Buttons mit Abstand, rechts ausgerichtet */}
               <div className="md:col-span-3 flex items-center gap-3 justify-end">
-                <button className="btn pill btn-lg" type="submit">
+                <button className="btn" type="submit">
                   {editId ? 'Spieler speichern' : 'Spieler anlegen'}
                 </button>
-                <Link href={`/capture?project=${projectId}`} className="btn pill btn-lg">
+                <Link href={`/capture?project=${projectId}`} className="btn">
                   Capture
                 </Link>
                 {editId && (
-                  <button type="button" className="btn pill btn-lg" onClick={deletePlayer}>
+                  <button type="button" className="btn" onClick={deletePlayer}>
                     Spieler löschen
                   </button>
                 )}
