@@ -417,14 +417,14 @@ setProject(res.item||null)).catch(()=>setProject(null))
   function StationButtonRow(){
     if (!stations.length) return null
     return (
-      <div className="w-fit mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="w-fit mx-auto grid grid-cols-1 sm:grid-cols-2 gap-8">
         {stations.map((s) => {
           // Wenn eine Station gewählt ist, werden alle anderen Buttons ausgeblendet
           if (selected && s.id !== selected) return null
           return (
             <div
               key={s.id}
-              className="flex items-center justify-center gap-4"
+              className="flex items-center justify-center gap-8"
             >
               {/* Hauptbutton für die Station */}
               <button
