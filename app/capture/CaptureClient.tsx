@@ -472,14 +472,6 @@ setProject(res.item||null)).catch(()=>setProject(null))
     </div>
   )
 }
-              
-             
-            </div>
-          )
-        })}
-      </div>
-    )
-  }
 
   function PlayerPicker(){
     if (!currentStation) return null
