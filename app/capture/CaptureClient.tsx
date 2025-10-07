@@ -417,14 +417,14 @@ setProject(res.item||null)).catch(()=>setProject(null))
   function StationButtonRow(){
     if (!stations.length) return null
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-center">
+      <div className="w-fit mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4">
         {stations.map((s) => {
           // Wenn eine Station gewählt ist, werden alle anderen Buttons ausgeblendet
           if (selected && s.id !== selected) return null
           return (
             <div
               key={s.id}
-              className="flex items-center justify-center gap-4 sm:grid sm:grid-cols-2"
+              className="flex items-center justify-center gap-4"
             >
               {/* Hauptbutton für die Station */}
               <button
@@ -438,7 +438,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
               >
                 {`S${ST_INDEX[s.name] ?? '?' } - ${s.name}`}
               </button>
-              {/* Große Stationsskizzen-Schaltfläche für sm und größere Bildschirme */}
+              {/* Lange Stationsskizzen-Schaltfläche für sm und größere Bildschirme */}
               <a
                 className="hidden sm:block btn pill btn-lg btn--wide items-center justify-center"
                 href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
@@ -814,7 +814,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
           space-y-6 definiert. Die page-pad-Klasse wird entfernt, damit der
           Inhalt durch das Hero-Grid vertikal zentriert bleibt.
         */}
-        <div className="flex flex-col items-center space-y-6 w-full">
+        <div className="flex flex-col items-center space-y-6 w-full px-4">
           <ProjectsSelect />
           <StationButtonRow />
           <PlayerPicker />
