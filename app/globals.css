@@ -175,14 +175,18 @@ a, .btn {
    Pills (z. B. Landingpage)
 --------------------------------------------------- */
 .pills {
-  display: flex;
+  display: grid;
   gap: 14px;
   justify-content: center;
   justify-items: center;
 }
 @media (min-width: 640px) {
-  .pills { grid-template-columns: repeat(2, max-content); }
+  .pills {
+    grid-template-columns: repeat(2, max-content);
+  }
 }
-@media (min-width: 768px) {
-  .pills { grid-template-columns: repeat(4, max-content); }
+@media (min-width: 1024px) {
+  .pills {
+    grid-template-columns: repeat(4, max-content);
+  }
 }
