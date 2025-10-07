@@ -440,7 +440,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
               </button>
               {/* Lange Stationsskizzen-Schaltfläche für sm und größere Bildschirme */}
               <a
-                className="hidden sm:block btn pill btn-lg btn--wide items-center justify-center"
+                className="hidden sm:flex btn pill btn-lg btn--wide items-center justify-center"
                 href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
                 target="_blank"
                 rel="noreferrer"
