@@ -439,25 +439,20 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 {`S${ST_INDEX[s.name] ?? '?' } - ${s.name}`}
               </button>
               {/* Lange Stationsskizzen-Schaltfläche für sm und größere Bildschirme */}
+             
               <a
-                className="hidden sm:flex btn pill btn-lg btn--wide items-center justify-center"
-                href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {`S${ST_INDEX[s.name] ?? '?' } - Stationsskizze`}
-              </a>
-              {/* Runde PDF-Schaltfläche für kleine Bildschirme */}
-              <a
-                className="block sm:hidden flex items-center justify-center btn pill btn-sm rounded-full p-0"
-                style={{ width: 'var(--btn-wide-height)', height: 'var(--btn-wide-height)' }}
-                href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`Stationsskizze S${ST_INDEX[s.name] ?? '?'}`}
-              >
-                📄
-              </a>
+              className="flex sm:hidden items-center justify-center btn pill btn-sm rounded-full p-0"
+              style={{ width: 'var(--btn-wide-height)', height: 'var(--btn-wide-height)' }}
+              href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Stationsskizze S${ST_INDEX[s.name] ?? '?'}`}
+            >
+              📄
+            </a>
+
+              
+             
             </div>
           )
         })}
