@@ -417,10 +417,6 @@ setProject(res.item||null)).catch(()=>setProject(null))
   function StationButtonRow(){
     if (!stations.length) return null
     return (
-      {/*
-        Auf kleinen Bildschirmen (unter sm) wird eine einspaltige Grid-Ansicht verwendet.
-        Ab sm (≥640px) werden zwei Spalten genutzt. Mit justify-items-center werden
-        die Zeilen horizontal zentriert. */}
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 justify-items-center">
         {stations.map((s)=>{
           // Wenn eine Station gewählt ist, werden alle anderen Buttons ausgeblendet
@@ -428,11 +424,6 @@ setProject(res.item||null)).catch(()=>setProject(null))
           return (
             <div
               key={s.id}
-              /*
-                Auf kleinen Bildschirmen (<640px) wird eine horizontale Flexbox verwendet,
-                damit die Schaltflächen zentriert und nebeneinander stehen. Ab sm werden
-                zwei Spalten genutzt. Die Zeile wird mit mx-auto zentriert und ihre
-                Breite entspricht dem Inhalt (max-w-3xl). */
               className="flex sm:grid sm:grid-cols-2 gap-3 max-w-3xl mx-auto justify-center"
             >
               {/* Hauptbutton für die Station */}
