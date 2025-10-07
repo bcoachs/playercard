@@ -11,8 +11,8 @@
   --ink:    #f1f5f9;   /* Heller Text auf dunklem BG */
   --muted:  #94a3b8;
   --ring:   rgba(236,3,71,.35);
-  --btn-wide: 250px;           /* Standardbreite Buttons */
-  --btn-wide-height: 52px;     /* Standardhöhe Buttons */
+  --btn-wide: 210px;           /* Standardbreite Buttons */
+  --btn-wide-height: 54px;     /* Standardhöhe Buttons */
 }
 
 /* -------------------------------------------------
@@ -94,12 +94,13 @@ a, .btn {
   border-radius: 9999px;
   background: linear-gradient(180deg, var(--brand), var(--brand2));
   color: #fff;
-  border: 2px solid rgba(255, 255, 255, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 6px 18px rgba(0,0,0,.25);
   padding-inline: clamp(1.5rem, 3vw, 2.5rem);
-  font-size: clamp(1.05rem, 2.4vw, 1.4rem);
+  font-size: clamp(1.05rem, 2.2vw, 1.35rem);
   font-weight: 700;
   text-align: center;
+  letter-spacing: 0.08em;
 }
 .btn.pill:hover {
   transform: translateY(-1px);
@@ -124,8 +125,8 @@ a, .btn {
   passen sich Breite und Höhe automatisch an kleinere Viewports an.
 */
 .btn-lg {
-  padding: 0.75rem 1.5rem;
-  font-size: 1.125rem;
+  padding: 0.75rem 1.75rem;
+  font-size: 1.05rem;
   min-width: var(--btn-wide);
   height: var(--btn-wide-height);
 }
@@ -191,26 +192,24 @@ a, .btn {
    Pills (z. B. Landingpage)
 --------------------------------------------------- */
 .pills {
-  display: grid;
-  gap: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(12px, 2.5vw, 24px);
   justify-content: center;
-  justify-items: center;
-  align-content: center;
-  width: min(100%, 960px);
-}
-@media (min-width: 640px) {
-  .pills {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    justify-items: stretch;
-  }
-}
-@media (min-width: 1024px) {
-  .pills {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    justify-items: stretch;
-  }
+  align-items: center;
+  width: min(100%, 820px);
 }
 
 .pills .btn {
-  width: 100%;
+  flex: 0 1 auto;
+}
+
+@media (max-width: 640px) {
+  .pills {
+    width: min(100%, 360px);
+  }
+
+  .pills .btn {
+    width: 100%;
+  }
 }

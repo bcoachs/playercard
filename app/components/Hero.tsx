@@ -92,10 +92,14 @@ export default function Hero({
 
       {/* Inhalt */}
       <div
-        className={`w-full px-6 mx-auto flex flex-col ${align === 'center'
-          ? 'max-w-4xl items-center gap-10 text-center'
-          : 'max-w-6xl items-start gap-6 pt-8 text-left'
+        className={`px-6 md:px-8 flex flex-col ${align === 'center'
+          ? 'items-center text-center gap-12'
+          : 'items-start text-left gap-6 pt-8'
         }`}
+        style={{
+          width: align === 'center' ? 'min(100%, 880px)' : 'min(100%, 1100px)',
+          margin: align === 'center' ? '0 auto' : undefined,
+        }}
       >
         <h1 className="hero-text hero-title font-league">{title}</h1>
         {subtitle && <p className={`hero-sub text-lg md:text-xl ${align === 'center' ? '' : 'text-left'}`}>{subtitle}</p>}
