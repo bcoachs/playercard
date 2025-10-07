@@ -424,7 +424,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
           return (
             <div
               key={s.id}
-              className="flex sm:grid sm:grid-cols-2 gap-3 max-w-3xl mx-auto justify-center"
+              className="flex items-center sm:grid sm:grid-cols-2 gap-4 max-w-3xl mx-auto justify-center"
             >
               {/* Hauptbutton für die Station */}
               <button
@@ -440,23 +440,23 @@ setProject(res.item||null)).catch(()=>setProject(null))
               </button>
               {/* Große Stationsskizzen-Schaltfläche für sm und größere Bildschirme */}
               <a
-                className="hidden sm:flex btn pill btn-lg btn--wide items-center justify-center"
+                className="hidden sm:block btn pill btn-lg btn--wide items-center justify-center"
                 href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
                 target="_blank"
                 rel="noreferrer"
               >
                 {`S${ST_INDEX[s.name] ?? '?' } - Stationsskizze`}
               </a>
-              {/* Runde PDF-Schaltfläche für kleine Bildschirme */}
+              {/* Runde PDF-Schaltfläche für kleine Bildschirme. Höhe und Breite entsprechen
+                  dem Stationsbutton (var(--btn-wide-height)) und bilden einen Kreis. */}
               <a
-                className="sm:hidden flex items-center justify-center btn pill btn-sm rounded-full p-0"
-                style={{ width: '44px', height: '44px' }}
+                className="block sm:hidden flex items-center justify-center btn pill btn-sm rounded-full p-0"
+                style={{ width: 'var(--btn-wide-height)', height: 'var(--btn-wide-height)' }}
                 href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
                 target="_blank"
                 rel="noreferrer"
                 aria-label={`Stationsskizze S${ST_INDEX[s.name] ?? '?'}`}
               >
-                {/* PDF-Icon; hier wird das Unicode-Dokument-Symbol verwendet */}
                 📄
               </a>
             </div>
@@ -807,7 +807,8 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
   return (
     <main>
-      <Hero title="Stationseingabe" image="/base.jpg" subtitle={project ? project.name : undefined}>
+      {/* align="center" stellt sicher, dass der Inhalt auch vertikal zentriert wird */}
+      <Hero title="Stationseingabe" image="/base.jpg" subtitle={project ? project.name : undefined} align="center">
         <div className="container page-pad">
           <ProjectsSelect />
 
