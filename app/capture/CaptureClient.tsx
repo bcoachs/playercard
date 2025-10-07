@@ -417,35 +417,56 @@ setProject(res.item||null)).catch(()=>setProject(null))
   function StationButtonRow(){
     if (!stations.length) return null
     return (
-      <div className="grid gap-3">
+      {/*
+        Auf kleinen Bildschirmen (unter sm) wird eine einspaltige Grid-Ansicht verwendet.
+        Ab sm (≥640px) werden zwei Spalten genutzt. Mit justify-items-center werden
+        die Zeilen horizontal zentriert. */}
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 justify-items-center">
         {stations.map((s)=>{
           // Wenn eine Station gewählt ist, werden alle anderen Buttons ausgeblendet
           if (selected && s.id !== selected) return null
           return (
-            <div key={s.id} className="grid grid-cols-2 gap-3 justify-start w-full max-w-3xl">
-              {/* left: Station */}
+            <div
+              key={s.id}
+              /*
+                Auf kleinen Bildschirmen (<640px) wird eine horizontale Flexbox verwendet,
+                damit die Schaltflächen zentriert und nebeneinander stehen. Ab sm werden
+                zwei Spalten genutzt. Die Zeile wird mit mx-auto zentriert und ihre
+                Breite entspricht dem Inhalt (max-w-3xl). */
+              className="flex sm:grid sm:grid-cols-2 gap-3 max-w-3xl mx-auto justify-center"
+            >
+              {/* Hauptbutton für die Station */}
               <button
-                // Verwende zusätzlich btn--wide, damit beide Stationen gleich breit und hoch sind
                 className="btn pill btn-lg btn--wide"
-                onClick={()=>{
+                onClick={() => {
                   setSelected(s.id)
                   setCurrentPlayerId('')
                   router.replace(projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`)
                 }}
-                style={s.id===selected ? { filter:'brightness(1.12)' } : {}}
+                style={s.id === selected ? { filter: 'brightness(1.12)' } : {}}
               >
                 {`S${ST_INDEX[s.name] ?? '?' } - ${s.name}`}
               </button>
-
-              {/* right: Sketch */}
+              {/* Große Stationsskizzen-Schaltfläche für sm und größere Bildschirme */}
               <a
-                // Verwende zusätzlich btn--wide, damit beide Stationen gleich breit und hoch sind
-                className="btn pill btn-lg btn--wide"
+                className="hidden sm:flex btn pill btn-lg btn--wide items-center justify-center"
                 href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
                 target="_blank"
                 rel="noreferrer"
               >
                 {`S${ST_INDEX[s.name] ?? '?' } - Stationsskizze`}
+              </a>
+              {/* Runde PDF-Schaltfläche für kleine Bildschirme */}
+              <a
+                className="sm:hidden flex items-center justify-center btn pill btn-sm rounded-full p-0"
+                style={{ width: '44px', height: '44px' }}
+                href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Stationsskizze S${ST_INDEX[s.name] ?? '?'}`}
+              >
+                {/* PDF-Icon; hier wird das Unicode-Dokument-Symbol verwendet */}
+                📄
               </a>
             </div>
           )
@@ -459,7 +480,10 @@ setProject(res.item||null)).catch(()=>setProject(null))
     return (
       <div className="card glass w-full max-w-3xl mx-auto">
         <label className="block text-sm font-semibold mb-2">Spieler*in wählen</label>
-        <select className="input" value={currentPlayerId} onChange={e=> setCurrentPlayerId(e.target.value)}>
+        {/*
+          Das Dropdown für die Spieler*innen-Auswahl erhält eine größere Höhe
+          für bessere Bedienbarkeit auf dem Handy. */}
+        <select className="input h-14" value={currentPlayerId} onChange={e=> setCurrentPlayerId(e.target.value)}>
           <option value="">Bitte wählen…</option>
           {players.map(p=>(<option key={p.id} value={p.id}>
             {p.display_name}{p.fav_number?` #${p.fav_number}`:''}{p.birth_year?` (${p.birth_year})`:''}
@@ -734,7 +758,8 @@ setProject(res.item||null)).catch(()=>setProject(null))
             )}
             {/* Eingabefeld für manuelle Eingabe oder zur Anzeige des gemessenen Werts */}
             <input
-              className="input"
+              /* Eine größere Höhe (h-14) verbessert die Eingabe auf Mobilgeräten */
+              className="input h-14"
               type="tel"
               value={localVal}
               onChange={e => {
