@@ -11,7 +11,7 @@ export default function BackFab({ fallback = '/' }: { fallback?: string }) {
       }}
       // Feste Position, unabhängig vom restlichen Layout
       style={{ position: 'fixed', right: '16px', bottom: '16px', zIndex: 9999 }}
-      className="btn pill"
+      className="btn btn-back"
       aria-label="Zurück"
       title="Zurück"
     >
