@@ -14,36 +14,6 @@ type HeroProps = {
   children?: React.ReactNode
 }
 
-function enhanceChildren(children: React.ReactNode): React.ReactNode {
-  return React.Children.map(children, child => {
-    if (!React.isValidElement(child)) {
-      return child
-    }
-
-    const existingClassName = (child.props as any).className ?? ''
-    const classList = typeof existingClassName === 'string'
-      ? existingClassName.split(/\s+/).filter(Boolean)
-      : []
-
-    const hasBtn = classList.includes('btn')
-    const needsSize = hasBtn && !classList.includes('btn-lg')
-
-    const nextProps: Record<string, any> = {}
-
-    if (needsSize) {
-      nextProps.className = `${existingClassName} btn-lg`.trim()
-    }
-
-    if (child.props && child.props.children) {
-      nextProps.children = enhanceChildren(child.props.children)
-    }
-
-    return Object.keys(nextProps).length > 0
-      ? React.cloneElement(child, nextProps)
-      : child
-  })
-}
-
 export default function Hero({
   title,
   subtitle,
@@ -105,7 +75,7 @@ export default function Hero({
         {subtitle && <p className={`hero-sub text-lg md:text-xl ${align === 'center' ? '' : 'text-left'}`}>{subtitle}</p>}
         {children && (
           <div className={`w-full ${align === 'center' ? 'flex justify-center' : ''}`}>
-            {enhanceChildren(children)}
+            {children}
           </div>
         )}
       </div>

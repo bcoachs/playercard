@@ -86,50 +86,35 @@ a, .btn {
 }
 
 .btn {
-  @apply inline-flex items-center justify-center font-semibold rounded-xl px-4 py-2 transition;
+  @apply inline-flex items-center justify-center font-semibold transition;
   text-align: center;
-}
-
-.btn.pill {
   border-radius: 9999px;
   background: linear-gradient(180deg, var(--brand), var(--brand2));
   color: #fff;
   border: 2px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 6px 18px rgba(0,0,0,.25);
-  padding-inline: clamp(1.5rem, 3vw, 2.5rem);
-  font-size: clamp(1.05rem, 2.2vw, 1.35rem);
+  padding-block: clamp(0.85rem, 2.4vw, 1.05rem);
+  padding-inline: clamp(1.75rem, 3.4vw, 2.75rem);
+  font-size: clamp(1.05rem, 2.3vw, 1.4rem);
   font-weight: 700;
-  text-align: center;
   letter-spacing: 0.08em;
   line-height: 1;
+  min-width: var(--btn-wide);
+  min-height: var(--btn-wide-height);
+  box-sizing: border-box;
 }
-.btn.pill:hover {
+.btn:hover {
   transform: translateY(-1px);
   filter: brightness(1.05);
 }
 
-/* Einheitliche Breite & Höhe für alle Capture-Buttons */
-.btn--wide {
-  width: var(--btn-wide);
-  height: var(--btn-wide-height);
-  box-sizing: border-box;
-  padding: 0 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1.2;
-}
-
-/*
-  Größere Buttons für mobile/touch‑freundliche Oberflächen.
-  Durch Verwendung der CSS‑Variablen var(--btn-wide) und var(--btn-wide-height)
-  passen sich Breite und Höhe automatisch an kleinere Viewports an.
-*/
-.btn-lg {
-  padding: 0.75rem 1.75rem;
-  font-size: 1.05rem;
-  min-width: var(--btn-wide);
-  height: var(--btn-wide-height);
+.btn-back {
+  min-width: auto;
+  min-height: auto;
+  padding-block: 0.5rem;
+  padding-inline: 1.5rem;
+  font-size: 1rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
 }
 
 /* Für kleine Screens: Buttons etwas schmaler */
@@ -204,11 +189,8 @@ a, .btn {
 .pills .btn {
   flex: 0 1 auto;
   font-size: clamp(1.15rem, 2.6vw, 1.5rem);
-  padding-block: clamp(0.85rem, 2.4vw, 1.05rem);
   padding-inline: clamp(2rem, 4.2vw, 3rem);
-  line-height: 1;
-  height: auto;
-  min-height: clamp(3.1rem, 8vw, 3.75rem);
+  min-width: clamp(200px, 38vw, 260px);
 }
 
 @media (max-width: 640px) {
