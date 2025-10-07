@@ -176,7 +176,7 @@ a, .btn {
 --------------------------------------------------- */
 .pills {
   display: grid;
-  gap: 14px;
+  gap: 140px;
   justify-content: center;
   justify-items: center;
 }
