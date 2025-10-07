@@ -11,7 +11,7 @@
   --ink:    #f1f5f9;   /* Heller Text auf dunklem BG */
   --muted:  #94a3b8;
   --ring:   rgba(236,3,71,.35);
-  --btn-wide: 300px;           /* Standardbreite Buttons */
+  --btn-wide: 250px;           /* Standardbreite Buttons */
   --btn-wide-height: 52px;     /* Standardhöhe Buttons */
 }
 
