@@ -417,14 +417,14 @@ setProject(res.item||null)).catch(()=>setProject(null))
   function StationButtonRow(){
     if (!stations.length) return null
     return (
-      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 justify-items-center">
-        {stations.map((s)=>{
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-center">
+        {stations.map((s) => {
           // Wenn eine Station gewählt ist, werden alle anderen Buttons ausgeblendet
           if (selected && s.id !== selected) return null
           return (
             <div
               key={s.id}
-              className="flex items-center sm:grid sm:grid-cols-2 gap-4 max-w-3xl mx-auto justify-center"
+              className="flex items-center justify-center gap-4 sm:grid sm:grid-cols-2"
             >
               {/* Hauptbutton für die Station */}
               <button
@@ -447,8 +447,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
               >
                 {`S${ST_INDEX[s.name] ?? '?' } - Stationsskizze`}
               </a>
-              {/* Runde PDF-Schaltfläche für kleine Bildschirme. Höhe und Breite entsprechen
-                  dem Stationsbutton (var(--btn-wide-height)) und bilden einen Kreis. */}
+              {/* Runde PDF-Schaltfläche für kleine Bildschirme */}
               <a
                 className="block sm:hidden flex items-center justify-center btn pill btn-sm rounded-full p-0"
                 style={{ width: 'var(--btn-wide-height)', height: 'var(--btn-wide-height)' }}
@@ -809,23 +808,17 @@ setProject(res.item||null)).catch(()=>setProject(null))
     <main>
       {/* align="center" stellt sicher, dass der Inhalt auch vertikal zentriert wird */}
       <Hero title="Stationseingabe" image="/base.jpg" subtitle={project ? project.name : undefined} align="center">
-        <div className="container page-pad">
+        {/*
+          Wir verwenden einen flexiblen Container, der alle Inhalte vertikal stapelt und
+          horizontal zentriert. Die Abstände zwischen den Abschnitten werden über
+          space-y-6 definiert. Die page-pad-Klasse wird entfernt, damit der
+          Inhalt durch das Hero-Grid vertikal zentriert bleibt.
+        */}
+        <div className="flex flex-col items-center space-y-6 w-full">
           <ProjectsSelect />
-
-          {/* 2 Spalten / 6 Reihen: links Station, rechts Skizze */}
-          <div className="mt-6 mb-6">
-            <StationButtonRow />
-          </div>
-
-          {/* Spieler wählen */}
-          <div className="mt-6">
-            <PlayerPicker />
-          </div>
-
-          {/* Eingabemaske zur aktuellen Station + gewähltem Spieler */}
-          <div className="mt-4">
-            <InputsForSelected />
-          </div>
+          <StationButtonRow />
+          <PlayerPicker />
+          <InputsForSelected />
         </div>
       </Hero>
 
