@@ -4,15 +4,7 @@ import React, { useEffect } from 'react'
 
 type Align = 'center' | 'top'
 
-export default function Hero({
-  title,
-  subtitle,
-  image = '/hero.jpg',
-  topRightLogoUrl,
-  align = 'center',     // <— NEU: center | top
-  tileY = false,        // <— NEU: Hintergrund vertikal kacheln
-  children,
-}: {
+type HeroProps = {
   title: string
   subtitle?: string
   image?: string
@@ -20,7 +12,47 @@ export default function Hero({
   align?: Align
   tileY?: boolean
   children?: React.ReactNode
-}) {
+}
+
+function enhanceChildren(children: React.ReactNode): React.ReactNode {
+  return React.Children.map(children, child => {
+    if (!React.isValidElement(child)) {
+      return child
+    }
+
+    const existingClassName = (child.props as any).className ?? ''
+    const classList = typeof existingClassName === 'string'
+      ? existingClassName.split(/\s+/).filter(Boolean)
+      : []
+
+    const hasBtn = classList.includes('btn')
+    const needsSize = hasBtn && !classList.includes('btn-lg')
+
+    const nextProps: Record<string, any> = {}
+
+    if (needsSize) {
+      nextProps.className = `${existingClassName} btn-lg`.trim()
+    }
+
+    if (child.props && child.props.children) {
+      nextProps.children = enhanceChildren(child.props.children)
+    }
+
+    return Object.keys(nextProps).length > 0
+      ? React.cloneElement(child, nextProps)
+      : child
+  })
+}
+
+export default function Hero({
+  title,
+  subtitle,
+  image = '/hero.jpg',
+  topRightLogoUrl,
+  align = 'center',
+  tileY = false,
+  children,
+}: HeroProps) {
   // robuste Viewport-Höhe für Mobile
   useEffect(() => {
     const setVh = () => {
@@ -38,7 +70,7 @@ export default function Hero({
 
   return (
     <section
-      className={`relative grid text-center ${align === 'center' ? 'place-content-center' : 'place-content-start'}`}
+      className={`relative grid ${align === 'center' ? 'place-items-center' : 'place-content-start'}`}
       style={{
         minHeight: 'calc(var(--vh, 1vh) * 100)',
         backgroundImage: `url('${image}')`,
@@ -46,7 +78,7 @@ export default function Hero({
         backgroundSize: tileY ? '100% auto' : 'cover',
         backgroundPosition: 'center top',
         color: '#fff',
-        paddingTop: align === 'top' ? 24 : 0, // kleines Top-Padding im Top-Layout
+        paddingTop: align === 'top' ? 24 : 0,
       }}
     >
       {/* Optional: Logo oben rechts */}
@@ -59,27 +91,17 @@ export default function Hero({
       )}
 
       {/* Inhalt */}
-      <div className={`w-full max-w-6xl px-5 mx-auto ${align === 'top' ? 'pt-8' : ''}`}>
-        <h1 className="hero-text text-7xl md:text-8xl font-extrabold uppercase">{title}</h1>
-        {subtitle && <p className="hero-sub text-lg md:text-xl mt-2">{subtitle}</p>}
-        {/*
-          Wenn Children vorhanden sind, werden sie in einem flexiblen Container dargestellt.
-          Dabei fügen wir jeder Schaltfläche automatisch die Klasse btn-lg hinzu. So bleiben
-          alle Buttons im Hero konsistent groß, ohne dass jede Seite dies manuell setzen muss.
-        */}
+      <div
+        className={`w-full px-6 mx-auto flex flex-col ${align === 'center'
+          ? 'max-w-4xl items-center gap-10 text-center'
+          : 'max-w-6xl items-start gap-6 pt-8 text-left'
+        }`}
+      >
+        <h1 className="hero-text hero-title font-league">{title}</h1>
+        {subtitle && <p className={`hero-sub text-lg md:text-xl ${align === 'center' ? '' : 'text-left'}`}>{subtitle}</p>}
         {children && (
-          <div className="mt-6 flex flex-col sm:flex-row gap-4 justify-center items-center">
-            {React.Children.map(children, child => {
-              if (React.isValidElement(child)) {
-                const existing = (child.props as any).className || ''
-                // btn-lg nur einmal anfügen, falls noch nicht gesetzt
-                const classes = existing.split(' ').includes('btn-lg')
-                  ? existing
-                  : `${existing} btn-lg`.trim()
-                return React.cloneElement(child as React.ReactElement<any>, { className: classes })
-              }
-              return child
-            })}
+          <div className={`w-full ${align === 'center' ? 'flex justify-center' : ''}`}>
+            {enhanceChildren(children)}
           </div>
         )}
       </div>
