@@ -175,7 +175,7 @@ a, .btn {
    Pills (z. B. Landingpage)
 --------------------------------------------------- */
 .pills {
-  display: grid;
+  display: flex;
   gap: 14px;
   justify-content: center;
   justify-items: center;
