@@ -12,7 +12,7 @@ export default function Home() {
     <main>
       {/* Für die Landingpage verwenden wir ein spezielles Hero-Bild und einen markanten Titel */}
       <Hero title="NEXT RUN" image="/hero.jpg">
-        <div className="pills mt-4">
+        <div className="pills mt-6">
           <Link href="/projects/new" className="btn pill btn-lg">NEUER RUN</Link>
           <Link href="/projects" className="btn pill btn-lg">RUN LADEN</Link>
           <Link href="/leaderboard" className="btn pill btn-lg">RANGLISTE</Link>
