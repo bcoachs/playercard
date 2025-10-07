@@ -13,10 +13,10 @@ export default function Home() {
       {/* Für die Landingpage verwenden wir ein spezielles Hero-Bild und einen markanten Titel */}
       <Hero title="CLUB PLAYERCARD" image="/hero.jpg">
         <div className="pills">
-          <Link href="/projects/new" className="btn">NEUER RUN</Link>
-          <Link href="/projects" className="btn">RUN LADEN</Link>
-          <Link href="/leaderboard" className="btn">RANGLISTE</Link>
-          <Link href="/capture" className="btn">BASE</Link>
+          <Link href="/projects/new" className="btn pill btn-lg">NEUER RUN</Link>
+          <Link href="/projects" className="btn pill btn-lg">RUN LADEN</Link>
+          <Link href="/leaderboard" className="btn pill btn-lg">RANGLISTE</Link>
+          <Link href="/capture" className="btn pill btn-lg">BASE</Link>
         </div>
       </Hero>
       <BackFab />
