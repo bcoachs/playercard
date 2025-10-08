@@ -456,27 +456,26 @@ setProject(res.item||null)).catch(()=>setProject(null))
   // CSV Maps laden (nur einmal). Bei Fehler bleibt Map null → Fallback in Score.
   useEffect(() => {
     if (USE_S1_CSV_CAPTURE) {
-      setS1Status('loading')
       Promise.allSettled([loadS1MapCapture('female'), loadS1MapCapture('male')]).then(([f, m]) => {
-        const fOK = f.status === 'fulfilled' && f.value
-        const mOK = m.status === 'fulfilled' && m.value
-        if (fOK) setS1FemaleMap(f.value as Record<string, number[]>)
-        if (mOK) setS1MaleMap(m.value as Record<string, number[]>)
-        setS1Status(fOK || mOK ? 'ok' : 'fail')
+        if (f.status === 'fulfilled' && f.value) {
+          setS1FemaleMap(f.value as Record<string, number[]>)
+        }
+        if (m.status === 'fulfilled' && m.value) {
+          setS1MaleMap(m.value as Record<string, number[]>)
+        }
       })
-    } else {
-      setS1Status('off')
     }
 
     if (USE_S6_CSV_CAPTURE) {
       setS6Status('loading')
       // beide Gender parallel laden
       Promise.allSettled([loadS6MapCapture('female'), loadS6MapCapture('male')]).then(([f, m]) => {
-        const fOK = f.status === 'fulfilled' && f.value
-        const mOK = m.status === 'fulfilled' && m.value
-        if (fOK) setS6FemaleMap(f.value as Record<string, number[]>)
-        if (mOK) setS6MaleMap(m.value as Record<string, number[]>)
-        setS6Status(fOK || mOK ? 'ok' : 'fail')
+        if (f.status === 'fulfilled' && f.value) {
+          setS6FemaleMap(f.value as Record<string, number[]>)
+        }
+        if (m.status === 'fulfilled' && m.value) {
+          setS6MaleMap(m.value as Record<string, number[]>)
+        }
       })
     } else {
       setS6Status('off')
@@ -487,9 +486,6 @@ setProject(res.item||null)).catch(()=>setProject(null))
       loadS4MapCapture().then(map => {
         if (map) {
           setS4Map(map)
-          setS4Status('ok')
-        } else {
-          setS4Status('fail')
         }
       })
     } else {
@@ -498,32 +494,6 @@ setProject(res.item||null)).catch(()=>setProject(null))
   }, [])
 
   /* UI-Bausteine */
-  function renderStatusLabel(status: CsvStatus) {
-    if (status === 'ok') return 'geladen ✅'
-    if (status === 'loading') return 'lädt …'
-    if (status === 'fail') return 'nicht gefunden – Fallback aktiv ⚠️'
-    return 'deaktiviert'
-  }
-
-  function CsvStatusNote() {
-    const items = [
-      USE_S1_CSV_CAPTURE && s1Status !== 'off' ? { key: 'S1', label: 'S1-Tabellen', status: s1Status } : null,
-      USE_S4_CSV_CAPTURE && s4Status !== 'off' ? { key: 'S4', label: 'S4-Tabellen', status: s4Status } : null,
-      USE_S6_CSV_CAPTURE && s6Status !== 'off' ? { key: 'S6', label: 'S6-Tabellen', status: s6Status } : null,
-    ].filter(Boolean) as { key: string; label: string; status: CsvStatus }[]
-
-    if (!items.length) return null
-
-    return (
-      <div className="csv-status-note">
-        {items.map(item => (
-          <div key={item.key} className="csv-status-note__line">
-            {item.label}: {renderStatusLabel(item.status)}
-          </div>
-        ))}
-      </div>
-    )
-  }
 
   function ProjectsSelect(){
     if (qProject) return null
@@ -556,14 +526,17 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
     return (
       <div className="capture-stations">
-        <div className="capture-stations__column capture-stations__column--stations">
-          {ordered.map(s => {
-            const idx = ST_INDEX[s.name]
-            const displayIdx = idx ?? '?'
-            return (
+        {ordered.map(s => {
+          const idx = ST_INDEX[s.name]
+          const displayIdx = idx ?? '?'
+          const hrefIdx = idx ?? 1
+          const href = `/station${hrefIdx}.pdf`
+          const label = `S${displayIdx} - Stationsskizze`
+
+          return (
+            <div key={s.id} className="capture-stations__row">
               <button
-                key={s.id}
-                className="btn"
+                className="btn capture-stations__station-button"
                 onClick={() => {
                   setSelected(s.id)
                   setCurrentPlayerId('')
@@ -575,34 +548,21 @@ setProject(res.item||null)).catch(()=>setProject(null))
               >
                 {`S${displayIdx} - ${s.name}`}
               </button>
-            )
-          })}
-        </div>
-        <div className="capture-stations__column capture-stations__column--sketches">
-          {ordered.map(s => {
-            const idx = ST_INDEX[s.name]
-            const hrefIdx = idx ?? 1
-            const labelIdx = idx ?? '?'
-            const href = `/station${hrefIdx}.pdf`
-            const label = `S${labelIdx} - Stationsskizze`
-            return (
-              <div key={`${s.id}-sketch`} className="capture-sketch-button">
-                <a
-                  className="btn btn-sketch"
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={label}
-                >
-                  <span className="btn-sketch__label">{label}</span>
-                  <span className="btn-sketch__icon" aria-hidden>
-                    📄
-                  </span>
-                </a>
-              </div>
-            )
-          })}
-        </div>
+              <a
+                className="btn capture-stations__sketch-button"
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={label}
+              >
+                <span className="btn-sketch__label">{label}</span>
+                <span className="btn-sketch__icon" aria-hidden>
+                  📄
+                </span>
+              </a>
+            </div>
+          )
+        })}
       </div>
     )
   }

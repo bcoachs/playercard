@@ -292,41 +292,30 @@ a, .btn {
   padding: 0 clamp(12px, 4vw, 36px);
   box-sizing: border-box;
   display: flex;
-  flex-wrap: wrap;
-  gap: clamp(18px, 3vw, 32px);
-  justify-content: center;
-}
-
-.capture-stations__column {
-  display: flex;
   flex-direction: column;
-  gap: clamp(12px, 2.4vw, 20px);
-  flex: 1 1 280px;
-  min-width: min(360px, 100%);
+  gap: clamp(16px, 3vw, 28px);
 }
 
-.capture-stations__column--stations .btn {
-  width: 100%;
-}
-
-.capture-stations__column--sketches {
+.capture-stations__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
+  gap: clamp(12px, 2.4vw, 20px);
 }
 
-.capture-sketch-button {
-  display: flex;
-  justify-content: center;
-}
-
-.capture-sketch-button .btn {
+.capture-stations__station-button {
   width: 100%;
+  height: 100%;
 }
 
-.btn-sketch {
+.capture-stations__sketch-button {
+  min-width: clamp(56px, 18vw, 220px);
+  padding-inline: clamp(0.85rem, 2.2vw, 1.45rem);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.65rem;
+  gap: 0.55rem;
+  height: 100%;
 }
 
 .btn-sketch__label {
@@ -334,17 +323,22 @@ a, .btn {
 }
 
 .btn-sketch__icon {
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   line-height: 1;
 }
 
 @media (min-width: 640px) {
   .capture-stations {
-    justify-content: space-between;
+    gap: clamp(18px, 2.8vw, 32px);
   }
 
-  .capture-stations__column {
-    min-width: clamp(320px, 35vw, 420px);
+  .capture-stations__row {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.65fr);
+  }
+
+  .capture-stations__sketch-button {
+    min-width: 0;
+    padding-inline: clamp(1.1rem, 2.6vw, 2.1rem);
   }
 
   .btn-sketch__label {
