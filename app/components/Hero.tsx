@@ -40,7 +40,7 @@ export default function Hero({
 
   return (
     <section
-      className={`relative grid ${align === 'center' ? 'place-items-center' : 'place-content-start'}`}
+      className={`hero-shell ${align === 'top' ? 'hero-shell--top' : ''}`}
       style={{
         minHeight: 'calc(var(--vh, 1vh) * 100)',
         backgroundImage: `url('${image}')`,
@@ -48,7 +48,6 @@ export default function Hero({
         backgroundSize: tileY ? '100% auto' : 'cover',
         backgroundPosition: 'center top',
         color: '#fff',
-        paddingTop: align === 'top' ? 24 : 0,
       }}
     >
       {/* Optional: Logo oben rechts */}
@@ -56,25 +55,22 @@ export default function Hero({
         <img
           src={topRightLogoUrl}
           alt="Vereinslogo"
-          className="absolute right-2 top-2 md:right-4 md:top-4 h-12 md:h-16 w-auto drop-shadow-lg rounded"
+          className="hero-logo"
         />
       )}
 
       {/* Inhalt */}
       <div
-        className={`px-6 md:px-8 flex flex-col ${align === 'center'
-          ? 'items-center text-center gap-12'
-          : 'items-start text-left gap-6 pt-8'
-        }`}
-        style={{
-          width: align === 'center' ? 'min(100%, 880px)' : 'min(100%, 1100px)',
-          margin: align === 'center' ? '0 auto' : undefined,
-        }}
+        className={`hero-inner ${align === 'top' ? 'hero-inner--top' : ''}`}
       >
         <h1 className="hero-text hero-title font-league">{title}</h1>
-        {subtitle && <p className={`hero-sub text-lg md:text-xl ${align === 'center' ? '' : 'text-left'}`}>{subtitle}</p>}
+        {subtitle && (
+          <p className={`hero-sub hero-subtitle ${align === 'top' ? 'hero-subtitle--left' : ''}`}>
+            {subtitle}
+          </p>
+        )}
         {children && (
-          <div className={`w-full ${align === 'center' ? 'flex justify-center' : ''}`}>
+          <div className={`hero-children ${align === 'top' ? 'hero-children--left' : ''}`}>
             {children}
           </div>
         )}

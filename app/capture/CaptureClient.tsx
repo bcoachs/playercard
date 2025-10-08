@@ -426,12 +426,12 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
   return (
     // Outer grid: zentriert, mit Abstand zwischen Zeilen
-    <div className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 px-2">
+    <div className="capture-stations">
       {visibleStations.map((s) => (
         // Zeilen-Container: Buttons/Icons zentriert + Abstand
         <div
           key={s.id}
-          className="flex flex-col items-stretch justify-center gap-4 sm:flex-row sm:items-center sm:gap-6"
+          className="capture-station-row"
         >
 
           {/* Hauptbutton für die Station */}
@@ -451,7 +451,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
           {/* Lange Stationsskizzen-Schaltfläche ab sm (≥640px) */}
           <a
-            className="hidden sm:inline-flex btn"
+            className="btn btn-sketch--label"
             href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
             target="_blank"
             rel="noreferrer"
@@ -461,7 +461,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
           {/* Rundes PDF-Icon unter sm */}
           <a
-            className="sm:hidden inline-flex btn"
+            className="btn btn-sketch--icon"
             href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
             target="_blank"
             rel="noreferrer"
@@ -821,7 +821,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
           space-y-6 definiert. Die page-pad-Klasse wird entfernt, damit der
           Inhalt durch das Hero-Grid vertikal zentriert bleibt.
         */}
-        <div className="flex flex-col items-center space-y-6 w-full px-4">
+        <div className="hero-stack">
           <ProjectsSelect />
           <StationButtonRow />
           <PlayerPicker />
