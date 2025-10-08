@@ -22,6 +22,8 @@ type Player = {
   fav_position?: string | null
 }
 
+type CsvStatus = 'ok' | 'fail' | 'off' | 'loading'
+
 const ST_ORDER = ['Beweglichkeit','Technik','Passgenauigkeit','Schusskraft','Schusspräzision','Schnelligkeit']
 const ST_INDEX: Record<string, number> = {
   'Beweglichkeit': 1, 'Technik': 2, 'Passgenauigkeit': 3, 'Schusskraft': 4, 'Schusspräzision': 5, 'Schnelligkeit': 6
@@ -272,6 +274,10 @@ export default function CaptureClient(){
   const [s6MaleMap, setS6MaleMap] = useState<Record<string, number[]> | null>(null)
   const [s4Map, setS4Map] = useState<Record<string, number[]> | null>(null)
 
+  const [s1Status, setS1Status] = useState<CsvStatus>(USE_S1_CSV_CAPTURE ? 'loading' : 'off')
+  const [s6Status, setS6Status] = useState<CsvStatus>(USE_S6_CSV_CAPTURE ? 'loading' : 'off')
+  const [s4Status, setS4Status] = useState<CsvStatus>(USE_S4_CSV_CAPTURE ? 'loading' : 'off')
+
   /* Daten holen */
   useEffect(()=>{ fetch('/api/projects').then(r=>r.json()).then(res=> setProjects(res.items||[])) },[])
   useEffect(()=>{
@@ -461,6 +467,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
     }
 
     if (USE_S6_CSV_CAPTURE) {
+      setS6Status('loading')
       // beide Gender parallel laden
       Promise.allSettled([loadS6MapCapture('female'), loadS6MapCapture('male')]).then(([f, m]) => {
         if (f.status === 'fulfilled' && f.value) {
@@ -470,14 +477,19 @@ setProject(res.item||null)).catch(()=>setProject(null))
           setS6MaleMap(m.value as Record<string, number[]>)
         }
       })
+    } else {
+      setS6Status('off')
     }
 
     if (USE_S4_CSV_CAPTURE) {
+      setS4Status('loading')
       loadS4MapCapture().then(map => {
         if (map) {
           setS4Map(map)
         }
       })
+    } else {
+      setS4Status('off')
     }
   }, [])
 
@@ -904,6 +916,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
         <div className="hero-stack">
           <ProjectsSelect />
           <StationButtonRow />
+          <CsvStatusNote />
           <PlayerPicker />
           <InputsForSelected />
         </div>
