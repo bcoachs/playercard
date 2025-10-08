@@ -291,52 +291,83 @@ a, .btn {
   margin: clamp(8px, 2vw, 24px) auto 0;
   padding: 0 clamp(12px, 4vw, 36px);
   box-sizing: border-box;
-  display: grid;
-  gap: clamp(18px, 3vw, 32px);
-}
-
-.capture-station-row {
   display: flex;
   flex-wrap: wrap;
+  gap: clamp(18px, 3vw, 32px);
   justify-content: center;
-  align-items: center;
+}
+
+.capture-stations__column {
+  display: flex;
+  flex-direction: column;
   gap: clamp(12px, 2.4vw, 20px);
+  flex: 1 1 280px;
+  min-width: min(360px, 100%);
 }
 
-.capture-station-row .btn {
-  flex: 1 1 240px;
-  max-width: 420px;
+.capture-stations__column--stations .btn {
+  width: 100%;
 }
 
-.capture-station-row .btn-sketch--label {
+.capture-stations__column--sketches {
+  align-items: stretch;
+}
+
+.capture-sketch-button {
+  display: flex;
+  justify-content: center;
+}
+
+.capture-sketch-button .btn {
+  width: 100%;
+}
+
+.btn-sketch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+}
+
+.btn-sketch__label {
   display: none;
 }
 
-.capture-station-row .btn-sketch--icon {
-  width: 54px;
-  min-width: 54px;
-  padding: 0;
+.btn-sketch__icon {
   font-size: 1.35rem;
+  line-height: 1;
 }
 
 @media (min-width: 640px) {
   .capture-stations {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: space-between;
   }
 
-  .capture-station-row {
-    justify-content: flex-start;
+  .capture-stations__column {
+    min-width: clamp(320px, 35vw, 420px);
   }
 
-  .capture-station-row .btn {
-    flex: 0 1 auto;
+  .btn-sketch__label {
+    display: inline;
   }
 
-  .capture-station-row .btn-sketch--label {
-    display: inline-flex;
-  }
-
-  .capture-station-row .btn-sketch--icon {
+  .btn-sketch__icon {
     display: none;
+  }
+}
+
+.csv-status-note {
+  margin-top: clamp(12px, 2.5vw, 22px);
+  color: rgba(255, 255, 255, 0.86);
+  text-align: center;
+}
+
+.csv-status-note__line + .csv-status-note__line {
+  margin-top: 0.35rem;
+}
+
+@media (min-width: 768px) {
+  .csv-status-note {
+    text-align: left;
   }
 }

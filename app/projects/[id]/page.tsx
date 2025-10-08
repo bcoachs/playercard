@@ -26,6 +26,8 @@ type Player = {
 type Project = { id: string; name: string; date: string | null; logo_url?: string | null }
 type Measurement = { player_id: string; station_id: string; value: number }
 
+type CsvStatus = 'ok' | 'fail' | 'off' | 'loading'
+
 const ST_ORDER = [
   'Beweglichkeit',
   'Technik',
@@ -38,6 +40,13 @@ const ST_INDEX: Record<string, number> = ST_ORDER.reduce((acc, n, i) => {
   acc[n] = i
   return acc
 }, {} as Record<string, number>)
+
+/* S1 via CSV global (optional, default an) */
+const USE_S1_CSV = (() => {
+  const v = process.env.NEXT_PUBLIC_USE_S1_CSV
+  if (v === '0' || v === 'false') return false
+  return true
+})()
 
 /* S6 via CSV global (optional, default an) */
 const USE_S6_CSV = (() => {
@@ -52,6 +61,43 @@ const USE_S4_CSV = (() => {
   if (v === '0' || v === 'false') return false
   return true
 })()
+
+async function loadS1Map(gender: 'male' | 'female'): Promise<Record<string, number[]> | null> {
+  const candidates = gender === 'male'
+    ? [
+        '/config/s1_male.csv',
+        '/config/S1_Beweglichkeit_m.csv',
+        '/config/s1_female.csv',
+        '/config/S1_Beweglichkeit_w.csv',
+        '/config/s1.csv',
+      ]
+    : ['/config/s1_female.csv', '/config/S1_Beweglichkeit_w.csv', '/config/s1.csv']
+  for (const file of candidates) {
+    try {
+      const res = await fetch(file, { cache: 'no-store' })
+      if (!res.ok) continue
+      const text = await res.text()
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+      if (lines.length < 2) continue
+      const header = lines[0].split(';').map(s => s.trim())
+      const ageCols = header.slice(1)
+      const out: Record<string, number[]> = {}
+      for (const age of ageCols) out[age] = []
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(';').map(s => s.trim())
+        for (let c = 1; c < cols.length; c++) {
+          const age = ageCols[c - 1]
+          const sec = Number((cols[c] || '').replace(',', '.'))
+          if (Number.isFinite(sec)) out[age].push(sec)
+        }
+      }
+      if (Object.keys(out).length) return out
+    } catch {
+      // ignore and try next candidate
+    }
+  }
+  return null
+}
 
 async function loadS6Map(gender: 'male' | 'female'): Promise<Record<string, number[]> | null> {
   try {
@@ -77,6 +123,13 @@ async function loadS6Map(gender: 'male' | 'female'): Promise<Record<string, numb
   } catch {
     return null
   }
+}
+
+function statusText(status: CsvStatus) {
+  if (status === 'ok') return 'geladen ✅'
+  if (status === 'loading') return 'lädt …'
+  if (status === 'fail') return 'nicht gefunden – Fallback aktiv ⚠️'
+  return 'deaktiviert'
 }
 
 async function loadS4Map(): Promise<Record<string, number[]> | null> {
@@ -164,14 +217,19 @@ export default function ProjectDashboard() {
   const [pNat, setPNat] = useState('')
   const [pGender, setPGender] = useState<'male' | 'female' | ''>('')
 
+  // S1 CSV (global)
+  const [s1Female, setS1Female] = useState<Record<string, number[]> | null>(null)
+  const [s1Male, setS1Male] = useState<Record<string, number[]> | null>(null)
+  const [s1Status, setS1Status] = useState<CsvStatus>(USE_S1_CSV ? 'loading' : 'off')
+
   // S6 CSV (global)
   const [s6Female, setS6Female] = useState<Record<string, number[]> | null>(null)
   const [s6Male, setS6Male] = useState<Record<string, number[]> | null>(null)
-  const [s6Status, setS6Status] = useState<'ok' | 'fail' | 'off' | 'loading'>(USE_S6_CSV ? 'loading' : 'off')
+  const [s6Status, setS6Status] = useState<CsvStatus>(USE_S6_CSV ? 'loading' : 'off')
 
   // S4 CSV (global, no gender distinction)
   const [s4Map, setS4Map] = useState<Record<string, number[]> | null>(null)
-  const [s4Status, setS4Status] = useState<'ok' | 'fail' | 'off' | 'loading'>(USE_S4_CSV ? 'loading' : 'off')
+  const [s4Status, setS4Status] = useState<CsvStatus>(USE_S4_CSV ? 'loading' : 'off')
 
   /* Laden */
   useEffect(() => {
@@ -203,6 +261,22 @@ export default function ProjectDashboard() {
       .then(r => r.json())
       .then(res => setMeas(res.items || []))
   }, [projectId])
+
+  // S1 CSV global laden
+  useEffect(() => {
+    if (!USE_S1_CSV) {
+      setS1Status('off')
+      return
+    }
+    setS1Status('loading')
+    Promise.allSettled([loadS1Map('female'), loadS1Map('male')]).then(([f, m]) => {
+      const fOK = f.status === 'fulfilled' && f.value
+      const mOK = m.status === 'fulfilled' && m.value
+      if (fOK) setS1Female(f.value as Record<string, number[]>)
+      if (mOK) setS1Male(m.value as Record<string, number[]>)
+      setS1Status(fOK || mOK ? 'ok' : 'fail')
+    })
+  }, [])
 
   // S6 CSV global laden
   useEffect(() => {
@@ -258,6 +332,20 @@ export default function ProjectDashboard() {
 
   function scoreFor(st: Station, p: Player, raw: number): number {
     const n = st.name.toLowerCase()
+    if (n.includes('beweglichkeit')) {
+      if (USE_S1_CSV) {
+        const map = p.gender === 'male' ? s1Male : s1Female
+        if (map) {
+          const keys = Object.keys(map)
+          if (keys.length) {
+            const bucket = nearestAgeBucket(resolveAge(p.birth_year), keys)
+            const rows = map[bucket] || []
+            if (rows.length) return scoreFromTimeStep(Number(raw), rows)
+          }
+        }
+      }
+      return normScore({ ...st, min_value: 10, max_value: 40, higher_is_better: false }, Number(raw))
+    }
     if (n.includes('schnelligkeit')) {
       // S6 via CSV (falls da), sonst Fallback
       if (USE_S6_CSV) {
@@ -571,15 +659,17 @@ export default function ProjectDashboard() {
                 </tbody>
               </table>
             </div>
-            {/* Extra Abstand vor dem Hinweis */}
-            {USE_S6_CSV && (
-              <div className="mt-6 text-sm" style={{ color: 'rgba(255,255,255,.86)' }}>
-                S6-Tabellen: {s6Status === 'ok' ? 'geladen ✅' : s6Status === 'loading' ? 'lädt …' : 'nicht gefunden – Fallback aktiv ⚠️'}
-              </div>
-            )}
-            {USE_S4_CSV && (
-              <div className="mt-2 text-sm" style={{ color: 'rgba(255,255,255,.86)' }}>
-                S4-Tabellen: {s4Status === 'ok' ? 'geladen ✅' : s4Status === 'loading' ? 'lädt …' : 'nicht gefunden – Fallback aktiv ⚠️'}
+            {(USE_S1_CSV || USE_S4_CSV || USE_S6_CSV) && (
+              <div className="csv-status-note text-sm">
+                {USE_S1_CSV && s1Status !== 'off' && (
+                  <div className="csv-status-note__line">S1-Tabellen: {statusText(s1Status)}</div>
+                )}
+                {USE_S4_CSV && s4Status !== 'off' && (
+                  <div className="csv-status-note__line">S4-Tabellen: {statusText(s4Status)}</div>
+                )}
+                {USE_S6_CSV && s6Status !== 'off' && (
+                  <div className="csv-status-note__line">S6-Tabellen: {statusText(s6Status)}</div>
+                )}
               </div>
             )}
           </div>
