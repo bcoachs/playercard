@@ -4,15 +4,7 @@ import React, { useEffect } from 'react'
 
 type Align = 'center' | 'top'
 
-export default function Hero({
-  title,
-  subtitle,
-  image = '/hero.jpg',
-  topRightLogoUrl,
-  align = 'center',     // <— NEU: center | top
-  tileY = false,        // <— NEU: Hintergrund vertikal kacheln
-  children,
-}: {
+type HeroProps = {
   title: string
   subtitle?: string
   image?: string
@@ -20,7 +12,17 @@ export default function Hero({
   align?: Align
   tileY?: boolean
   children?: React.ReactNode
-}) {
+}
+
+export default function Hero({
+  title,
+  subtitle,
+  image = '/hero.jpg',
+  topRightLogoUrl,
+  align = 'center',
+  tileY = false,
+  children,
+}: HeroProps) {
   // robuste Viewport-Höhe für Mobile
   useEffect(() => {
     const setVh = () => {
@@ -38,7 +40,7 @@ export default function Hero({
 
   return (
     <section
-      className={`relative grid text-center ${align === 'center' ? 'place-content-center' : 'place-content-start'}`}
+      className={`relative grid ${align === 'center' ? 'place-items-center' : 'place-content-start'}`}
       style={{
         minHeight: 'calc(var(--vh, 1vh) * 100)',
         backgroundImage: `url('${image}')`,
@@ -46,7 +48,7 @@ export default function Hero({
         backgroundSize: tileY ? '100% auto' : 'cover',
         backgroundPosition: 'center top',
         color: '#fff',
-        paddingTop: align === 'top' ? 24 : 0, // kleines Top-Padding im Top-Layout
+        paddingTop: align === 'top' ? 24 : 0,
       }}
     >
       {/* Optional: Logo oben rechts */}
@@ -59,27 +61,21 @@ export default function Hero({
       )}
 
       {/* Inhalt */}
-      <div className={`w-full max-w-6xl px-5 mx-auto ${align === 'top' ? 'pt-8' : ''}`}>
-        <h1 className="hero-text text-7xl md:text-8xl font-extrabold uppercase">{title}</h1>
-        {subtitle && <p className="hero-sub text-lg md:text-xl mt-2">{subtitle}</p>}
-        {/*
-          Wenn Children vorhanden sind, werden sie in einem flexiblen Container dargestellt.
-          Dabei fügen wir jeder Schaltfläche automatisch die Klasse btn-lg hinzu. So bleiben
-          alle Buttons im Hero konsistent groß, ohne dass jede Seite dies manuell setzen muss.
-        */}
+      <div
+        className={`px-6 md:px-8 flex flex-col ${align === 'center'
+          ? 'items-center text-center gap-12'
+          : 'items-start text-left gap-6 pt-8'
+        }`}
+        style={{
+          width: align === 'center' ? 'min(100%, 880px)' : 'min(100%, 1100px)',
+          margin: align === 'center' ? '0 auto' : undefined,
+        }}
+      >
+        <h1 className="hero-text hero-title font-league">{title}</h1>
+        {subtitle && <p className={`hero-sub text-lg md:text-xl ${align === 'center' ? '' : 'text-left'}`}>{subtitle}</p>}
         {children && (
-          <div className="mt-6 flex flex-col sm:flex-row gap-4 justify-center items-center">
-            {React.Children.map(children, child => {
-              if (React.isValidElement(child)) {
-                const existing = (child.props as any).className || ''
-                // btn-lg nur einmal anfügen, falls noch nicht gesetzt
-                const classes = existing.split(' ').includes('btn-lg')
-                  ? existing
-                  : `${existing} btn-lg`.trim()
-                return React.cloneElement(child as React.ReactElement<any>, { className: classes })
-              }
-              return child
-            })}
+          <div className={`w-full ${align === 'center' ? 'flex justify-center' : ''}`}>
+            {children}
           </div>
         )}
       </div>
