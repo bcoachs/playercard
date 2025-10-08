@@ -22,6 +22,8 @@ type Player = {
   fav_position?: string | null
 }
 
+type CsvStatus = 'ok' | 'fail' | 'off' | 'loading'
+
 const ST_ORDER = ['Beweglichkeit','Technik','Passgenauigkeit','Schusskraft','Schusspräzision','Schnelligkeit']
 const ST_INDEX: Record<string, number> = {
   'Beweglichkeit': 1, 'Technik': 2, 'Passgenauigkeit': 3, 'Schusskraft': 4, 'Schusspräzision': 5, 'Schnelligkeit': 6
@@ -74,6 +76,12 @@ function normScore(st: Station, raw: number){
  */
 
 // Flags aus Umgebungsvariablen lesen (standardmäßig aktiv)
+const USE_S1_CSV_CAPTURE = (() => {
+  const v = process.env.NEXT_PUBLIC_USE_S1_CSV
+  if (v === '0' || v === 'false') return false
+  return true
+})()
+
 const USE_S6_CSV_CAPTURE = (() => {
   const v = process.env.NEXT_PUBLIC_USE_S6_CSV
   if (v === '0' || v === 'false') return false
@@ -84,6 +92,46 @@ const USE_S4_CSV_CAPTURE = (() => {
   if (v === '0' || v === 'false') return false
   return true
 })()
+
+async function loadS1MapCapture(gender: 'male' | 'female'): Promise<Record<string, number[]> | null> {
+  const candidates = gender === 'male'
+    ? [
+        '/config/s1_male.csv',
+        '/config/S1_Beweglichkeit_m.csv',
+        '/config/s1_female.csv',
+        '/config/S1_Beweglichkeit_w.csv',
+        '/config/s1.csv',
+      ]
+    : ['/config/s1_female.csv', '/config/S1_Beweglichkeit_w.csv', '/config/s1.csv']
+  for (const file of candidates) {
+    try {
+      const res = await fetch(file, { cache: 'no-store' })
+      if (!res.ok) continue
+      const text = await res.text()
+      const lines = text
+        .split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(Boolean)
+      if (lines.length < 2) continue
+      const header = lines[0].split(';').map(s => s.trim())
+      const ageCols = header.slice(1)
+      const out: Record<string, number[]> = {}
+      for (const age of ageCols) out[age] = []
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(';').map(s => s.trim())
+        for (let c = 1; c < cols.length; c++) {
+          const age = ageCols[c - 1]
+          const sec = Number((cols[c] || '').replace(',', '.'))
+          if (Number.isFinite(sec)) out[age].push(sec)
+        }
+      }
+      if (Object.keys(out).length) return out
+    } catch {
+      // ignore and try next candidate
+    }
+  }
+  return null
+}
 
 async function loadS6MapCapture(gender: 'male' | 'female'): Promise<Record<string, number[]> | null> {
   try {
@@ -220,9 +268,15 @@ export default function CaptureClient(){
 
   // CSV Maps für S4/S6 (analog Dashboard). Wir laden sie einmalig, um im Capture die
   // gleichen Bewertungstabellen zu verwenden wie in der Spieler-Matrix.
+  const [s1FemaleMap, setS1FemaleMap] = useState<Record<string, number[]> | null>(null)
+  const [s1MaleMap, setS1MaleMap] = useState<Record<string, number[]> | null>(null)
   const [s6FemaleMap, setS6FemaleMap] = useState<Record<string, number[]> | null>(null)
   const [s6MaleMap, setS6MaleMap] = useState<Record<string, number[]> | null>(null)
   const [s4Map, setS4Map] = useState<Record<string, number[]> | null>(null)
+
+  const [s1Status, setS1Status] = useState<CsvStatus>(USE_S1_CSV_CAPTURE ? 'loading' : 'off')
+  const [s6Status, setS6Status] = useState<CsvStatus>(USE_S6_CSV_CAPTURE ? 'loading' : 'off')
+  const [s4Status, setS4Status] = useState<CsvStatus>(USE_S4_CSV_CAPTURE ? 'loading' : 'off')
 
   /* Daten holen */
   useEffect(()=>{ fetch('/api/projects').then(r=>r.json()).then(res=> setProjects(res.items||[])) },[])
@@ -289,6 +343,22 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
   function scoreFor(st: Station, p: Player, raw: number){
     const n = (st.name || '').toLowerCase()
+    if (n.includes('beweglichkeit')) {
+      if (USE_S1_CSV_CAPTURE) {
+        const map = p.gender === 'male' ? s1MaleMap : s1FemaleMap
+        if (map) {
+          const keys = Object.keys(map)
+          if (keys.length) {
+            const age = resolveAge(p.birth_year)
+            const bucket = nearestAgeBucketCapture(age, keys)
+            const rows = map[bucket] || []
+            if (rows.length) return scoreFromTimeStepCapture(Number(raw), rows)
+          }
+        }
+      }
+      return normScore(st, raw)
+    }
+
     // Sonderfall Schnelligkeit (S6): zuerst CSV schauen, sonst Fallback (4–20 s)
     if (n.includes('schnelligkeit')) {
       if (USE_S6_CSV_CAPTURE) {
@@ -385,21 +455,76 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
   // CSV Maps laden (nur einmal). Bei Fehler bleibt Map null → Fallback in Score.
   useEffect(() => {
+    if (USE_S1_CSV_CAPTURE) {
+      setS1Status('loading')
+      Promise.allSettled([loadS1MapCapture('female'), loadS1MapCapture('male')]).then(([f, m]) => {
+        const fOK = f.status === 'fulfilled' && f.value
+        const mOK = m.status === 'fulfilled' && m.value
+        if (fOK) setS1FemaleMap(f.value as Record<string, number[]>)
+        if (mOK) setS1MaleMap(m.value as Record<string, number[]>)
+        setS1Status(fOK || mOK ? 'ok' : 'fail')
+      })
+    } else {
+      setS1Status('off')
+    }
+
     if (USE_S6_CSV_CAPTURE) {
+      setS6Status('loading')
       // beide Gender parallel laden
       Promise.allSettled([loadS6MapCapture('female'), loadS6MapCapture('male')]).then(([f, m]) => {
-        if (f.status === 'fulfilled' && f.value) setS6FemaleMap(f.value)
-        if (m.status === 'fulfilled' && m.value) setS6MaleMap(m.value)
+        const fOK = f.status === 'fulfilled' && f.value
+        const mOK = m.status === 'fulfilled' && m.value
+        if (fOK) setS6FemaleMap(f.value as Record<string, number[]>)
+        if (mOK) setS6MaleMap(m.value as Record<string, number[]>)
+        setS6Status(fOK || mOK ? 'ok' : 'fail')
       })
+    } else {
+      setS6Status('off')
     }
+
     if (USE_S4_CSV_CAPTURE) {
+      setS4Status('loading')
       loadS4MapCapture().then(map => {
-        if (map) setS4Map(map)
+        if (map) {
+          setS4Map(map)
+          setS4Status('ok')
+        } else {
+          setS4Status('fail')
+        }
       })
+    } else {
+      setS4Status('off')
     }
   }, [])
 
   /* UI-Bausteine */
+  function renderStatusLabel(status: CsvStatus) {
+    if (status === 'ok') return 'geladen ✅'
+    if (status === 'loading') return 'lädt …'
+    if (status === 'fail') return 'nicht gefunden – Fallback aktiv ⚠️'
+    return 'deaktiviert'
+  }
+
+  function CsvStatusNote() {
+    const items = [
+      USE_S1_CSV_CAPTURE && s1Status !== 'off' ? { key: 'S1', label: 'S1-Tabellen', status: s1Status } : null,
+      USE_S4_CSV_CAPTURE && s4Status !== 'off' ? { key: 'S4', label: 'S4-Tabellen', status: s4Status } : null,
+      USE_S6_CSV_CAPTURE && s6Status !== 'off' ? { key: 'S6', label: 'S6-Tabellen', status: s6Status } : null,
+    ].filter(Boolean) as { key: string; label: string; status: CsvStatus }[]
+
+    if (!items.length) return null
+
+    return (
+      <div className="csv-status-note">
+        {items.map(item => (
+          <div key={item.key} className="csv-status-note__line">
+            {item.label}: {renderStatusLabel(item.status)}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   function ProjectsSelect(){
     if (qProject) return null
     return (
@@ -417,66 +542,67 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
 
   function StationButtonRow() {
-  if (!stations.length) return null
+    if (!stations.length) return null
 
-  // Stufe 2: Wenn eine Station gewählt ist, nur diese anzeigen – sonst alle
-  const visibleStations = selected
-    ? stations.filter(s => s.id === selected)
-    : stations
+    const base = selected ? stations.filter(s => s.id === selected) : stations
+    const ordered = base.slice().sort((a, b) => {
+      const ia = ST_INDEX[a.name] ?? 99
+      const ib = ST_INDEX[b.name] ?? 99
+      if (ia !== ib) return ia - ib
+      return a.name.localeCompare(b.name, 'de')
+    })
 
-  return (
-    // Outer grid: zentriert, mit Abstand zwischen Zeilen
-    <div className="w-fit mx-auto grid grid-cols-1 sm:grid-cols-2 gap-8">
-      {visibleStations.map((s) => (
-        // Zeilen-Container: Buttons/Icons zentriert + Abstand
-        <div key={s.id} className="flex items-center justify-center gap-8">
+    if (!ordered.length) return null
 
-          {/* Hauptbutton für die Station */}
-          <button
-            className="btn pill btn-lg btn--wide"
-            onClick={() => {
-              setSelected(s.id)
-              setCurrentPlayerId('')
-              router.replace(
-                projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`
-              )
-            }}
-            style={s.id === selected ? { filter: 'brightness(1.12)' } : {}}
-          >
-            {`S${ST_INDEX[s.name] ?? '?' } - ${s.name}`}
-          </button>
-
-          {/* Lange Stationsskizzen-Schaltfläche ab sm (≥640px) */}
-          <a
-            className="hidden sm:flex btn pill btn-lg btn--wide items-center justify-center"
-            href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {`S${ST_INDEX[s.name] ?? '?' } - Stationsskizze`}
-          </a>
-
-          {/* Rundes PDF-Icon unter sm */}
-          <a
-            className="flex sm:hidden items-center justify-center btn pill btn-sm rounded-full p-0"
-            style={{ width: 'var(--btn-wide-height)', height: 'var(--btn-wide-height)' }}
-            href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Stationsskizze S${ST_INDEX[s.name] ?? '?'}`}
-          >
-            📄
-          </a>
+    return (
+      <div className="capture-stations">
+        <div className="capture-stations__column capture-stations__column--stations">
+          {ordered.map(s => {
+            const idx = ST_INDEX[s.name]
+            const displayIdx = idx ?? '?'
+            return (
+              <button
+                key={s.id}
+                className="btn"
+                onClick={() => {
+                  setSelected(s.id)
+                  setCurrentPlayerId('')
+                  router.replace(
+                    projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`
+                  )
+                }}
+                style={s.id === selected ? { filter: 'brightness(1.12)' } : {}}
+              >
+                {`S${displayIdx} - ${s.name}`}
+              </button>
+            )
+          })}
         </div>
-      ))}
-    </div>
-  )
-}
-              
-             
-            </div>
-          )
-        })}
+        <div className="capture-stations__column capture-stations__column--sketches">
+          {ordered.map(s => {
+            const idx = ST_INDEX[s.name]
+            const hrefIdx = idx ?? 1
+            const labelIdx = idx ?? '?'
+            const href = `/station${hrefIdx}.pdf`
+            const label = `S${labelIdx} - Stationsskizze`
+            return (
+              <div key={`${s.id}-sketch`} className="capture-sketch-button">
+                <a
+                  className="btn btn-sketch"
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={label}
+                >
+                  <span className="btn-sketch__label">{label}</span>
+                  <span className="btn-sketch__icon" aria-hidden>
+                    📄
+                  </span>
+                </a>
+              </div>
+            )
+          })}
+        </div>
       </div>
     )
   }
@@ -572,8 +698,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
             </div>
           </div>
           <div className="mt-4 text-right">
-            {/* Verwende die zentrale btn-lg Klasse für größere Buttons */}
-            <button className="btn pill btn-lg" onClick={()=>saveOne(st, p)}>Speichern</button>
+            <button className="btn" onClick={()=>saveOne(st, p)}>Speichern</button>
           </div>
         </div>
       )
@@ -670,8 +795,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
             </div>
           </div>
           <div className="mt-4 text-right">
-            {/* Verwende die zentrale btn-lg Klasse für größere Buttons */}
-            <button className="btn pill btn-lg" onClick={()=>saveOne(st, p)}>Speichern</button>
+            <button className="btn" onClick={()=>saveOne(st, p)}>Speichern</button>
           </div>
         </div>
       )
@@ -738,13 +862,13 @@ setProject(res.item||null)).catch(()=>setProject(null))
               Messwert {st.unit ? `(${st.unit})` : ''}
             </label>
             {isTimeStation && (
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex flex-wrap items-center gap-3 mb-4">
                 {!running ? (
-                  <button className="btn pill btn-lg" type="button" onClick={startStopwatch}>
+                  <button className="btn" type="button" onClick={startStopwatch}>
                     Start
                   </button>
                 ) : (
-                  <button className="btn pill btn-lg" type="button" onClick={stopStopwatch}>
+                  <button className="btn" type="button" onClick={stopStopwatch}>
                     Stop
                   </button>
                 )}
@@ -753,7 +877,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                   {st.unit || 's'}
                 </span>
                 <button
-                  className="btn pill btn-lg"
+                  className="btn"
                   type="button"
                   onClick={resetStopwatch}
                   disabled={running && !localVal}
@@ -783,8 +907,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
           </div>
         </div>
         <div className="mt-4 text-right">
-          {/* Verwende die zentrale btn-lg Klasse für größere Buttons */}
-          <button className="btn pill btn-lg" onClick={() => saveOne(st, p)}>Speichern</button>
+          <button className="btn" onClick={() => saveOne(st, p)}>Speichern</button>
         </div>
       </div>
     )
@@ -796,25 +919,25 @@ setProject(res.item||null)).catch(()=>setProject(null))
    * springt der Button zur vorherigen Seite zurück.
    */
   function CaptureBackFab(){
-    return (
-      <button
-        onClick={() => {
-          if (selected) {
-            // Station abwählen → alle Stationen wieder anzeigen
-            setSelected('')
-            setCurrentPlayerId('')
-            if (projectId) router.replace(`?project=${projectId}`)
-            else router.replace('')
-          } else {
-            // Keine Station gewählt → zurück zur vorherigen Seite
-            router.back()
-          }
-        }}
-        style={{ position: 'fixed', right: '16px', bottom: '16px', zIndex: 9999 }}
-        className="btn pill btn-sm"
-        aria-label="Zurück"
-        title="Zurück"
-      >
+      return (
+        <button
+          onClick={() => {
+            if (selected) {
+              // Station abwählen → alle Stationen wieder anzeigen
+              setSelected('')
+              setCurrentPlayerId('')
+              if (projectId) router.replace(`?project=${projectId}`)
+              else router.replace('')
+            } else {
+              // Keine Station gewählt → zurück zur vorherigen Seite
+              router.back()
+            }
+          }}
+          style={{ position: 'fixed', right: '16px', bottom: '16px', zIndex: 9999 }}
+          className="btn btn-back"
+          aria-label="Zurück"
+          title="Zurück"
+        >
         ← Zurück
       </button>
     )
@@ -830,9 +953,10 @@ setProject(res.item||null)).catch(()=>setProject(null))
           space-y-6 definiert. Die page-pad-Klasse wird entfernt, damit der
           Inhalt durch das Hero-Grid vertikal zentriert bleibt.
         */}
-        <div className="flex flex-col items-center space-y-6 w-full px-4">
+        <div className="hero-stack">
           <ProjectsSelect />
           <StationButtonRow />
+          <CsvStatusNote />
           <PlayerPicker />
           <InputsForSelected />
         </div>
