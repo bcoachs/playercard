@@ -1,6 +1,6 @@
 'use client'
 
-import React, {useEffect, useMemo, useState} from 'react'
+import React, {useCallback, useEffect, useMemo, useState} from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 // BackFab wird hier ersetzt durch eine eigene Implementierung mit zusätzlicher Logik
 import Hero from '@/app/components/Hero'
@@ -22,7 +22,12 @@ type Player = {
   fav_position?: string | null
 }
 
-type CsvStatus = 'ok' | 'fail' | 'off' | 'loading'
+type Measurement = {
+  id?: string
+  player_id: string
+  station_id: string
+  value: number | null
+}
 
 const ST_ORDER = ['Beweglichkeit','Technik','Passgenauigkeit','Schusskraft','Schusspräzision','Schnelligkeit']
 const ST_INDEX: Record<string, number> = {
@@ -265,6 +270,7 @@ export default function CaptureClient(){
   // Werte pro Spieler (pro Station unterschiedlich aufgebaut)
   const [values, setValues] = useState<Record<string, any>>({}) // key = playerId
   const [saved, setSaved]   = useState<Record<string, number>>({}) // gespeicherter Score (zur Info)
+  const [measurements, setMeasurements] = useState<Measurement[]>([])
 
   // CSV Maps für S4/S6 (analog Dashboard). Wir laden sie einmalig, um im Capture die
   // gleichen Bewertungstabellen zu verwenden wie in der Spieler-Matrix.
@@ -308,6 +314,67 @@ setProject(res.item||null)).catch(()=>setProject(null))
   const currentStation = useMemo(()=> stations.find(s=>s.id===selected), [stations, selected])
   const currentIndex   = currentStation ? (ST_INDEX[currentStation.name] ?? 1) : 1
   const sketchHref     = `/station${currentIndex}.pdf`
+
+  const loadMeasurements = useCallback(async () => {
+    if (!projectId) {
+      setMeasurements([])
+      return
+    }
+    try {
+      const res = await fetch(`/api/projects/${projectId}/measurements`, { cache: 'no-store' })
+      const data = await res.json()
+      const items = Array.isArray(data.items) ? data.items : []
+      setMeasurements(items as Measurement[])
+    } catch {
+      // Messwerte sind optional – bei Fehlern behalten wir den aktuellen Stand bei.
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    loadMeasurements()
+  }, [loadMeasurements])
+
+  const stationHighscore = useMemo(() => {
+    if (!selected) return null
+    const st = stations.find(s => s.id === selected)
+    if (!st) return null
+    let best: number | null = null
+    for (const m of measurements) {
+      if (m.station_id !== selected) continue
+      const raw = Number(m.value)
+      if (!Number.isFinite(raw)) continue
+      const player = players.find(pl => pl.id === m.player_id)
+      if (!player) continue
+      const score = scoreFor(st, player, raw)
+      if (!Number.isFinite(score)) continue
+      best = best === null ? score : Math.max(best, score)
+    }
+    return best
+  }, [measurements, selected, stations, players])
+
+  useEffect(() => {
+    if (!selected || !currentPlayerId) return
+    const measurement = measurements.find(
+      m => m.station_id === selected && m.player_id === currentPlayerId
+    )
+    if (!measurement || !Number.isFinite(Number(measurement.value))) {
+      setSaved(prev => {
+        if (!(currentPlayerId in prev)) return prev
+        const copy = { ...prev }
+        delete copy[currentPlayerId]
+        return copy
+      })
+      return
+    }
+    const st = stations.find(s => s.id === selected)
+    const p = players.find(pl => pl.id === currentPlayerId)
+    if (!st || !p) return
+    const score = scoreFor(st, p, Number(measurement.value))
+    setSaved(prev => {
+      if (prev[currentPlayerId] === score) return prev
+      return { ...prev, [currentPlayerId]: score }
+    })
+  }, [measurements, selected, currentPlayerId, stations, players])
 
   /* Helfer */
   function resolveAge(by: number|null){
@@ -421,37 +488,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
     // Score für Anzeige berechnen: identisch zur Matrix-Logik (inklusive CSV-Auswertung)
     const score = scoreFor(st, p, raw)
     setSaved(prev => ({ ...prev, [p.id]: score }))
+    await loadMeasurements()
     alert('Gespeichert.')
   }
-
-  /* Messungen laden und Score setzen, wenn Spieler/Station gewechselt */
-  useEffect(() => {
-    if (!projectId || !selected || !currentPlayerId) return
-    // Alle Messungen dieses Projekts laden, passendes Measurement für Spieler/Station suchen
-    fetch(`/api/projects/${projectId}/measurements`, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(res => {
-        const items = res.items || []
-        const m = items.find((m: any) => m.player_id === currentPlayerId && m.station_id === selected)
-        if (m && typeof m.value === 'number') {
-          const rawVal = Number(m.value)
-          const st = stations.find(s => s.id === selected)
-          const p = players.find(pl => pl.id === currentPlayerId)
-          if (st && p) {
-            const sc = scoreFor(st, p, rawVal)
-            setSaved(prev => ({ ...prev, [currentPlayerId]: sc }))
-          }
-        } else {
-          // Keine Messung vorhanden → gespeicherten Score entfernen
-          setSaved(prev => {
-            const copy: Record<string, number> = { ...prev }
-            delete copy[currentPlayerId]
-            return copy
-          })
-        }
-      })
-      .catch(() => {})
-  }, [projectId, selected, currentPlayerId, stations])
 
   // CSV Maps laden (nur einmal). Bei Fehler bleibt Map null → Fallback in Score.
   useEffect(() => {
@@ -549,14 +588,14 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 {`S${displayIdx} - ${s.name}`}
               </button>
               <a
-                className="btn capture-stations__sketch-button"
+                className="btn btn-icon capture-stations__sketch-button"
                 href={href}
                 target="_blank"
                 rel="noreferrer"
                 aria-label={label}
               >
-                <span className="btn-sketch__label">{label}</span>
-                <span className="btn-sketch__icon" aria-hidden>
+                <span className="btn-icon__label">{label}</span>
+                <span className="btn-icon__icon" aria-hidden>
                   📄
                 </span>
               </a>
@@ -567,115 +606,135 @@ setProject(res.item||null)).catch(()=>setProject(null))
     )
   }
 
-  function PlayerPicker(){
-    if (!currentStation) return null
-    return (
-      <div className="card glass w-full max-w-3xl mx-auto">
-        <label className="block text-sm font-semibold mb-2">Spieler*in wählen</label>
-        {/*
-          Das Dropdown für die Spieler*innen-Auswahl erhält eine größere Höhe
-          für bessere Bedienbarkeit auf dem Handy. */}
-        <select className="input h-14" value={currentPlayerId} onChange={e=> setCurrentPlayerId(e.target.value)}>
-          <option value="">Bitte wählen…</option>
-          {players.map(p=>(<option key={p.id} value={p.id}>
-            {p.display_name}{p.fav_number?` #${p.fav_number}`:''}{p.birth_year?` (${p.birth_year})`:''}
-          </option>))}
-        </select>
-      </div>
-    )
-  }
-
   function InputsForSelected(){
-    const st = currentStation
-    const p = players.find(x=>x.id===currentPlayerId)
-    if (!st || !p) return null
-    const n = st.name.toLowerCase()
-    const v = values[p.id] || {}
-    
-    if (n.includes('passgenauigkeit')){
-      const h10=v.h10??0, h14=v.h14??0, h18=v.h18??0
+    const station = currentStation
+    if (!station) return null
+
+    const stationUnit = station.unit || ''
+    const stationUnitLabel = stationUnit ? `(${stationUnit})` : ''
+
+    const handleSave = (target: Player) => {
+      void saveOne(station, target)
+    }
+
+    const n = station.name.toLowerCase()
+    const displayIdx = ST_INDEX[station.name] ?? '?'
+    const heading = `S${displayIdx} - ${station.name}`.toUpperCase()
+    const player = players.find(x => x.id === currentPlayerId) || null
+    const playerScore = player ? saved[player.id] : undefined
+    const highscoreDisplay = stationHighscore !== null
+      ? String(stationHighscore).padStart(3, '0')
+      : '###'
+    const sketchLabel = `S${displayIdx} - Stationsskizze`
+
+    const renderPdfButton = () => (
+      <a
+        className="btn btn-icon capture-panel__pdf-button"
+        href={sketchHref}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={sketchLabel}
+      >
+        <span className="btn-icon__label">PDF</span>
+        <span className="btn-icon__icon" aria-hidden>
+          📄
+        </span>
+      </a>
+    )
+
+    function PassForm({ player }: { player: Player }) {
+      const v = values[player.id] || {}
+      const h10 = v.h10 ?? 0
+      const h14 = v.h14 ?? 0
+      const h18 = v.h18 ?? 0
+
       return (
-        <div className="card glass w-full max-w-3xl mx-auto">
-          {/* Score anzeigen, falls vorhanden */}
-          {saved[p.id]!==undefined && (
-            <div className="mb-2 text-sm">Bisheriger Score: {saved[p.id]}</div>
-          )}
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold mb-1">10 m (0–3)</label>
-                   <input
-                     className="input"
-                     type="number"
-                     min={0}
-                     max={3}
-                     value={h10}
-                     onChange={e => setValues(prev => ({
-                       ...prev,
-                       [p.id]: { ...prev[p.id], h10: Number(e.target.value) },
-                     }))}
-                     // stop key events in both capture and bubble phase so that global hotkeys do not interfere
-                     onKeyDown={e => e.stopPropagation()}
-                     onKeyDownCapture={e => e.stopPropagation()}
-                     onKeyUp={e => e.stopPropagation()}
-                     onKeyPress={e => e.stopPropagation()}
-                   />
+        <div className="capture-panel__form-card">
+          <div className="capture-panel__inputs-grid capture-panel__inputs-grid--thirds">
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">10 m (0–3)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={3}
+                value={h10}
+                onChange={e =>
+                  setValues(prev => ({
+                    ...prev,
+                    [player.id]: { ...prev[player.id], h10: Number(e.target.value) },
+                  }))
+                }
+                onKeyDown={e => e.stopPropagation()}
+                onKeyDownCapture={e => e.stopPropagation()}
+                onKeyUp={e => e.stopPropagation()}
+                onKeyPress={e => e.stopPropagation()}
+              />
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">14 m (0–2)</label>
-                   <input
-                     className="input"
-                     type="number"
-                     min={0}
-                     max={2}
-                     value={h14}
-                     onChange={e => setValues(prev => ({
-                       ...prev,
-                       [p.id]: { ...prev[p.id], h14: Number(e.target.value) },
-                     }))}
-                     onKeyDown={e => e.stopPropagation()}
-                     onKeyDownCapture={e => e.stopPropagation()}
-                     onKeyUp={e => e.stopPropagation()}
-                     onKeyPress={e => e.stopPropagation()}
-                   />
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">14 m (0–2)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={2}
+                value={h14}
+                onChange={e =>
+                  setValues(prev => ({
+                    ...prev,
+                    [player.id]: { ...prev[player.id], h14: Number(e.target.value) },
+                  }))
+                }
+                onKeyDown={e => e.stopPropagation()}
+                onKeyDownCapture={e => e.stopPropagation()}
+                onKeyUp={e => e.stopPropagation()}
+                onKeyPress={e => e.stopPropagation()}
+              />
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">18 m (0–1)</label>
-                   <input
-                     className="input"
-                     type="number"
-                     min={0}
-                     max={1}
-                     value={h18}
-                     onChange={e => setValues(prev => ({
-                       ...prev,
-                       [p.id]: { ...prev[p.id], h18: Number(e.target.value) },
-                     }))}
-                     onKeyDown={e => e.stopPropagation()}
-                     onKeyDownCapture={e => e.stopPropagation()}
-                     onKeyUp={e => e.stopPropagation()}
-                     onKeyPress={e => e.stopPropagation()}
-                   />
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">18 m (0–1)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={1}
+                value={h18}
+                onChange={e =>
+                  setValues(prev => ({
+                    ...prev,
+                    [player.id]: { ...prev[player.id], h18: Number(e.target.value) },
+                  }))
+                }
+                onKeyDown={e => e.stopPropagation()}
+                onKeyDownCapture={e => e.stopPropagation()}
+                onKeyUp={e => e.stopPropagation()}
+                onKeyPress={e => e.stopPropagation()}
+              />
             </div>
           </div>
-          <div className="mt-4 text-right">
-            <button className="btn" onClick={()=>saveOne(st, p)}>Speichern</button>
+          <div className="capture-panel__form-actions">
+            <button className="btn" type="button" onClick={() => handleSave(player)}>
+              Speichern
+            </button>
+            {renderPdfButton()}
           </div>
         </div>
       )
     }
 
-    if (n.includes('schusspräzision')){
-      const ul=v.ul??0, ur=v.ur??0, ll=v.ll??0, lr=v.lr??0
+    function PrecisionForm({ player }: { player: Player }) {
+      const v = values[player.id] || {}
+      const ul = v.ul ?? 0
+      const ur = v.ur ?? 0
+      const ll = v.ll ?? 0
+      const lr = v.lr ?? 0
+
       return (
-        <div className="card glass w-full max-w-3xl mx-auto">
-          {/* Score anzeigen, falls vorhanden */}
-          {saved[p.id]!==undefined && (
-            <div className="mb-2 text-sm">Bisheriger Score: {saved[p.id]}</div>
-          )}
-          <div className="grid grid-cols-4 gap-3">
-            <div>
-              <label className="block text-xs font-semibold mb-1">oben L (0–3)</label>
-                   <input
+        <div className="capture-panel__form-card">
+          <div className="capture-panel__inputs-grid capture-panel__inputs-grid--quarters">
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">oben L (0–3)</label>
+              <input
                 className="input"
                 type="number"
                 min={0}
@@ -684,7 +743,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onChange={e =>
                   setValues(prev => ({
                     ...prev,
-                    [p.id]: { ...prev[p.id], ul: Number(e.target.value) },
+                    [player.id]: { ...prev[player.id], ul: Number(e.target.value) },
                   }))
                 }
                 onKeyDown={e => e.stopPropagation()}
@@ -693,9 +752,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onKeyPress={e => e.stopPropagation()}
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">oben R (0–3)</label>
-                   <input
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">oben R (0–3)</label>
+              <input
                 className="input"
                 type="number"
                 min={0}
@@ -704,7 +763,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onChange={e =>
                   setValues(prev => ({
                     ...prev,
-                    [p.id]: { ...prev[p.id], ur: Number(e.target.value) },
+                    [player.id]: { ...prev[player.id], ur: Number(e.target.value) },
                   }))
                 }
                 onKeyDown={e => e.stopPropagation()}
@@ -713,9 +772,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onKeyPress={e => e.stopPropagation()}
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">unten L (0–3)</label>
-                   <input
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">unten L (0–3)</label>
+              <input
                 className="input"
                 type="number"
                 min={0}
@@ -724,7 +783,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onChange={e =>
                   setValues(prev => ({
                     ...prev,
-                    [p.id]: { ...prev[p.id], ll: Number(e.target.value) },
+                    [player.id]: { ...prev[player.id], ll: Number(e.target.value) },
                   }))
                 }
                 onKeyDown={e => e.stopPropagation()}
@@ -733,9 +792,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onKeyPress={e => e.stopPropagation()}
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">unten R (0–3)</label>
-                   <input
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">unten R (0–3)</label>
+              <input
                 className="input"
                 type="number"
                 min={0}
@@ -744,7 +803,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onChange={e =>
                   setValues(prev => ({
                     ...prev,
-                    [p.id]: { ...prev[p.id], lr: Number(e.target.value) },
+                    [player.id]: { ...prev[player.id], lr: Number(e.target.value) },
                   }))
                 }
                 onKeyDown={e => e.stopPropagation()}
@@ -754,122 +813,216 @@ setProject(res.item||null)).catch(()=>setProject(null))
               />
             </div>
           </div>
-          <div className="mt-4 text-right">
-            <button className="btn" onClick={()=>saveOne(st, p)}>Speichern</button>
+          <div className="capture-panel__form-actions">
+            <button className="btn" type="button" onClick={() => handleSave(player)}>
+              Speichern
+            </button>
+            {renderPdfButton()}
           </div>
         </div>
       )
     }
 
-    // Generische Messung (z.B. Schusskraft, Schnelligkeit Fallback) oder zeitbasierte Stationen.
-    const val = v.value ?? ''
-    // Zeitstationen: Beweglichkeit (S1), Technik (S2), Schnelligkeit (S6) → Stoppuhr nutzen
-    const isTimeStation = n.includes('beweglichkeit') || n.includes('technik') || n.includes('schnelligkeit')
-    // Lokaler Zustand für das Eingabefeld / Stoppuhr
-    const [localVal, setLocalVal] = React.useState<string>(val)
-    const [stopwatchStart, setStopwatchStart] = React.useState<number | null>(null)
-    const [elapsed, setElapsed] = React.useState<number>(0)
-    const [timerId, setTimerId] = React.useState<any>(null)
-    const running = stopwatchStart !== null
-    // synchronisiere lokalen Wert, wenn externe Messung geändert wird
-    React.useEffect(() => {
-      setLocalVal(val)
-    }, [val])
-    // cleanup bei unmount/wechsel
-    React.useEffect(() => {
-      return () => {
-        if (timerId) clearInterval(timerId)
+    function GenericForm({ player }: { player: Player }) {
+      const v = values[player.id] || {}
+      const val = v.value ?? ''
+      const isTimeStation =
+        n.includes('beweglichkeit') || n.includes('technik') || n.includes('schnelligkeit')
+
+      const [localVal, setLocalVal] = React.useState<string>(val)
+      const [stopwatchStart, setStopwatchStart] = React.useState<number | null>(null)
+      const [elapsed, setElapsed] = React.useState<number>(0)
+      const [timerId, setTimerId] = React.useState<ReturnType<typeof setInterval> | null>(null)
+      const running = stopwatchStart !== null
+
+      React.useEffect(() => {
+        setLocalVal(val)
+      }, [val])
+
+      React.useEffect(() => {
+        return () => {
+          if (timerId) clearInterval(timerId)
+        }
+      }, [timerId])
+
+      const startStopwatch = () => {
+        if (running) return
+        const start = Date.now()
+        setStopwatchStart(start)
+        const id = setInterval(() => {
+          const now = Date.now()
+          setElapsed((now - start) / 1000)
+        }, 50)
+        setTimerId(id)
       }
-    }, [timerId])
-    const startStopwatch = () => {
-      if (running) return
-      const start = Date.now()
-      setStopwatchStart(start)
-      const id = setInterval(() => {
-        const now = Date.now()
-        const diff = (now - start) / 1000
-        setElapsed(diff)
-      }, 100)
-      setTimerId(id)
-    }
-    const stopStopwatch = () => {
-      if (!running) return
-      if (timerId) clearInterval(timerId)
-      const finalVal = (Date.now() - (stopwatchStart || Date.now())) / 1000
-      const valStr = finalVal.toFixed(2)
-      setStopwatchStart(null)
-      setElapsed(finalVal)
-      setLocalVal(valStr)
-      // Wert auch im globalen State aktualisieren
-      setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: valStr } }))
-    }
-    const resetStopwatch = () => {
-      if (timerId) clearInterval(timerId)
-      setStopwatchStart(null)
-      setElapsed(0)
-      setLocalVal('')
-      setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: '' } }))
-    }
-    return (
-      <div className="card glass w-full max-w-3xl mx-auto">
-        {/* Score anzeigen, falls vorhanden */}
-        {saved[p.id] !== undefined && (
-          <div className="mb-2 text-sm">Bisheriger Score: {saved[p.id]}</div>
-        )}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold mb-1">
-              Messwert {st.unit ? `(${st.unit})` : ''}
+
+      const stopStopwatch = () => {
+        if (!running) return
+        if (timerId) clearInterval(timerId)
+        const finalVal = (Date.now() - (stopwatchStart || Date.now())) / 1000
+        const valStr = finalVal.toFixed(2)
+        setStopwatchStart(null)
+        setElapsed(finalVal)
+        setTimerId(null)
+        setLocalVal(valStr)
+        setValues(prev => ({ ...prev, [player.id]: { ...prev[player.id], value: valStr } }))
+      }
+
+      const resetStopwatch = () => {
+        if (timerId) clearInterval(timerId)
+        setStopwatchStart(null)
+        setElapsed(0)
+        setTimerId(null)
+        setLocalVal('')
+        setValues(prev => ({ ...prev, [player.id]: { ...prev[player.id], value: '' } }))
+      }
+
+      const formatTime = (seconds: number) => {
+        if (!Number.isFinite(seconds) || seconds < 0) seconds = 0
+        const mm = Math.floor(seconds / 60)
+        const ss = Math.floor(seconds % 60)
+        const ms = Math.floor((seconds - Math.floor(seconds)) * 100)
+        return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}:${String(ms).padStart(2, '0')}`
+      }
+
+      const displaySeconds = running ? elapsed : Number(localVal || 0)
+      const formatted = formatTime(displaySeconds)
+      const saveDisabled = !localVal || !currentPlayerId
+
+      const handleManualChange = (inputVal: string) => {
+        const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
+        setLocalVal(sanitized)
+        setValues(prev => ({ ...prev, [player.id]: { ...prev[player.id], value: sanitized } }))
+      }
+
+      if (!isTimeStation) {
+        return (
+          <div className="capture-panel__form-card capture-panel__form-card--single">
+            <label className="capture-panel__input-label">
+              Messwert {stationUnitLabel}
             </label>
-            {isTimeStation && (
-              <div className="flex flex-wrap items-center gap-3 mb-4">
-                {!running ? (
-                  <button className="btn" type="button" onClick={startStopwatch}>
-                    Start
-                  </button>
-                ) : (
-                  <button className="btn" type="button" onClick={stopStopwatch}>
-                    Stop
-                  </button>
-                )}
-                <span className="text-sm font-mono" style={{ minWidth: '60px' }}>
-                  {running ? elapsed.toFixed(2) : localVal || ''}
-                  {st.unit || 's'}
-                </span>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={resetStopwatch}
-                  disabled={running && !localVal}
-                >
-                  Reset
-                </button>
-              </div>
-            )}
-            {/* Eingabefeld für manuelle Eingabe oder zur Anzeige des gemessenen Werts */}
             <input
-              /* Eine größere Höhe (h-14) verbessert die Eingabe auf Mobilgeräten */
-              className="input h-14"
+              className="input capture-panel__input"
               type="tel"
               value={localVal}
-              onChange={e => {
-                const inputVal = e.target.value
-                const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
-                setLocalVal(sanitized)
-                setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: sanitized } }))
-              }}
+              onChange={e => handleManualChange(e.target.value)}
               onKeyDown={e => e.stopPropagation()}
               onKeyDownCapture={e => e.stopPropagation()}
               onKeyUp={e => e.stopPropagation()}
               onKeyPress={e => e.stopPropagation()}
-              placeholder={st.unit || 'Wert'}
+              placeholder={stationUnit || 'Wert'}
+            />
+            <div className="capture-panel__form-actions capture-panel__form-actions--inline">
+              <button
+                className="btn"
+                type="button"
+                onClick={() => handleSave(player)}
+                disabled={saveDisabled}
+              >
+                Speichern
+              </button>
+              {renderPdfButton()}
+            </div>
+          </div>
+        )
+      }
+
+      return (
+        <>
+          <div className="capture-panel__timer">
+            <div className="capture-panel__timer-display">{formatted}</div>
+            <div className={`capture-panel__timer-bar${running ? ' is-running' : ''}`} />
+          </div>
+          <div className="capture-panel__measurement-input">
+            <label className="capture-panel__input-label">
+              Messwert {stationUnit ? `(${stationUnit})` : '(s)'}
+            </label>
+            <input
+              className="input capture-panel__input"
+              type="tel"
+              value={localVal}
+              onChange={e => handleManualChange(e.target.value)}
+              onKeyDown={e => e.stopPropagation()}
+              onKeyDownCapture={e => e.stopPropagation()}
+              onKeyUp={e => e.stopPropagation()}
+              onKeyPress={e => e.stopPropagation()}
+              placeholder={stationUnit || 'Sekunden'}
             />
           </div>
+          <div className="capture-panel__buttons">
+            <button
+              className="btn"
+              type="button"
+              onClick={running ? stopStopwatch : startStopwatch}
+            >
+              {running ? 'STOP' : 'START/STOP'}
+            </button>
+            <button className="btn" type="button" onClick={resetStopwatch}>
+              RESET
+            </button>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => handleSave(player)}
+              disabled={saveDisabled}
+            >
+              SPEICHERN
+            </button>
+            {renderPdfButton()}
+          </div>
+        </>
+      )
+    }
+
+    let content: React.ReactNode
+    if (!player) {
+      content = (
+        <p className="capture-panel__hint">
+          Bitte Spieler*in auswählen, um Messwerte zu erfassen.
+        </p>
+      )
+    } else if (n.includes('passgenauigkeit')) {
+      content = <PassForm player={player} />
+    } else if (n.includes('schusspräzision')) {
+      content = <PrecisionForm player={player} />
+    } else {
+      content = <GenericForm player={player} />
+    }
+
+    return (
+      <section className="capture-panel">
+        <div className="capture-panel__header font-league">{heading}</div>
+        <div className="capture-panel__player">
+          <p className="capture-panel__player-label">SPIELER*IN WÄHLEN</p>
+          <p className="capture-panel__player-name">
+            {(player ? player.display_name : 'NAME').toUpperCase()}
+          </p>
+          <div className="capture-panel__player-select">
+            <select
+              className="input capture-panel__select"
+              value={currentPlayerId}
+              onChange={e => setCurrentPlayerId(e.target.value)}
+            >
+              <option value="">Bitte wählen…</option>
+              {players.map(pl => (
+                <option key={pl.id} value={pl.id}>
+                  {pl.display_name}
+                  {pl.fav_number ? ` #${pl.fav_number}` : ''}
+                  {pl.birth_year ? ` (${pl.birth_year})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="mt-4 text-right">
-          <button className="btn" onClick={() => saveOne(st, p)}>Speichern</button>
+        <div className="capture-panel__highscore">
+          <span>AKTUELLER HIGHSCORE:</span>
+          <span className="capture-panel__highscore-value">{highscoreDisplay}</span>
         </div>
-      </div>
+        {player && playerScore !== undefined && (
+          <div className="capture-panel__saved">Bisheriger Score: {playerScore}</div>
+        )}
+        {content}
+      </section>
     )
   }
 
@@ -916,8 +1069,6 @@ setProject(res.item||null)).catch(()=>setProject(null))
         <div className="hero-stack">
           <ProjectsSelect />
           <StationButtonRow />
-          <CsvStatusNote />
-          <PlayerPicker />
           <InputsForSelected />
         </div>
       </Hero>
