@@ -752,47 +752,4 @@ a, .btn {
   }
 }
 
-/* --- Mobile-Overrides: alle seitlichen Abstände auf 0px --- */
-@media (max-width: 640px) {
-  /* 1) Glass-Kachel (Capture Panel) */
-  .capture-panel {
-    /* zentriert & ohne seitliche Innenabstände */
-    margin-left: auto !important;
-    margin-right: auto !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
 
-    /* Safe-Area nur ohne Zusatzabstand */
-    padding-left: max(env(safe-area-inset-left), 0px) !important;
-    padding-right: max(env(safe-area-inset-right), 0px) !important;
-  }
-
-  /* 2) Stations-Grid-Wrapper */
-  .capture-stations {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-
-  /* 3) Schalen/Wrapper der Kachel (zur Sicherheit) */
-  .capture-panel-shell {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-    justify-content: center !important;
-  }
-
-  /* 4) Buttons-Container der Kachel */
-  .capture-panel__buttons {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-  }
-
-  /* 5) Runs-Container der Kachel */
-  .capture-panel__runs {
-    margin-left: auto !important;
-    margin-right: auto !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-}
