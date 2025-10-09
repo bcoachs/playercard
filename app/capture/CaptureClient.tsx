@@ -1,9 +1,11 @@
 'use client'
 
-import React, {useEffect, useMemo, useState} from 'react'
+import React, {useCallback, useEffect, useMemo, useState} from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 // BackFab wird hier ersetzt durch eine eigene Implementierung mit zusätzlicher Logik
 import Hero from '@/app/components/Hero'
+
+type CsvStatus = 'ok' | 'fail' | 'off' | 'loading'
 
 type Station = {
   id: string
@@ -20,6 +22,13 @@ type Player = {
   club?: string | null
   fav_number?: number | null
   fav_position?: string | null
+}
+
+type Measurement = {
+  id?: string
+  player_id: string
+  station_id: string
+  value: number | null
 }
 
 const ST_ORDER = ['Beweglichkeit','Technik','Passgenauigkeit','Schusskraft','Schusspräzision','Schnelligkeit']
@@ -74,6 +83,12 @@ function normScore(st: Station, raw: number){
  */
 
 // Flags aus Umgebungsvariablen lesen (standardmäßig aktiv)
+const USE_S1_CSV_CAPTURE = (() => {
+  const v = process.env.NEXT_PUBLIC_USE_S1_CSV
+  if (v === '0' || v === 'false') return false
+  return true
+})()
+
 const USE_S6_CSV_CAPTURE = (() => {
   const v = process.env.NEXT_PUBLIC_USE_S6_CSV
   if (v === '0' || v === 'false') return false
@@ -84,6 +99,46 @@ const USE_S4_CSV_CAPTURE = (() => {
   if (v === '0' || v === 'false') return false
   return true
 })()
+
+async function loadS1MapCapture(gender: 'male' | 'female'): Promise<Record<string, number[]> | null> {
+  const candidates = gender === 'male'
+    ? [
+        '/config/s1_male.csv',
+        '/config/S1_Beweglichkeit_m.csv',
+        '/config/s1_female.csv',
+        '/config/S1_Beweglichkeit_w.csv',
+        '/config/s1.csv',
+      ]
+    : ['/config/s1_female.csv', '/config/S1_Beweglichkeit_w.csv', '/config/s1.csv']
+  for (const file of candidates) {
+    try {
+      const res = await fetch(file, { cache: 'no-store' })
+      if (!res.ok) continue
+      const text = await res.text()
+      const lines = text
+        .split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(Boolean)
+      if (lines.length < 2) continue
+      const header = lines[0].split(';').map(s => s.trim())
+      const ageCols = header.slice(1)
+      const out: Record<string, number[]> = {}
+      for (const age of ageCols) out[age] = []
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(';').map(s => s.trim())
+        for (let c = 1; c < cols.length; c++) {
+          const age = ageCols[c - 1]
+          const sec = Number((cols[c] || '').replace(',', '.'))
+          if (Number.isFinite(sec)) out[age].push(sec)
+        }
+      }
+      if (Object.keys(out).length) return out
+    } catch {
+      // ignore and try next candidate
+    }
+  }
+  return null
+}
 
 async function loadS6MapCapture(gender: 'male' | 'female'): Promise<Record<string, number[]> | null> {
   try {
@@ -217,9 +272,12 @@ export default function CaptureClient(){
   // Werte pro Spieler (pro Station unterschiedlich aufgebaut)
   const [values, setValues] = useState<Record<string, any>>({}) // key = playerId
   const [saved, setSaved]   = useState<Record<string, number>>({}) // gespeicherter Score (zur Info)
+  const [measurements, setMeasurements] = useState<Measurement[]>([])
 
   // CSV Maps für S4/S6 (analog Dashboard). Wir laden sie einmalig, um im Capture die
   // gleichen Bewertungstabellen zu verwenden wie in der Spieler-Matrix.
+  const [s1FemaleMap, setS1FemaleMap] = useState<Record<string, number[]> | null>(null)
+  const [s1MaleMap, setS1MaleMap] = useState<Record<string, number[]> | null>(null)
   const [s6FemaleMap, setS6FemaleMap] = useState<Record<string, number[]> | null>(null)
   const [s6MaleMap, setS6MaleMap] = useState<Record<string, number[]> | null>(null)
   const [s4Map, setS4Map] = useState<Record<string, number[]> | null>(null)
@@ -255,6 +313,67 @@ setProject(res.item||null)).catch(()=>setProject(null))
   const currentIndex   = currentStation ? (ST_INDEX[currentStation.name] ?? 1) : 1
   const sketchHref     = `/station${currentIndex}.pdf`
 
+  const loadMeasurements = useCallback(async () => {
+    if (!projectId) {
+      setMeasurements([])
+      return
+    }
+    try {
+      const res = await fetch(`/api/projects/${projectId}/measurements`, { cache: 'no-store' })
+      const data = await res.json()
+      const items = Array.isArray(data.items) ? data.items : []
+      setMeasurements(items as Measurement[])
+    } catch {
+      // Messwerte sind optional – bei Fehlern behalten wir den aktuellen Stand bei.
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    loadMeasurements()
+  }, [loadMeasurements])
+
+  const stationHighscore = useMemo(() => {
+    if (!selected) return null
+    const st = stations.find(s => s.id === selected)
+    if (!st) return null
+    let best: number | null = null
+    for (const m of measurements) {
+      if (m.station_id !== selected) continue
+      const raw = Number(m.value)
+      if (!Number.isFinite(raw)) continue
+      const player = players.find(pl => pl.id === m.player_id)
+      if (!player) continue
+      const score = scoreFor(st, player, raw)
+      if (!Number.isFinite(score)) continue
+      best = best === null ? score : Math.max(best, score)
+    }
+    return best
+  }, [measurements, selected, stations, players])
+
+  useEffect(() => {
+    if (!selected || !currentPlayerId) return
+    const measurement = measurements.find(
+      m => m.station_id === selected && m.player_id === currentPlayerId
+    )
+    if (!measurement || !Number.isFinite(Number(measurement.value))) {
+      setSaved(prev => {
+        if (!(currentPlayerId in prev)) return prev
+        const copy = { ...prev }
+        delete copy[currentPlayerId]
+        return copy
+      })
+      return
+    }
+    const st = stations.find(s => s.id === selected)
+    const p = players.find(pl => pl.id === currentPlayerId)
+    if (!st || !p) return
+    const score = scoreFor(st, p, Number(measurement.value))
+    setSaved(prev => {
+      if (prev[currentPlayerId] === score) return prev
+      return { ...prev, [currentPlayerId]: score }
+    })
+  }, [measurements, selected, currentPlayerId, stations, players])
+
   /* Helfer */
   function resolveAge(by: number|null){
     const eventYear = project?.date ? Number(String(project.date).slice(0,4)) : new Date().getFullYear()
@@ -289,6 +408,22 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
   function scoreFor(st: Station, p: Player, raw: number){
     const n = (st.name || '').toLowerCase()
+    if (n.includes('beweglichkeit')) {
+      if (USE_S1_CSV_CAPTURE) {
+        const map = p.gender === 'male' ? s1MaleMap : s1FemaleMap
+        if (map) {
+          const keys = Object.keys(map)
+          if (keys.length) {
+            const age = resolveAge(p.birth_year)
+            const bucket = nearestAgeBucketCapture(age, keys)
+            const rows = map[bucket] || []
+            if (rows.length) return scoreFromTimeStepCapture(Number(raw), rows)
+          }
+        }
+      }
+      return normScore(st, raw)
+    }
+
     // Sonderfall Schnelligkeit (S6): zuerst CSV schauen, sonst Fallback (4–20 s)
     if (n.includes('schnelligkeit')) {
       if (USE_S6_CSV_CAPTURE) {
@@ -351,55 +486,46 @@ setProject(res.item||null)).catch(()=>setProject(null))
     // Score für Anzeige berechnen: identisch zur Matrix-Logik (inklusive CSV-Auswertung)
     const score = scoreFor(st, p, raw)
     setSaved(prev => ({ ...prev, [p.id]: score }))
+    await loadMeasurements()
     alert('Gespeichert.')
   }
 
-  /* Messungen laden und Score setzen, wenn Spieler/Station gewechselt */
-  useEffect(() => {
-    if (!projectId || !selected || !currentPlayerId) return
-    // Alle Messungen dieses Projekts laden, passendes Measurement für Spieler/Station suchen
-    fetch(`/api/projects/${projectId}/measurements`, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(res => {
-        const items = res.items || []
-        const m = items.find((m: any) => m.player_id === currentPlayerId && m.station_id === selected)
-        if (m && typeof m.value === 'number') {
-          const rawVal = Number(m.value)
-          const st = stations.find(s => s.id === selected)
-          const p = players.find(pl => pl.id === currentPlayerId)
-          if (st && p) {
-            const sc = scoreFor(st, p, rawVal)
-            setSaved(prev => ({ ...prev, [currentPlayerId]: sc }))
-          }
-        } else {
-          // Keine Messung vorhanden → gespeicherten Score entfernen
-          setSaved(prev => {
-            const copy: Record<string, number> = { ...prev }
-            delete copy[currentPlayerId]
-            return copy
-          })
-        }
-      })
-      .catch(() => {})
-  }, [projectId, selected, currentPlayerId, stations])
-
   // CSV Maps laden (nur einmal). Bei Fehler bleibt Map null → Fallback in Score.
   useEffect(() => {
+    if (USE_S1_CSV_CAPTURE) {
+      Promise.allSettled([loadS1MapCapture('female'), loadS1MapCapture('male')]).then(([f, m]) => {
+        if (f.status === 'fulfilled' && f.value) {
+          setS1FemaleMap(f.value as Record<string, number[]>)
+        }
+        if (m.status === 'fulfilled' && m.value) {
+          setS1MaleMap(m.value as Record<string, number[]>)
+        }
+      })
+    }
+
     if (USE_S6_CSV_CAPTURE) {
       // beide Gender parallel laden
       Promise.allSettled([loadS6MapCapture('female'), loadS6MapCapture('male')]).then(([f, m]) => {
-        if (f.status === 'fulfilled' && f.value) setS6FemaleMap(f.value)
-        if (m.status === 'fulfilled' && m.value) setS6MaleMap(m.value)
+        if (f.status === 'fulfilled' && f.value) {
+          setS6FemaleMap(f.value as Record<string, number[]>)
+        }
+        if (m.status === 'fulfilled' && m.value) {
+          setS6MaleMap(m.value as Record<string, number[]>)
+        }
       })
     }
+
     if (USE_S4_CSV_CAPTURE) {
       loadS4MapCapture().then(map => {
-        if (map) setS4Map(map)
+        if (map) {
+          setS4Map(map)
+        }
       })
     }
   }, [])
 
   /* UI-Bausteine */
+
   function ProjectsSelect(){
     if (qProject) return null
     return (
@@ -417,63 +543,54 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
 
   function StationButtonRow() {
-  if (!stations.length) return null
+    if (!stations.length) return null
 
-  // Stufe 2: Wenn eine Station gewählt ist, nur diese anzeigen – sonst alle
-  const visibleStations = selected
-    ? stations.filter(s => s.id === selected)
-    : stations
+    const base = selected ? stations.filter(s => s.id === selected) : stations
+    const ordered = base.slice().sort((a, b) => {
+      const ia = ST_INDEX[a.name] ?? 99
+      const ib = ST_INDEX[b.name] ?? 99
+      if (ia !== ib) return ia - ib
+      return a.name.localeCompare(b.name, 'de')
+    })
 
-  return (
-    // Outer grid: zentriert, mit Abstand zwischen Zeilen
-    <div className="w-fit mx-auto grid grid-cols-1 sm:grid-cols-2 gap-8">
-      {visibleStations.map((s) => (
-        // Zeilen-Container: Buttons/Icons zentriert + Abstand
-        <div key={s.id} className="flex items-center justify-center gap-8">
+    if (!ordered.length) return null
 
-          {/* Hauptbutton für die Station */}
-          <button
-            className="btn pill btn-lg btn--wide"
-            onClick={() => {
-              setSelected(s.id)
-              setCurrentPlayerId('')
-              router.replace(
-                projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`
-              )
-            }}
-            style={s.id === selected ? { filter: 'brightness(1.12)' } : {}}
-          >
-            {`S${ST_INDEX[s.name] ?? '?' } - ${s.name}`}
-          </button>
+    return (
+      <div className="capture-stations">
+        {ordered.map(s => {
+          const idx = ST_INDEX[s.name]
+          const displayIdx = idx ?? '?'
+          const hrefIdx = idx ?? 1
+          const href = `/station${hrefIdx}.pdf`
+          const label = `S${displayIdx} - Stationsskizze`
 
-          {/* Lange Stationsskizzen-Schaltfläche ab sm (≥640px) */}
-          <a
-            className="hidden sm:flex btn pill btn-lg btn--wide items-center justify-center"
-            href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {`S${ST_INDEX[s.name] ?? '?' } - Stationsskizze`}
-          </a>
-
-          {/* Rundes PDF-Icon unter sm */}
-          <a
-            className="flex sm:hidden items-center justify-center btn pill btn-sm rounded-full p-0"
-            style={{ width: 'var(--btn-wide-height)', height: 'var(--btn-wide-height)' }}
-            href={`/station${ST_INDEX[s.name] ?? 1}.pdf`}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Stationsskizze S${ST_INDEX[s.name] ?? '?'}`}
-          >
-            📄
-          </a>
-        </div>
-      ))}
-    </div>
-  )
-}
-              
-             
+          return (
+            <div key={s.id} className="capture-stations__row">
+              <button
+                className="btn capture-stations__station-button"
+                onClick={() => {
+                  setSelected(s.id)
+                  setCurrentPlayerId('')
+                  router.replace(
+                    projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`
+                  )
+                }}
+                style={s.id === selected ? { filter: 'brightness(1.12)' } : {}}
+              >
+                {`S${displayIdx} - ${s.name}`}
+              </button>
+              <a
+                className="btn btn-icon capture-stations__sketch-button"
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={label}
+              >
+                <span className="btn-icon__label">{label}</span>
+                <span className="btn-icon__icon" aria-hidden>
+                  📄
+                </span>
+              </a>
             </div>
           )
         })}
@@ -481,116 +598,135 @@ setProject(res.item||null)).catch(()=>setProject(null))
     )
   }
 
-  function PlayerPicker(){
-    if (!currentStation) return null
-    return (
-      <div className="card glass w-full max-w-3xl mx-auto">
-        <label className="block text-sm font-semibold mb-2">Spieler*in wählen</label>
-        {/*
-          Das Dropdown für die Spieler*innen-Auswahl erhält eine größere Höhe
-          für bessere Bedienbarkeit auf dem Handy. */}
-        <select className="input h-14" value={currentPlayerId} onChange={e=> setCurrentPlayerId(e.target.value)}>
-          <option value="">Bitte wählen…</option>
-          {players.map(p=>(<option key={p.id} value={p.id}>
-            {p.display_name}{p.fav_number?` #${p.fav_number}`:''}{p.birth_year?` (${p.birth_year})`:''}
-          </option>))}
-        </select>
-      </div>
-    )
-  }
-
   function InputsForSelected(){
-    const st = currentStation
-    const p = players.find(x=>x.id===currentPlayerId)
-    if (!st || !p) return null
-    const n = st.name.toLowerCase()
-    const v = values[p.id] || {}
-    
-    if (n.includes('passgenauigkeit')){
-      const h10=v.h10??0, h14=v.h14??0, h18=v.h18??0
+    const station = currentStation
+    if (!station) return null
+
+    const stationUnit = station.unit || ''
+    const stationUnitLabel = stationUnit ? `(${stationUnit})` : ''
+
+    const handleSave = (target: Player) => {
+      void saveOne(station, target)
+    }
+
+    const n = station.name.toLowerCase()
+    const displayIdx = ST_INDEX[station.name] ?? '?'
+    const heading = `S${displayIdx} - ${station.name}`.toUpperCase()
+    const player = players.find(x => x.id === currentPlayerId) || null
+    const playerScore = player ? saved[player.id] : undefined
+    const highscoreDisplay = stationHighscore !== null
+      ? String(stationHighscore).padStart(3, '0')
+      : '###'
+    const sketchLabel = `S${displayIdx} - Stationsskizze`
+
+    const renderPdfButton = () => (
+      <a
+        className="btn btn-icon capture-panel__pdf-button"
+        href={sketchHref}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={sketchLabel}
+      >
+        <span className="btn-icon__label">PDF</span>
+        <span className="btn-icon__icon" aria-hidden>
+          📄
+        </span>
+      </a>
+    )
+
+    function PassForm({ player }: { player: Player }) {
+      const v = values[player.id] || {}
+      const h10 = v.h10 ?? 0
+      const h14 = v.h14 ?? 0
+      const h18 = v.h18 ?? 0
+
       return (
-        <div className="card glass w-full max-w-3xl mx-auto">
-          {/* Score anzeigen, falls vorhanden */}
-          {saved[p.id]!==undefined && (
-            <div className="mb-2 text-sm">Bisheriger Score: {saved[p.id]}</div>
-          )}
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold mb-1">10 m (0–3)</label>
-                   <input
-                     className="input"
-                     type="number"
-                     min={0}
-                     max={3}
-                     value={h10}
-                     onChange={e => setValues(prev => ({
-                       ...prev,
-                       [p.id]: { ...prev[p.id], h10: Number(e.target.value) },
-                     }))}
-                     // stop key events in both capture and bubble phase so that global hotkeys do not interfere
-                     onKeyDown={e => e.stopPropagation()}
-                     onKeyDownCapture={e => e.stopPropagation()}
-                     onKeyUp={e => e.stopPropagation()}
-                     onKeyPress={e => e.stopPropagation()}
-                   />
+        <div className="capture-panel__form-card">
+          <div className="capture-panel__inputs-grid capture-panel__inputs-grid--thirds">
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">10 m (0–3)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={3}
+                value={h10}
+                onChange={e =>
+                  setValues(prev => ({
+                    ...prev,
+                    [player.id]: { ...prev[player.id], h10: Number(e.target.value) },
+                  }))
+                }
+                onKeyDown={e => e.stopPropagation()}
+                onKeyDownCapture={e => e.stopPropagation()}
+                onKeyUp={e => e.stopPropagation()}
+                onKeyPress={e => e.stopPropagation()}
+              />
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">14 m (0–2)</label>
-                   <input
-                     className="input"
-                     type="number"
-                     min={0}
-                     max={2}
-                     value={h14}
-                     onChange={e => setValues(prev => ({
-                       ...prev,
-                       [p.id]: { ...prev[p.id], h14: Number(e.target.value) },
-                     }))}
-                     onKeyDown={e => e.stopPropagation()}
-                     onKeyDownCapture={e => e.stopPropagation()}
-                     onKeyUp={e => e.stopPropagation()}
-                     onKeyPress={e => e.stopPropagation()}
-                   />
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">14 m (0–2)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={2}
+                value={h14}
+                onChange={e =>
+                  setValues(prev => ({
+                    ...prev,
+                    [player.id]: { ...prev[player.id], h14: Number(e.target.value) },
+                  }))
+                }
+                onKeyDown={e => e.stopPropagation()}
+                onKeyDownCapture={e => e.stopPropagation()}
+                onKeyUp={e => e.stopPropagation()}
+                onKeyPress={e => e.stopPropagation()}
+              />
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">18 m (0–1)</label>
-                   <input
-                     className="input"
-                     type="number"
-                     min={0}
-                     max={1}
-                     value={h18}
-                     onChange={e => setValues(prev => ({
-                       ...prev,
-                       [p.id]: { ...prev[p.id], h18: Number(e.target.value) },
-                     }))}
-                     onKeyDown={e => e.stopPropagation()}
-                     onKeyDownCapture={e => e.stopPropagation()}
-                     onKeyUp={e => e.stopPropagation()}
-                     onKeyPress={e => e.stopPropagation()}
-                   />
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">18 m (0–1)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={1}
+                value={h18}
+                onChange={e =>
+                  setValues(prev => ({
+                    ...prev,
+                    [player.id]: { ...prev[player.id], h18: Number(e.target.value) },
+                  }))
+                }
+                onKeyDown={e => e.stopPropagation()}
+                onKeyDownCapture={e => e.stopPropagation()}
+                onKeyUp={e => e.stopPropagation()}
+                onKeyPress={e => e.stopPropagation()}
+              />
             </div>
           </div>
-          <div className="mt-4 text-right">
-            {/* Verwende die zentrale btn-lg Klasse für größere Buttons */}
-            <button className="btn pill btn-lg" onClick={()=>saveOne(st, p)}>Speichern</button>
+          <div className="capture-panel__form-actions">
+            <button className="btn" type="button" onClick={() => handleSave(player)}>
+              Speichern
+            </button>
+            {renderPdfButton()}
           </div>
         </div>
       )
     }
 
-    if (n.includes('schusspräzision')){
-      const ul=v.ul??0, ur=v.ur??0, ll=v.ll??0, lr=v.lr??0
+    function PrecisionForm({ player }: { player: Player }) {
+      const v = values[player.id] || {}
+      const ul = v.ul ?? 0
+      const ur = v.ur ?? 0
+      const ll = v.ll ?? 0
+      const lr = v.lr ?? 0
+
       return (
-        <div className="card glass w-full max-w-3xl mx-auto">
-          {/* Score anzeigen, falls vorhanden */}
-          {saved[p.id]!==undefined && (
-            <div className="mb-2 text-sm">Bisheriger Score: {saved[p.id]}</div>
-          )}
-          <div className="grid grid-cols-4 gap-3">
-            <div>
-              <label className="block text-xs font-semibold mb-1">oben L (0–3)</label>
-                   <input
+        <div className="capture-panel__form-card">
+          <div className="capture-panel__inputs-grid capture-panel__inputs-grid--quarters">
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">oben L (0–3)</label>
+              <input
                 className="input"
                 type="number"
                 min={0}
@@ -599,7 +735,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onChange={e =>
                   setValues(prev => ({
                     ...prev,
-                    [p.id]: { ...prev[p.id], ul: Number(e.target.value) },
+                    [player.id]: { ...prev[player.id], ul: Number(e.target.value) },
                   }))
                 }
                 onKeyDown={e => e.stopPropagation()}
@@ -608,9 +744,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onKeyPress={e => e.stopPropagation()}
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">oben R (0–3)</label>
-                   <input
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">oben R (0–3)</label>
+              <input
                 className="input"
                 type="number"
                 min={0}
@@ -619,7 +755,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onChange={e =>
                   setValues(prev => ({
                     ...prev,
-                    [p.id]: { ...prev[p.id], ur: Number(e.target.value) },
+                    [player.id]: { ...prev[player.id], ur: Number(e.target.value) },
                   }))
                 }
                 onKeyDown={e => e.stopPropagation()}
@@ -628,9 +764,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onKeyPress={e => e.stopPropagation()}
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">unten L (0–3)</label>
-                   <input
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">unten L (0–3)</label>
+              <input
                 className="input"
                 type="number"
                 min={0}
@@ -639,7 +775,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onChange={e =>
                   setValues(prev => ({
                     ...prev,
-                    [p.id]: { ...prev[p.id], ll: Number(e.target.value) },
+                    [player.id]: { ...prev[player.id], ll: Number(e.target.value) },
                   }))
                 }
                 onKeyDown={e => e.stopPropagation()}
@@ -648,9 +784,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onKeyPress={e => e.stopPropagation()}
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">unten R (0–3)</label>
-                   <input
+            <div className="capture-panel__input-group">
+              <label className="capture-panel__input-label">unten R (0–3)</label>
+              <input
                 className="input"
                 type="number"
                 min={0}
@@ -659,7 +795,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 onChange={e =>
                   setValues(prev => ({
                     ...prev,
-                    [p.id]: { ...prev[p.id], lr: Number(e.target.value) },
+                    [player.id]: { ...prev[player.id], lr: Number(e.target.value) },
                   }))
                 }
                 onKeyDown={e => e.stopPropagation()}
@@ -669,124 +805,216 @@ setProject(res.item||null)).catch(()=>setProject(null))
               />
             </div>
           </div>
-          <div className="mt-4 text-right">
-            {/* Verwende die zentrale btn-lg Klasse für größere Buttons */}
-            <button className="btn pill btn-lg" onClick={()=>saveOne(st, p)}>Speichern</button>
+          <div className="capture-panel__form-actions">
+            <button className="btn" type="button" onClick={() => handleSave(player)}>
+              Speichern
+            </button>
+            {renderPdfButton()}
           </div>
         </div>
       )
     }
 
-    // Generische Messung (z.B. Schusskraft, Schnelligkeit Fallback) oder zeitbasierte Stationen.
-    const val = v.value ?? ''
-    // Zeitstationen: Beweglichkeit (S1), Technik (S2), Schnelligkeit (S6) → Stoppuhr nutzen
-    const isTimeStation = n.includes('beweglichkeit') || n.includes('technik') || n.includes('schnelligkeit')
-    // Lokaler Zustand für das Eingabefeld / Stoppuhr
-    const [localVal, setLocalVal] = React.useState<string>(val)
-    const [stopwatchStart, setStopwatchStart] = React.useState<number | null>(null)
-    const [elapsed, setElapsed] = React.useState<number>(0)
-    const [timerId, setTimerId] = React.useState<any>(null)
-    const running = stopwatchStart !== null
-    // synchronisiere lokalen Wert, wenn externe Messung geändert wird
-    React.useEffect(() => {
-      setLocalVal(val)
-    }, [val])
-    // cleanup bei unmount/wechsel
-    React.useEffect(() => {
-      return () => {
-        if (timerId) clearInterval(timerId)
+    function GenericForm({ player }: { player: Player }) {
+      const v = values[player.id] || {}
+      const val = v.value ?? ''
+      const isTimeStation =
+        n.includes('beweglichkeit') || n.includes('technik') || n.includes('schnelligkeit')
+
+      const [localVal, setLocalVal] = React.useState<string>(val)
+      const [stopwatchStart, setStopwatchStart] = React.useState<number | null>(null)
+      const [elapsed, setElapsed] = React.useState<number>(0)
+      const [timerId, setTimerId] = React.useState<ReturnType<typeof setInterval> | null>(null)
+      const running = stopwatchStart !== null
+
+      React.useEffect(() => {
+        setLocalVal(val)
+      }, [val])
+
+      React.useEffect(() => {
+        return () => {
+          if (timerId) clearInterval(timerId)
+        }
+      }, [timerId])
+
+      const startStopwatch = () => {
+        if (running) return
+        const start = Date.now()
+        setStopwatchStart(start)
+        const id = setInterval(() => {
+          const now = Date.now()
+          setElapsed((now - start) / 1000)
+        }, 50)
+        setTimerId(id)
       }
-    }, [timerId])
-    const startStopwatch = () => {
-      if (running) return
-      const start = Date.now()
-      setStopwatchStart(start)
-      const id = setInterval(() => {
-        const now = Date.now()
-        const diff = (now - start) / 1000
-        setElapsed(diff)
-      }, 100)
-      setTimerId(id)
-    }
-    const stopStopwatch = () => {
-      if (!running) return
-      if (timerId) clearInterval(timerId)
-      const finalVal = (Date.now() - (stopwatchStart || Date.now())) / 1000
-      const valStr = finalVal.toFixed(2)
-      setStopwatchStart(null)
-      setElapsed(finalVal)
-      setLocalVal(valStr)
-      // Wert auch im globalen State aktualisieren
-      setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: valStr } }))
-    }
-    const resetStopwatch = () => {
-      if (timerId) clearInterval(timerId)
-      setStopwatchStart(null)
-      setElapsed(0)
-      setLocalVal('')
-      setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: '' } }))
-    }
-    return (
-      <div className="card glass w-full max-w-3xl mx-auto">
-        {/* Score anzeigen, falls vorhanden */}
-        {saved[p.id] !== undefined && (
-          <div className="mb-2 text-sm">Bisheriger Score: {saved[p.id]}</div>
-        )}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold mb-1">
-              Messwert {st.unit ? `(${st.unit})` : ''}
+
+      const stopStopwatch = () => {
+        if (!running) return
+        if (timerId) clearInterval(timerId)
+        const finalVal = (Date.now() - (stopwatchStart || Date.now())) / 1000
+        const valStr = finalVal.toFixed(2)
+        setStopwatchStart(null)
+        setElapsed(finalVal)
+        setTimerId(null)
+        setLocalVal(valStr)
+        setValues(prev => ({ ...prev, [player.id]: { ...prev[player.id], value: valStr } }))
+      }
+
+      const resetStopwatch = () => {
+        if (timerId) clearInterval(timerId)
+        setStopwatchStart(null)
+        setElapsed(0)
+        setTimerId(null)
+        setLocalVal('')
+        setValues(prev => ({ ...prev, [player.id]: { ...prev[player.id], value: '' } }))
+      }
+
+      const formatTime = (seconds: number) => {
+        if (!Number.isFinite(seconds) || seconds < 0) seconds = 0
+        const mm = Math.floor(seconds / 60)
+        const ss = Math.floor(seconds % 60)
+        const ms = Math.floor((seconds - Math.floor(seconds)) * 100)
+        return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}:${String(ms).padStart(2, '0')}`
+      }
+
+      const displaySeconds = running ? elapsed : Number(localVal || 0)
+      const formatted = formatTime(displaySeconds)
+      const saveDisabled = !localVal || !currentPlayerId
+
+      const handleManualChange = (inputVal: string) => {
+        const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
+        setLocalVal(sanitized)
+        setValues(prev => ({ ...prev, [player.id]: { ...prev[player.id], value: sanitized } }))
+      }
+
+      if (!isTimeStation) {
+        return (
+          <div className="capture-panel__form-card capture-panel__form-card--single">
+            <label className="capture-panel__input-label">
+              Messwert {stationUnitLabel}
             </label>
-            {isTimeStation && (
-              <div className="flex items-center gap-2 mb-2">
-                {!running ? (
-                  <button className="btn pill btn-lg" type="button" onClick={startStopwatch}>
-                    Start
-                  </button>
-                ) : (
-                  <button className="btn pill btn-lg" type="button" onClick={stopStopwatch}>
-                    Stop
-                  </button>
-                )}
-                <span className="text-sm font-mono" style={{ minWidth: '60px' }}>
-                  {running ? elapsed.toFixed(2) : localVal || ''}
-                  {st.unit || 's'}
-                </span>
-                <button
-                  className="btn pill btn-lg"
-                  type="button"
-                  onClick={resetStopwatch}
-                  disabled={running && !localVal}
-                >
-                  Reset
-                </button>
-              </div>
-            )}
-            {/* Eingabefeld für manuelle Eingabe oder zur Anzeige des gemessenen Werts */}
             <input
-              /* Eine größere Höhe (h-14) verbessert die Eingabe auf Mobilgeräten */
-              className="input h-14"
+              className="input capture-panel__input"
               type="tel"
               value={localVal}
-              onChange={e => {
-                const inputVal = e.target.value
-                const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
-                setLocalVal(sanitized)
-                setValues(prev => ({ ...prev, [p.id]: { ...prev[p.id], value: sanitized } }))
-              }}
+              onChange={e => handleManualChange(e.target.value)}
               onKeyDown={e => e.stopPropagation()}
               onKeyDownCapture={e => e.stopPropagation()}
               onKeyUp={e => e.stopPropagation()}
               onKeyPress={e => e.stopPropagation()}
-              placeholder={st.unit || 'Wert'}
+              placeholder={stationUnit || 'Wert'}
+            />
+            <div className="capture-panel__form-actions capture-panel__form-actions--inline">
+              <button
+                className="btn"
+                type="button"
+                onClick={() => handleSave(player)}
+                disabled={saveDisabled}
+              >
+                Speichern
+              </button>
+              {renderPdfButton()}
+            </div>
+          </div>
+        )
+      }
+
+      return (
+        <>
+          <div className="capture-panel__timer">
+            <div className="capture-panel__timer-display">{formatted}</div>
+            <div className={`capture-panel__timer-bar${running ? ' is-running' : ''}`} />
+          </div>
+          <div className="capture-panel__measurement-input">
+            <label className="capture-panel__input-label">
+              Messwert {stationUnit ? `(${stationUnit})` : '(s)'}
+            </label>
+            <input
+              className="input capture-panel__input"
+              type="tel"
+              value={localVal}
+              onChange={e => handleManualChange(e.target.value)}
+              onKeyDown={e => e.stopPropagation()}
+              onKeyDownCapture={e => e.stopPropagation()}
+              onKeyUp={e => e.stopPropagation()}
+              onKeyPress={e => e.stopPropagation()}
+              placeholder={stationUnit || 'Sekunden'}
             />
           </div>
+          <div className="capture-panel__buttons">
+            <button
+              className="btn"
+              type="button"
+              onClick={running ? stopStopwatch : startStopwatch}
+            >
+              {running ? 'STOP' : 'START/STOP'}
+            </button>
+            <button className="btn" type="button" onClick={resetStopwatch}>
+              RESET
+            </button>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => handleSave(player)}
+              disabled={saveDisabled}
+            >
+              SPEICHERN
+            </button>
+            {renderPdfButton()}
+          </div>
+        </>
+      )
+    }
+
+    let content: React.ReactNode
+    if (!player) {
+      content = (
+        <p className="capture-panel__hint">
+          Bitte Spieler*in auswählen, um Messwerte zu erfassen.
+        </p>
+      )
+    } else if (n.includes('passgenauigkeit')) {
+      content = <PassForm player={player} />
+    } else if (n.includes('schusspräzision')) {
+      content = <PrecisionForm player={player} />
+    } else {
+      content = <GenericForm player={player} />
+    }
+
+    return (
+      <section className="capture-panel">
+        <div className="capture-panel__header font-league">{heading}</div>
+        <div className="capture-panel__player">
+          <p className="capture-panel__player-label">SPIELER*IN WÄHLEN</p>
+          <p className="capture-panel__player-name">
+            {(player ? player.display_name : 'NAME').toUpperCase()}
+          </p>
+          <div className="capture-panel__player-select">
+            <select
+              className="input capture-panel__select"
+              value={currentPlayerId}
+              onChange={e => setCurrentPlayerId(e.target.value)}
+            >
+              <option value="">Bitte wählen…</option>
+              {players.map(pl => (
+                <option key={pl.id} value={pl.id}>
+                  {pl.display_name}
+                  {pl.fav_number ? ` #${pl.fav_number}` : ''}
+                  {pl.birth_year ? ` (${pl.birth_year})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="mt-4 text-right">
-          {/* Verwende die zentrale btn-lg Klasse für größere Buttons */}
-          <button className="btn pill btn-lg" onClick={() => saveOne(st, p)}>Speichern</button>
+        <div className="capture-panel__highscore">
+          <span>AKTUELLER HIGHSCORE:</span>
+          <span className="capture-panel__highscore-value">{highscoreDisplay}</span>
         </div>
-      </div>
+        {player && playerScore !== undefined && (
+          <div className="capture-panel__saved">Bisheriger Score: {playerScore}</div>
+        )}
+        {content}
+      </section>
     )
   }
 
@@ -796,25 +1024,25 @@ setProject(res.item||null)).catch(()=>setProject(null))
    * springt der Button zur vorherigen Seite zurück.
    */
   function CaptureBackFab(){
-    return (
-      <button
-        onClick={() => {
-          if (selected) {
-            // Station abwählen → alle Stationen wieder anzeigen
-            setSelected('')
-            setCurrentPlayerId('')
-            if (projectId) router.replace(`?project=${projectId}`)
-            else router.replace('')
-          } else {
-            // Keine Station gewählt → zurück zur vorherigen Seite
-            router.back()
-          }
-        }}
-        style={{ position: 'fixed', right: '16px', bottom: '16px', zIndex: 9999 }}
-        className="btn pill btn-sm"
-        aria-label="Zurück"
-        title="Zurück"
-      >
+      return (
+        <button
+          onClick={() => {
+            if (selected) {
+              // Station abwählen → alle Stationen wieder anzeigen
+              setSelected('')
+              setCurrentPlayerId('')
+              if (projectId) router.replace(`?project=${projectId}`)
+              else router.replace('')
+            } else {
+              // Keine Station gewählt → zurück zur vorherigen Seite
+              router.back()
+            }
+          }}
+          style={{ position: 'fixed', right: '16px', bottom: '16px', zIndex: 9999 }}
+          className="btn btn-back"
+          aria-label="Zurück"
+          title="Zurück"
+        >
         ← Zurück
       </button>
     )
@@ -830,10 +1058,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
           space-y-6 definiert. Die page-pad-Klasse wird entfernt, damit der
           Inhalt durch das Hero-Grid vertikal zentriert bleibt.
         */}
-        <div className="flex flex-col items-center space-y-6 w-full px-4">
+        <div className="hero-stack">
           <ProjectsSelect />
           <StationButtonRow />
-          <PlayerPicker />
           <InputsForSelected />
         </div>
       </Hero>
