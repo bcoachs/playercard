@@ -38,6 +38,8 @@ export default function Hero({
     }
   }, [])
 
+  const showTitle = typeof title === 'string' && title.trim().length > 0
+
   return (
     <section
       className={`hero-shell ${align === 'top' ? 'hero-shell--top' : ''}`}
@@ -63,7 +65,9 @@ export default function Hero({
       <div
         className={`hero-inner ${align === 'top' ? 'hero-inner--top' : ''}`}
       >
-        <h1 className="hero-text hero-title font-league">{title}</h1>
+        {showTitle && (
+          <h1 className="hero-text hero-title font-league">{title}</h1>
+        )}
         {subtitle && (
           <p className={`hero-sub hero-subtitle ${align === 'top' ? 'hero-subtitle--left' : ''}`}>
             {subtitle}

@@ -36,6 +36,8 @@ const ST_INDEX: Record<string, number> = {
   'Beweglichkeit': 1, 'Technik': 2, 'Passgenauigkeit': 3, 'Schusskraft': 4, 'Schusspräzision': 5, 'Schnelligkeit': 6
 }
 
+const RUNS_COUNT = 3
+
 /** Standard-Normierung (Fallback, wenn keine CSV) */
 function normScore(st: Station, raw: number){
   const n = (st.name||'').toLowerCase()
@@ -410,6 +412,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
       ? v.runs
           .map((entry: unknown) => Number(entry))
           .filter((entry: number) => Number.isFinite(entry))
+          .slice(-RUNS_COUNT)
       : []
     if (runs.length) {
       return Math.min(...runs)
@@ -572,8 +575,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
   function StationButtonRow() {
     if (!stations.length) return null
 
-    const base = selected ? stations.filter(s => s.id === selected) : stations
-    const ordered = base.slice().sort((a, b) => {
+    if (selected) return null
+
+    const ordered = stations.slice().sort((a, b) => {
       const ia = ST_INDEX[a.name] ?? 99
       const ib = ST_INDEX[b.name] ?? 99
       if (ia !== ib) return ia - ib
@@ -608,28 +612,18 @@ setProject(res.item||null)).catch(()=>setProject(null))
               >
                 {`S${displayIdx} - ${s.name}`}
               </button>
-              {currentPlayerId ? (
-                <button
-                  type="button"
-                  className="btn capture-stations__switch-button"
-                  onClick={handleSelectStation}
-                >
-                  Spielerwechsel
-                </button>
-              ) : (
-                <a
-                  className="btn btn-icon capture-stations__sketch-button"
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={sketchLabel}
-                >
-                  <span className="btn-icon__label">{sketchLabel}</span>
-                  <span className="btn-icon__icon" aria-hidden>
-                    📄
-                  </span>
-                </a>
-              )}
+              <a
+                className="btn btn-icon capture-stations__sketch-button"
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={sketchLabel}
+              >
+                <span className="btn-icon__label">{sketchLabel}</span>
+                <span className="btn-icon__icon" aria-hidden>
+                  📄
+                </span>
+              </a>
             </div>
           )
         })}
@@ -660,6 +654,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
     const playerRuns = rawRuns
       .map((entry: unknown) => Number(entry))
       .filter((entry: number) => Number.isFinite(entry))
+      .slice(-RUNS_COUNT)
     const runScores = player && playerRuns.length
       ? playerRuns.map(run => scoreFor(station, player, run))
       : []
@@ -681,9 +676,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
       lastRunScore !== undefined ? String(lastRunScore).padStart(3, '0') : null
     const sketchLabel = `S${displayIdx}-Skizze`
 
-    const renderPdfButton = () => (
+    const renderPdfButton = (extraClass = '') => (
       <a
-        className="btn btn-icon capture-panel__pdf-button"
+        className={`btn btn-icon capture-panel__pdf-button${extraClass ? ` ${extraClass}` : ''}`}
         href={sketchHref}
         target="_blank"
         rel="noreferrer"
@@ -847,26 +842,47 @@ setProject(res.item||null)).catch(()=>setProject(null))
       const val = v.value ?? ''
       const isTimeStation =
         n.includes('beweglichkeit') || n.includes('technik') || n.includes('schnelligkeit')
-      const storedRuns = Array.isArray(v.runs)
-        ? (v.runs as unknown[])
-            .map(entry => Number(entry))
-            .filter(entry => Number.isFinite(entry))
-        : []
+      const storedRuns = React.useMemo(() => {
+        if (!Array.isArray(v.runs)) return []
+        return (v.runs as unknown[])
+          .map(entry => Number(entry))
+          .filter(entry => Number.isFinite(entry))
+          .slice(-RUNS_COUNT)
+      }, [v.runs])
+      const measurementRun = React.useMemo(() => {
+        if (!isTimeStation) return null
+        const entry = measurements.find(
+          m => m.station_id === station.id && m.player_id === player.id
+        )
+        if (!entry) return null
+        const numeric = Number(String(entry.value ?? '').replace(',', '.'))
+        return Number.isFinite(numeric) ? numeric : null
+      }, [isTimeStation, measurements, player.id, station.id])
+      const normalizedRuns = React.useMemo(() => {
+        if (storedRuns.length) return storedRuns
+        if (measurementRun !== null) return [measurementRun]
+        return []
+      }, [storedRuns, measurementRun])
+      const normalizedValue = React.useMemo(() => {
+        if (val) return val
+        if (measurementRun !== null) return measurementRun.toFixed(2)
+        return ''
+      }, [val, measurementRun])
 
-      const [localVal, setLocalVal] = React.useState<string>(val)
-      const [localRuns, setLocalRuns] = React.useState<number[]>(storedRuns)
+      const [localVal, setLocalVal] = React.useState<string>(normalizedValue)
+      const [localRuns, setLocalRuns] = React.useState<number[]>(normalizedRuns)
       const [stopwatchStart, setStopwatchStart] = React.useState<number | null>(null)
       const [elapsed, setElapsed] = React.useState<number>(0)
       const [timerId, setTimerId] = React.useState<ReturnType<typeof setInterval> | null>(null)
       const running = stopwatchStart !== null
 
       React.useEffect(() => {
-        setLocalVal(val)
-      }, [val])
+        setLocalVal(normalizedValue)
+      }, [normalizedValue])
 
       React.useEffect(() => {
-        setLocalRuns(storedRuns)
-      }, [storedRuns])
+        setLocalRuns(normalizedRuns)
+      }, [normalizedRuns])
 
       React.useEffect(() => {
         return () => {
@@ -876,10 +892,11 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
       const formatTime = (seconds: number) => {
         if (!Number.isFinite(seconds) || seconds < 0) seconds = 0
-        const mm = Math.floor(seconds / 60)
-        const ss = Math.floor(seconds % 60)
-        const ms = Math.floor((seconds - Math.floor(seconds)) * 100)
-        return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}:${String(ms).padStart(2, '0')}`
+        const totalHundredths = Math.round(seconds * 100)
+        const ss = Math.floor(totalHundredths / 100)
+        const hh = Math.abs(totalHundredths % 100)
+        const cappedSeconds = Math.min(ss, 99)
+        return `${String(cappedSeconds).padStart(2, '0')}:${String(hh).padStart(2, '0')}`
       }
 
       const startStopwatch = () => {
@@ -898,7 +915,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
         if (timerId) clearInterval(timerId)
         const finalVal = (Date.now() - (stopwatchStart || Date.now())) / 1000
         const valStr = finalVal.toFixed(2)
-        const nextRuns = [...localRuns, finalVal].slice(-5)
+        const nextRuns = [...localRuns, finalVal].slice(-RUNS_COUNT)
         const best = nextRuns.length ? Math.min(...nextRuns) : finalVal
         setStopwatchStart(null)
         setElapsed(finalVal)
@@ -970,43 +987,45 @@ setProject(res.item||null)).catch(()=>setProject(null))
       return (
         <>
           <div className="capture-panel__timer">
-            <div className="capture-panel__timer-display">{formatted}</div>
+            <div className={`capture-panel__timer-display timer-display${running ? ' is-running' : ''}`}>
+              {formatted}
+            </div>
             <div className={`capture-panel__timer-bar${running ? ' is-running' : ''}`} />
           </div>
           <div className="capture-panel__runs">
-            {Array.from({ length: 5 }).map((_, idx) => {
+            {Array.from({ length: RUNS_COUNT }).map((_, idx) => {
               const runVal = localRuns[idx]
               const hasRun = typeof runVal === 'number' && Number.isFinite(runVal)
               return (
                 <div key={idx} className="capture-panel__run-row">
                   <span className="capture-panel__run-label">{`RUN ${idx + 1}:`}</span>
                   <span className="capture-panel__run-value">
-                    {hasRun ? formatTime(runVal) : '--:--:--'}
+                    {hasRun ? formatTime(runVal) : '--:--'}
                   </span>
                 </div>
               )
             })}
           </div>
-          <div className="capture-panel__buttons">
+          <div className="capture-panel__buttons capture-actions">
             <button
-              className="btn"
+              className="btn btn-capture"
               type="button"
               onClick={running ? stopStopwatch : startStopwatch}
             >
-              {running ? 'STOP' : 'START/STOP'}
+              {running ? 'STOP' : 'START'}
             </button>
-            <button className="btn" type="button" onClick={resetStopwatch}>
+            <button className="btn btn-capture" type="button" onClick={resetStopwatch}>
               RESET
             </button>
             <button
-              className="btn"
+              className="btn btn-capture"
               type="button"
               onClick={() => handleSave(player)}
               disabled={saveDisabled}
             >
               SPEICHERN
             </button>
-            {renderPdfButton()}
+            {renderPdfButton('btn-capture')}
           </div>
         </>
       )
@@ -1024,43 +1043,47 @@ setProject(res.item||null)).catch(()=>setProject(null))
     }
 
     return (
-      <section className="capture-panel">
-        <div className="capture-panel__header font-league">{heading}</div>
-        <div className="capture-panel__player">
-          <p className="capture-panel__player-label">SPIELER*IN WÄHLEN</p>
-          <p className="capture-panel__player-name">
-            {(player ? player.display_name : 'NAME').toUpperCase()}
-          </p>
-          {!player && (
-            <div className="capture-panel__player-select">
-              <select
-                className="input capture-panel__select"
-                value={currentPlayerId}
-                onChange={e => setCurrentPlayerId(e.target.value)}
-              >
-                <option value="">Bitte wählen…</option>
-                {players.map(pl => (
-                  <option key={pl.id} value={pl.id}>
-                    {pl.display_name}
-                    {pl.fav_number ? ` #${pl.fav_number}` : ''}
-                    {pl.birth_year ? ` (${pl.birth_year})` : ''}
-                  </option>
-                ))}
-              </select>
+      <div className="capture-panel-shell">
+        <section className="capture-panel">
+          <div className="capture-panel__header font-league capture-title">{heading}</div>
+          <div className="capture-panel__player">
+            {!player && (
+              <p className="capture-panel__player-label">SPIELER*IN WÄHLEN</p>
+            )}
+            <p className="capture-panel__player-name capture-player-name">
+              {(player ? player.display_name : 'NAME').toUpperCase()}
+            </p>
+            {!player && (
+              <div className="capture-panel__player-select">
+                <select
+                  className="input capture-panel__select"
+                  value={currentPlayerId}
+                  onChange={e => setCurrentPlayerId(e.target.value)}
+                >
+                  <option value="">Bitte wählen…</option>
+                  {players.map(pl => (
+                    <option key={pl.id} value={pl.id}>
+                      {pl.display_name}
+                      {pl.fav_number ? ` #${pl.fav_number}` : ''}
+                      {pl.birth_year ? ` (${pl.birth_year})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+          {player && (
+            <div className="capture-panel__highscore">
+              <span>AKTUELLER HIGHSCORE:</span>
+              <span className="capture-panel__highscore-value">{highscoreDisplay}</span>
             </div>
           )}
-        </div>
-        {player && (
-          <div className="capture-panel__highscore">
-            <span>AKTUELLER HIGHSCORE:</span>
-            <span className="capture-panel__highscore-value">{highscoreDisplay}</span>
-          </div>
-        )}
-        {player && letzterRunDisplay && (
-          <div className="capture-panel__saved">Letzter Run: {letzterRunDisplay}</div>
-        )}
-        {content}
-      </section>
+          {player && letzterRunDisplay && (
+            <div className="capture-panel__saved">Letzter Run: {letzterRunDisplay}</div>
+          )}
+          {content}
+        </section>
+      </div>
     )
   }
 
@@ -1070,7 +1093,8 @@ setProject(res.item||null)).catch(()=>setProject(null))
    * springt der Button zur vorherigen Seite zurück.
    */
   function CaptureBackFab(){
-      return (
+    return (
+      <div className="capture-fixed-button capture-fixed-button--right">
         <button
           onClick={() => {
             if (selected) {
@@ -1084,20 +1108,40 @@ setProject(res.item||null)).catch(()=>setProject(null))
               router.back()
             }
           }}
-          style={{ position: 'fixed', right: '16px', bottom: '16px', zIndex: 9999 }}
           className="btn btn-back"
           aria-label="Zurück"
           title="Zurück"
+          type="button"
         >
-        ← Zurück
-      </button>
+          ← Zurück
+        </button>
+      </div>
     )
   }
+
+  function CapturePlayerSwitchButton() {
+    if (!selected || !currentPlayerId) return null
+
+    return (
+      <div className="capture-fixed-button capture-fixed-button--left">
+        <button
+          type="button"
+          onClick={() => setCurrentPlayerId('')}
+          className="btn btn-back capture-player-switch"
+        >
+          Spielerwechsel
+        </button>
+      </div>
+    )
+  }
+
+  const heroTitle = selected ? '' : 'Stationseingabe'
+  const heroSubtitle = selected ? undefined : project ? project.name : undefined
 
   return (
     <main>
       {/* align="center" stellt sicher, dass der Inhalt auch vertikal zentriert wird */}
-      <Hero title="Stationseingabe" image="/base.jpg" subtitle={project ? project.name : undefined} align="center">
+      <Hero title={heroTitle} image="/base.jpg" subtitle={heroSubtitle} align="center">
         {/*
           Wir verwenden einen flexiblen Container, der alle Inhalte vertikal stapelt und
           horizontal zentriert. Die Abstände zwischen den Abschnitten werden über
@@ -1112,9 +1156,8 @@ setProject(res.item||null)).catch(()=>setProject(null))
       </Hero>
 
       {/* Zurück-FAB fixiert unten rechts */}
-      <div className="back-fab-fixed">
-        <CaptureBackFab />
-      </div>
+      <CaptureBackFab />
+      <CapturePlayerSwitchButton />
     </main>
   )
 }

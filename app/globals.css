@@ -109,7 +109,9 @@ main {
   width: 100%;
   display: flex;
   justify-content: center;
-  padding-inline: clamp(12px, 4vw, 28px);
+  padding-inline: clamp(0px, 4vw, 28px);
+  padding-left: max(env(safe-area-inset-left), clamp(0px, 4vw, 28px));
+  padding-right: max(env(safe-area-inset-right), clamp(0px, 4vw, 28px));
   box-sizing: border-box;
 }
 
@@ -212,7 +214,7 @@ a, .btn {
   max-width: min(100%, 960px);
   margin-inline: auto;
   gap: clamp(20px, 4vw, 32px);
-  padding-inline: clamp(12px, 4vw, 32px);
+  padding-inline: clamp(0px, 4vw, 32px);
   box-sizing: border-box;
 }
 
@@ -323,12 +325,32 @@ a, .btn {
   padding-inline: clamp(0.65rem, 1.8vw, 1.3rem);
 }
 
-.capture-stations__switch-button {
+.capture-stations__row .capture-stations__switch-button {
   height: 100%;
   min-width: 0;
   padding-inline: clamp(0.8rem, 3vw, 1.6rem);
   white-space: nowrap;
   font-size: clamp(0.95rem, 2.6vw, 1.1rem);
+}
+
+.capture-player-switch {
+  min-width: auto;
+  font-size: clamp(0.9rem, 2.3vw, 1.05rem);
+  padding-inline: clamp(1rem, 3vw, 1.6rem);
+}
+
+.capture-fixed-button {
+  position: fixed;
+  bottom: clamp(12px, 3vw, 20px);
+  z-index: 9999;
+}
+
+.capture-fixed-button--right {
+  right: clamp(12px, 3vw, 20px);
+}
+
+.capture-fixed-button--left {
+  left: clamp(12px, 3vw, 20px);
 }
 
 .btn-icon__label {
@@ -345,10 +367,23 @@ a, .btn {
   padding-inline: clamp(0.75rem, 2vw, 1.6rem);
 }
 
+.capture-panel-shell {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
 .capture-panel {
-  width: min(100%, 820px);
-  margin: 0 auto;
-  padding: clamp(22px, 5vw, 40px);
+  --capture-panel-stack-width: clamp(280px, 92vw, 520px);
+  width: 100%;
+  max-width: clamp(320px, 92vw, 640px);
+  margin-left: auto;
+  margin-right: auto;
+  padding-block: clamp(12px, 3vw, 20px);
+  padding-inline: clamp(12px, 3vw, 20px);
+  padding-left: max(env(safe-area-inset-left), clamp(12px, 3vw, 20px));
+  padding-right: max(env(safe-area-inset-right), clamp(12px, 3vw, 20px));
   border-radius: 32px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.42), rgba(15, 23, 42, 0.68));
@@ -357,8 +392,9 @@ a, .btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(18px, 4vw, 32px);
+  gap: clamp(6px, 2vw, 16px);
   text-align: center;
+  box-sizing: border-box;
 }
 
 .capture-panel__header {
@@ -367,12 +403,20 @@ a, .btn {
   text-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
 }
 
-.capture-panel__player {
+.capture-panel__header.capture-title {
+  font-size: clamp(18px, 5vw, 28px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   width: 100%;
+}
+
+.capture-panel__player {
+  width: var(--capture-panel-stack-width);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(8px, 2vw, 14px);
+  gap: clamp(2px, 1.2vw, 8px);
 }
 
 .capture-panel__player-label {
@@ -381,9 +425,18 @@ a, .btn {
 }
 
 .capture-panel__player-name {
-  font-size: clamp(1.8rem, 4.8vw, 2.8rem);
+  font-size: clamp(1.6rem, 4.2vw, 2.2rem);
   font-weight: 700;
   letter-spacing: 0.12em;
+}
+
+.capture-player-name {
+  font-weight: 800;
+  font-size: clamp(1.6rem, 4.2vw, 2.2rem);
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .capture-panel__player-select {
@@ -399,13 +452,14 @@ a, .btn {
 }
 
 .capture-panel__highscore {
-  width: min(100%, 420px);
+  width: var(--capture-panel-stack-width);
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: clamp(1rem, 2.4vw, 1.35rem);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  margin-top: clamp(2px, 1vw, 6px);
 }
 
 .capture-panel__highscore-value {
@@ -485,24 +539,37 @@ a, .btn {
 }
 
 .capture-panel__timer {
-  width: min(100%, 520px);
+  width: var(--capture-panel-stack-width);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(12px, 2.6vw, 20px);
-  padding: clamp(20px, 4.6vw, 32px);
-  border-radius: 28px;
+  gap: clamp(10px, 2.4vw, 18px);
+  padding: clamp(14px, 3vw, 22px);
+  border-radius: 24px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(0, 0, 0, 0.55);
   box-shadow: 0 22px 44px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
 }
 
 .capture-panel__timer-display {
   font-family: 'Inter', monospace;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.18em;
-  font-size: clamp(2.6rem, 7vw, 4.6rem);
+  font-size: clamp(2.2rem, 7vw, 3.6rem);
   font-weight: 800;
+}
+
+.timer-display {
+  width: 100%;
+  padding: clamp(10px, 2.4vw, 16px) clamp(14px, 3vw, 20px);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
 }
 
 .capture-panel__timer-bar {
@@ -532,11 +599,12 @@ a, .btn {
 }
 
 .capture-panel__runs {
-  width: min(100%, 420px);
+  width: var(--capture-panel-stack-width);
   display: flex;
   flex-direction: column;
   gap: clamp(6px, 1.6vw, 12px);
   margin: clamp(8px, 2vw, 16px) auto 0;
+  box-sizing: border-box;
 }
 
 .capture-panel__run-row {
@@ -565,18 +633,48 @@ a, .btn {
 }
 
 .capture-panel__buttons {
-  width: min(100%, 540px);
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(14px, 3.2vw, 24px);
+  width: var(--capture-panel-stack-width);
+  margin: clamp(10px, 3vw, 24px) auto 0;
+  box-sizing: border-box;
 }
 
-.capture-panel__buttons .btn {
+.capture-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(8px, 2vw, 12px);
   width: 100%;
 }
 
+.timer-display.is-running {
+  background: rgba(236, 3, 71, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(236, 3, 71, 0.4);
+}
+
+.btn-capture {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  padding: clamp(8px, 1.6vw, 12px) clamp(12px, 2.4vw, 18px);
+  font-size: clamp(14px, 2.6vw, 16px);
+  letter-spacing: 0.12em;
+  border-radius: 9999px;
+  box-sizing: border-box;
+}
+
+.capture-actions .btn-icon {
+  justify-content: center;
+  gap: clamp(6px, 1.6vw, 10px);
+}
+
 .capture-panel__pdf-button {
-  font-size: clamp(0.85rem, 2.1vw, 1.1rem);
+  font-size: clamp(13px, 2.4vw, 16px);
+}
+
+@media (min-width: 720px) {
+  .capture-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(10px, 2.4vw, 16px);
+  }
 }
 
 @media (min-width: 640px) {
@@ -606,14 +704,30 @@ a, .btn {
   }
 }
 
+@media (max-width: 640px) {
+  .capture-panel {
+    width: 100%;
+    margin-inline: 0;
+    padding-block: clamp(14px, 5vw, 24px);
+    padding-inline: clamp(12px, 5.6vw, 24px);
+    padding-left: max(env(safe-area-inset-left), clamp(12px, 5.6vw, 24px));
+    padding-right: max(env(safe-area-inset-right), clamp(12px, 5.6vw, 24px));
+    border-radius: 24px;
+  }
+
+  .capture-panel__highscore {
+    width: 100%;
+  }
+}
+
 @media (max-width: 520px) {
-  .capture-panel__buttons {
+  .capture-actions {
     gap: clamp(10px, 3vw, 16px);
   }
 
-  .capture-panel__buttons .btn {
+  .btn-capture {
+    padding: clamp(6px, 3.2vw, 10px) clamp(10px, 6vw, 16px);
     font-size: clamp(0.85rem, 4.2vw, 1rem);
-    padding-block: clamp(0.55rem, 3.8vw, 0.75rem);
   }
 
   .capture-panel__run-row {
