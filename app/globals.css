@@ -718,6 +718,7 @@ a, .btn {
   .capture-panel__highscore {
     width: 100%;
   }
+ }
 
 
 @media (max-width: 520px) {
