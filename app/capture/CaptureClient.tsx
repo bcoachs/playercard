@@ -36,6 +36,8 @@ const ST_INDEX: Record<string, number> = {
   'Beweglichkeit': 1, 'Technik': 2, 'Passgenauigkeit': 3, 'Schusskraft': 4, 'Schusspräzision': 5, 'Schnelligkeit': 6
 }
 
+const RUNS_COUNT = 3
+
 /** Standard-Normierung (Fallback, wenn keine CSV) */
 function normScore(st: Station, raw: number){
   const n = (st.name||'').toLowerCase()
@@ -410,6 +412,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
       ? v.runs
           .map((entry: unknown) => Number(entry))
           .filter((entry: number) => Number.isFinite(entry))
+          .slice(-RUNS_COUNT)
       : []
     if (runs.length) {
       return Math.min(...runs)
@@ -572,8 +575,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
   function StationButtonRow() {
     if (!stations.length) return null
 
-    const base = selected ? stations.filter(s => s.id === selected) : stations
-    const ordered = base.slice().sort((a, b) => {
+    if (selected) return null
+
+    const ordered = stations.slice().sort((a, b) => {
       const ia = ST_INDEX[a.name] ?? 99
       const ib = ST_INDEX[b.name] ?? 99
       if (ia !== ib) return ia - ib
@@ -608,28 +612,18 @@ setProject(res.item||null)).catch(()=>setProject(null))
               >
                 {`S${displayIdx} - ${s.name}`}
               </button>
-              {currentPlayerId ? (
-                <button
-                  type="button"
-                  className="btn capture-stations__switch-button"
-                  onClick={handleSelectStation}
-                >
-                  Spielerwechsel
-                </button>
-              ) : (
-                <a
-                  className="btn btn-icon capture-stations__sketch-button"
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={sketchLabel}
-                >
-                  <span className="btn-icon__label">{sketchLabel}</span>
-                  <span className="btn-icon__icon" aria-hidden>
-                    📄
-                  </span>
-                </a>
-              )}
+              <a
+                className="btn btn-icon capture-stations__sketch-button"
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={sketchLabel}
+              >
+                <span className="btn-icon__label">{sketchLabel}</span>
+                <span className="btn-icon__icon" aria-hidden>
+                  📄
+                </span>
+              </a>
             </div>
           )
         })}
@@ -660,6 +654,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
     const playerRuns = rawRuns
       .map((entry: unknown) => Number(entry))
       .filter((entry: number) => Number.isFinite(entry))
+      .slice(-RUNS_COUNT)
     const runScores = player && playerRuns.length
       ? playerRuns.map(run => scoreFor(station, player, run))
       : []
@@ -851,6 +846,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
         ? (v.runs as unknown[])
             .map(entry => Number(entry))
             .filter(entry => Number.isFinite(entry))
+            .slice(-RUNS_COUNT)
         : []
 
       const [localVal, setLocalVal] = React.useState<string>(val)
@@ -898,7 +894,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
         if (timerId) clearInterval(timerId)
         const finalVal = (Date.now() - (stopwatchStart || Date.now())) / 1000
         const valStr = finalVal.toFixed(2)
-        const nextRuns = [...localRuns, finalVal].slice(-5)
+        const nextRuns = [...localRuns, finalVal].slice(-RUNS_COUNT)
         const best = nextRuns.length ? Math.min(...nextRuns) : finalVal
         setStopwatchStart(null)
         setElapsed(finalVal)
@@ -974,7 +970,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
             <div className={`capture-panel__timer-bar${running ? ' is-running' : ''}`} />
           </div>
           <div className="capture-panel__runs">
-            {Array.from({ length: 5 }).map((_, idx) => {
+            {Array.from({ length: RUNS_COUNT }).map((_, idx) => {
               const runVal = localRuns[idx]
               const hasRun = typeof runVal === 'number' && Number.isFinite(runVal)
               return (
@@ -1027,7 +1023,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
       <section className="capture-panel">
         <div className="capture-panel__header font-league">{heading}</div>
         <div className="capture-panel__player">
-          <p className="capture-panel__player-label">SPIELER*IN WÄHLEN</p>
+          {!player && (
+            <p className="capture-panel__player-label">SPIELER*IN WÄHLEN</p>
+          )}
           <p className="capture-panel__player-name">
             {(player ? player.display_name : 'NAME').toUpperCase()}
           </p>
@@ -1094,6 +1092,21 @@ setProject(res.item||null)).catch(()=>setProject(null))
     )
   }
 
+  function CapturePlayerSwitchButton() {
+    if (!selected || !currentPlayerId) return null
+
+    return (
+      <button
+        type="button"
+        onClick={() => setCurrentPlayerId('')}
+        style={{ position: 'fixed', left: '16px', bottom: '16px', zIndex: 9999 }}
+        className="btn btn-back capture-stations__switch-button"
+      >
+        Spielerwechsel
+      </button>
+    )
+  }
+
   return (
     <main>
       {/* align="center" stellt sicher, dass der Inhalt auch vertikal zentriert wird */}
@@ -1115,6 +1128,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
       <div className="back-fab-fixed">
         <CaptureBackFab />
       </div>
+      <CapturePlayerSwitchButton />
     </main>
   )
 }
