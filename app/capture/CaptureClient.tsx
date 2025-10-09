@@ -860,15 +860,13 @@ setProject(res.item||null)).catch(()=>setProject(null))
         return Number.isFinite(numeric) ? numeric : null
       }, [isTimeStation, measurements, player.id, stationId])
       const normalizedRuns = React.useMemo(() => {
-        if (storedRuns.length) return storedRuns
-        if (measurementRun !== null) return [measurementRun]
-        return []
-      }, [storedRuns, measurementRun])
+        return storedRuns
+      }, [storedRuns])
       const normalizedValue = React.useMemo(() => {
         if (val) return val
-        if (measurementRun !== null) return measurementRun.toFixed(2)
+        if (!isTimeStation && measurementRun !== null) return measurementRun.toFixed(2)
         return ''
-      }, [val, measurementRun])
+      }, [val, measurementRun, isTimeStation])
 
       const [localVal, setLocalVal] = React.useState<string>(normalizedValue)
       const [localRuns, setLocalRuns] = React.useState<number[]>(normalizedRuns)
@@ -935,6 +933,8 @@ setProject(res.item||null)).catch(()=>setProject(null))
         setElapsed(0)
         setTimerId(null)
         setLocalVal('')
+        setLocalRuns([])
+        updatePlayerValues(player.id, { runs: [], value: '' })
       }
 
       const handleManualChange = (inputVal: string) => {
@@ -1075,7 +1075,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
           </div>
           {player && (
             <div className="capture-panel__highscore">
-              <span>AKTUELLER HIGHSCORE:</span>
+              <span className="capture-panel__highscore-label">AKTUELLER HIGHSCORE:</span>
               <span className="capture-panel__highscore-value">{highscoreDisplay}</span>
             </div>
           )}
