@@ -44,7 +44,7 @@ export default function CaptureHubClient({ projectId }: { projectId: string }) {
         <div>
           <label className="block text-sm mb-1">Spieler*in</label>
           <select className="border p-2 w-full rounded" value={playerId} onChange={e => setPlayerId(e.target.value)}>
-            <option value="">– auswählen –</option>
+            {!playerId && <option value="">– auswählen –</option>}
             {players.map(p => (
               <option key={p.id} value={p.id}>{p.display_name}{p.fav_position ? ` (${p.fav_position})` : ''}{p.club ? ` – ${p.club}` : ''}</option>
             ))}
