@@ -1075,7 +1075,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
           </div>
           {player && (
             <div className="capture-panel__highscore">
-              <span>AKTUELLER HIGHSCORE:</span>
+              <span className="capture-panel__highscore-label">AKTUELLER HIGHSCORE:</span>
               <span className="capture-panel__highscore-value">{highscoreDisplay}</span>
             </div>
           )}
