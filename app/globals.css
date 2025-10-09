@@ -323,12 +323,32 @@ a, .btn {
   padding-inline: clamp(0.65rem, 1.8vw, 1.3rem);
 }
 
-.capture-stations__switch-button {
+.capture-stations__row .capture-stations__switch-button {
   height: 100%;
   min-width: 0;
   padding-inline: clamp(0.8rem, 3vw, 1.6rem);
   white-space: nowrap;
   font-size: clamp(0.95rem, 2.6vw, 1.1rem);
+}
+
+.capture-player-switch {
+  min-width: auto;
+  font-size: clamp(0.9rem, 2.3vw, 1.05rem);
+  padding-inline: clamp(1rem, 3vw, 1.6rem);
+}
+
+.capture-fixed-button {
+  position: fixed;
+  bottom: clamp(12px, 3vw, 20px);
+  z-index: 9999;
+}
+
+.capture-fixed-button--right {
+  right: clamp(12px, 3vw, 20px);
+}
+
+.capture-fixed-button--left {
+  left: clamp(12px, 3vw, 20px);
 }
 
 .btn-icon__label {
@@ -348,7 +368,7 @@ a, .btn {
 .capture-panel {
   width: min(100%, 820px);
   margin: 0 auto;
-  padding: clamp(22px, 5vw, 40px);
+  padding: clamp(20px, 4.6vw, 36px);
   border-radius: 32px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.42), rgba(15, 23, 42, 0.68));
@@ -357,7 +377,7 @@ a, .btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(18px, 4vw, 32px);
+  gap: clamp(12px, 3.2vw, 24px);
   text-align: center;
 }
 
@@ -372,7 +392,7 @@ a, .btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(8px, 2vw, 14px);
+  gap: clamp(4px, 1.6vw, 10px);
 }
 
 .capture-panel__player-label {
@@ -381,7 +401,7 @@ a, .btn {
 }
 
 .capture-panel__player-name {
-  font-size: clamp(1.8rem, 4.8vw, 2.8rem);
+  font-size: clamp(2rem, 5.6vw, 3rem);
   font-weight: 700;
   letter-spacing: 0.12em;
 }
@@ -406,6 +426,7 @@ a, .btn {
   font-size: clamp(1rem, 2.4vw, 1.35rem);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  margin-top: clamp(4px, 1.4vw, 10px);
 }
 
 .capture-panel__highscore-value {
@@ -603,6 +624,19 @@ a, .btn {
 
   .btn-icon__icon {
     display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .capture-panel {
+    width: 100%;
+    margin-inline: 0;
+    padding: clamp(18px, 5.6vw, 28px);
+    border-radius: 24px;
+  }
+
+  .capture-panel__highscore {
+    width: 100%;
   }
 }
 

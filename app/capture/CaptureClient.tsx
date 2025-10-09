@@ -1068,7 +1068,8 @@ setProject(res.item||null)).catch(()=>setProject(null))
    * springt der Button zur vorherigen Seite zurück.
    */
   function CaptureBackFab(){
-      return (
+    return (
+      <div className="capture-fixed-button capture-fixed-button--right">
         <button
           onClick={() => {
             if (selected) {
@@ -1082,13 +1083,14 @@ setProject(res.item||null)).catch(()=>setProject(null))
               router.back()
             }
           }}
-          style={{ position: 'fixed', right: '16px', bottom: '16px', zIndex: 9999 }}
           className="btn btn-back"
           aria-label="Zurück"
           title="Zurück"
+          type="button"
         >
-        ← Zurück
-      </button>
+          ← Zurück
+        </button>
+      </div>
     )
   }
 
@@ -1096,21 +1098,25 @@ setProject(res.item||null)).catch(()=>setProject(null))
     if (!selected || !currentPlayerId) return null
 
     return (
-      <button
-        type="button"
-        onClick={() => setCurrentPlayerId('')}
-        style={{ position: 'fixed', left: '16px', bottom: '16px', zIndex: 9999 }}
-        className="btn btn-back capture-stations__switch-button"
-      >
-        Spielerwechsel
-      </button>
+      <div className="capture-fixed-button capture-fixed-button--left">
+        <button
+          type="button"
+          onClick={() => setCurrentPlayerId('')}
+          className="btn btn-back capture-player-switch"
+        >
+          Spielerwechsel
+        </button>
+      </div>
     )
   }
+
+  const heroTitle = selected ? '' : 'Stationseingabe'
+  const heroSubtitle = selected ? undefined : project ? project.name : undefined
 
   return (
     <main>
       {/* align="center" stellt sicher, dass der Inhalt auch vertikal zentriert wird */}
-      <Hero title="Stationseingabe" image="/base.jpg" subtitle={project ? project.name : undefined} align="center">
+      <Hero title={heroTitle} image="/base.jpg" subtitle={heroSubtitle} align="center">
         {/*
           Wir verwenden einen flexiblen Container, der alle Inhalte vertikal stapelt und
           horizontal zentriert. Die Abstände zwischen den Abschnitten werden über
@@ -1125,9 +1131,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
       </Hero>
 
       {/* Zurück-FAB fixiert unten rechts */}
-      <div className="back-fab-fixed">
-        <CaptureBackFab />
-      </div>
+      <CaptureBackFab />
       <CapturePlayerSwitchButton />
     </main>
   )
