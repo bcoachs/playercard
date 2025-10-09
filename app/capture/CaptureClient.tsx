@@ -5,6 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation'
 // BackFab wird hier ersetzt durch eine eigene Implementierung mit zusätzlicher Logik
 import Hero from '@/app/components/Hero'
 
+type CsvStatus = 'ok' | 'fail' | 'off' | 'loading'
+
 type Station = {
   id: string
   name: string
