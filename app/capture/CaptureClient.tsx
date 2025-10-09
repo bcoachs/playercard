@@ -405,6 +405,16 @@ setProject(res.item||null)).catch(()=>setProject(null))
       const rawHits = top * 3 + bottom
       return rawHits
     }
+
+    const runs = Array.isArray(v.runs)
+      ? v.runs
+          .map((entry: unknown) => Number(entry))
+          .filter((entry: number) => Number.isFinite(entry))
+      : []
+    if (runs.length) {
+      return Math.min(...runs)
+    }
+
     // generisch (Zahl)
     const num = Number(v.value||0)
     return isNaN(num) ? 0 : num
@@ -643,9 +653,32 @@ setProject(res.item||null)).catch(()=>setProject(null))
     const heading = `S${displayIdx} - ${station.name}`.toUpperCase()
     const player = players.find(x => x.id === currentPlayerId) || null
     const playerScore = player ? saved[player.id] : undefined
-    const highscoreDisplay = stationHighscore !== null
-      ? String(stationHighscore).padStart(3, '0')
-      : '###'
+    const playerValues = player ? values[player.id] : undefined
+    const rawRuns = Array.isArray(playerValues?.runs)
+      ? (playerValues?.runs as unknown[])
+      : []
+    const playerRuns = rawRuns
+      .map((entry: unknown) => Number(entry))
+      .filter((entry: number) => Number.isFinite(entry))
+    const runScores = player && playerRuns.length
+      ? playerRuns.map(run => scoreFor(station, player, run))
+      : []
+    const lastRunScore = runScores.length
+      ? runScores[runScores.length - 1]
+      : playerScore
+    const isTimeStation =
+      n.includes('beweglichkeit') || n.includes('technik') || n.includes('schnelligkeit')
+    const bestLocalScore = isTimeStation
+      ? (runScores.length ? Math.max(...runScores) : undefined)
+      : undefined
+    const effectiveHighscore =
+      bestLocalScore ?? playerScore ?? (stationHighscore !== null ? stationHighscore : undefined)
+    const highscoreDisplay =
+      effectiveHighscore !== undefined
+        ? String(effectiveHighscore).padStart(3, '0')
+        : '###'
+    const letzterRunDisplay =
+      lastRunScore !== undefined ? String(lastRunScore).padStart(3, '0') : null
     const sketchLabel = `S${displayIdx}-Skizze`
 
     const renderPdfButton = () => (
@@ -814,8 +847,14 @@ setProject(res.item||null)).catch(()=>setProject(null))
       const val = v.value ?? ''
       const isTimeStation =
         n.includes('beweglichkeit') || n.includes('technik') || n.includes('schnelligkeit')
+      const storedRuns = Array.isArray(v.runs)
+        ? (v.runs as unknown[])
+            .map(entry => Number(entry))
+            .filter(entry => Number.isFinite(entry))
+        : []
 
       const [localVal, setLocalVal] = React.useState<string>(val)
+      const [localRuns, setLocalRuns] = React.useState<number[]>(storedRuns)
       const [stopwatchStart, setStopwatchStart] = React.useState<number | null>(null)
       const [elapsed, setElapsed] = React.useState<number>(0)
       const [timerId, setTimerId] = React.useState<ReturnType<typeof setInterval> | null>(null)
@@ -826,10 +865,22 @@ setProject(res.item||null)).catch(()=>setProject(null))
       }, [val])
 
       React.useEffect(() => {
+        setLocalRuns(storedRuns)
+      }, [storedRuns])
+
+      React.useEffect(() => {
         return () => {
           if (timerId) clearInterval(timerId)
         }
       }, [timerId])
+
+      const formatTime = (seconds: number) => {
+        if (!Number.isFinite(seconds) || seconds < 0) seconds = 0
+        const mm = Math.floor(seconds / 60)
+        const ss = Math.floor(seconds % 60)
+        const ms = Math.floor((seconds - Math.floor(seconds)) * 100)
+        return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}:${String(ms).padStart(2, '0')}`
+      }
 
       const startStopwatch = () => {
         if (running) return
@@ -847,11 +898,17 @@ setProject(res.item||null)).catch(()=>setProject(null))
         if (timerId) clearInterval(timerId)
         const finalVal = (Date.now() - (stopwatchStart || Date.now())) / 1000
         const valStr = finalVal.toFixed(2)
+        const nextRuns = [...localRuns, finalVal].slice(-5)
+        const best = nextRuns.length ? Math.min(...nextRuns) : finalVal
         setStopwatchStart(null)
         setElapsed(finalVal)
         setTimerId(null)
         setLocalVal(valStr)
-        updatePlayerValues(player.id, { value: valStr })
+        setLocalRuns(nextRuns)
+        updatePlayerValues(player.id, {
+          runs: nextRuns,
+          value: best.toFixed(2),
+        })
       }
 
       const resetStopwatch = () => {
@@ -860,26 +917,23 @@ setProject(res.item||null)).catch(()=>setProject(null))
         setElapsed(0)
         setTimerId(null)
         setLocalVal('')
-        updatePlayerValues(player.id, { value: '' })
       }
-
-      const formatTime = (seconds: number) => {
-        if (!Number.isFinite(seconds) || seconds < 0) seconds = 0
-        const mm = Math.floor(seconds / 60)
-        const ss = Math.floor(seconds % 60)
-        const ms = Math.floor((seconds - Math.floor(seconds)) * 100)
-        return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}:${String(ms).padStart(2, '0')}`
-      }
-
-      const displaySeconds = running ? elapsed : Number(localVal || 0)
-      const formatted = formatTime(displaySeconds)
-      const saveDisabled = !localVal || !currentPlayerId
 
       const handleManualChange = (inputVal: string) => {
         const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
         setLocalVal(sanitized)
         updatePlayerValues(player.id, { value: sanitized })
       }
+
+      const displaySeconds = running
+        ? elapsed
+        : localRuns.length
+          ? localRuns[localRuns.length - 1]
+          : Number(localVal || 0)
+      const formatted = formatTime(displaySeconds)
+      const saveDisabled = isTimeStation
+        ? localRuns.length === 0 || !currentPlayerId
+        : !localVal || !currentPlayerId
 
       if (!isTimeStation) {
         return (
@@ -919,21 +973,19 @@ setProject(res.item||null)).catch(()=>setProject(null))
             <div className="capture-panel__timer-display">{formatted}</div>
             <div className={`capture-panel__timer-bar${running ? ' is-running' : ''}`} />
           </div>
-          <div className="capture-panel__measurement-input">
-            <label className="capture-panel__input-label">
-              Messwert {stationUnit ? `(${stationUnit})` : '(s)'}
-            </label>
-            <input
-              className="input capture-panel__input"
-              type="tel"
-              value={localVal}
-              onChange={e => handleManualChange(e.target.value)}
-              onKeyDown={e => e.stopPropagation()}
-              onKeyDownCapture={e => e.stopPropagation()}
-              onKeyUp={e => e.stopPropagation()}
-              onKeyPress={e => e.stopPropagation()}
-              placeholder={stationUnit || 'Sekunden'}
-            />
+          <div className="capture-panel__runs">
+            {Array.from({ length: 5 }).map((_, idx) => {
+              const runVal = localRuns[idx]
+              const hasRun = typeof runVal === 'number' && Number.isFinite(runVal)
+              return (
+                <div key={idx} className="capture-panel__run-row">
+                  <span className="capture-panel__run-label">{`RUN ${idx + 1}:`}</span>
+                  <span className="capture-panel__run-value">
+                    {hasRun ? formatTime(runVal) : '--:--:--'}
+                  </span>
+                </div>
+              )
+            })}
           </div>
           <div className="capture-panel__buttons">
             <button
@@ -1004,8 +1056,8 @@ setProject(res.item||null)).catch(()=>setProject(null))
             <span className="capture-panel__highscore-value">{highscoreDisplay}</span>
           </div>
         )}
-        {player && playerScore !== undefined && (
-          <div className="capture-panel__saved">Bisheriger Score: {playerScore}</div>
+        {player && letzterRunDisplay && (
+          <div className="capture-panel__saved">Letzter Run: {letzterRunDisplay}</div>
         )}
         {content}
       </section>
