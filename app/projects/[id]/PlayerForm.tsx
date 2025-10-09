@@ -189,7 +189,7 @@ export default function PlayerForm({ projectId }: { projectId: string }) {
       </div>
 
       <div className="flex items-center gap-3">
-        <button className="btn pill" type="submit" disabled={isPending}>
+        <button className="btn" type="submit" disabled={isPending}>
           {isPending ? 'Speichere…' : 'Spieler anlegen'}
         </button>
         <span className="text-sm muted">
