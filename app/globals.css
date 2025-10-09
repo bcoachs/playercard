@@ -109,7 +109,9 @@ main {
   width: 100%;
   display: flex;
   justify-content: center;
-  padding-inline: clamp(12px, 4vw, 28px);
+  padding-inline: clamp(0px, 4vw, 28px);
+  padding-left: max(env(safe-area-inset-left), clamp(0px, 4vw, 28px));
+  padding-right: max(env(safe-area-inset-right), clamp(0px, 4vw, 28px));
   box-sizing: border-box;
 }
 
@@ -365,12 +367,23 @@ a, .btn {
   padding-inline: clamp(0.75rem, 2vw, 1.6rem);
 }
 
+.capture-panel-shell {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
 .capture-panel {
   --capture-panel-stack-width: clamp(280px, 92vw, 520px);
   width: 100%;
-  max-width: clamp(320px, 92vw, 620px);
-  margin: 0 auto;
-  padding: clamp(16px, 4vw, 32px);
+  max-width: clamp(320px, 92vw, 640px);
+  margin-left: auto;
+  margin-right: auto;
+  padding-block: clamp(12px, 3vw, 20px);
+  padding-inline: clamp(12px, 3vw, 20px);
+  padding-left: max(env(safe-area-inset-left), clamp(12px, 3vw, 20px));
+  padding-right: max(env(safe-area-inset-right), clamp(12px, 3vw, 20px));
   border-radius: 32px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.42), rgba(15, 23, 42, 0.68));
@@ -695,7 +708,10 @@ a, .btn {
   .capture-panel {
     width: 100%;
     margin-inline: 0;
-    padding: clamp(18px, 5.6vw, 28px);
+    padding-block: clamp(14px, 5vw, 24px);
+    padding-inline: clamp(12px, 5.6vw, 24px);
+    padding-left: max(env(safe-area-inset-left), clamp(12px, 5.6vw, 24px));
+    padding-right: max(env(safe-area-inset-right), clamp(12px, 5.6vw, 24px));
     border-radius: 24px;
   }
 

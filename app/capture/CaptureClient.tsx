@@ -637,6 +637,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
     const stationUnit = station.unit || ''
     const stationUnitLabel = stationUnit ? `(${stationUnit})` : ''
+    const stationId = station.id
 
     const handleSave = (target: Player) => {
       void saveOne(station, target)
@@ -842,27 +843,47 @@ setProject(res.item||null)).catch(()=>setProject(null))
       const val = v.value ?? ''
       const isTimeStation =
         n.includes('beweglichkeit') || n.includes('technik') || n.includes('schnelligkeit')
-      const storedRuns = Array.isArray(v.runs)
-        ? (v.runs as unknown[])
-            .map(entry => Number(entry))
-            .filter(entry => Number.isFinite(entry))
-            .slice(-RUNS_COUNT)
-        : []
+      const storedRuns = React.useMemo(() => {
+        if (!Array.isArray(v.runs)) return []
+        return (v.runs as unknown[])
+          .map(entry => Number(entry))
+          .filter(entry => Number.isFinite(entry))
+          .slice(-RUNS_COUNT)
+      }, [v.runs])
+      const measurementRun = React.useMemo(() => {
+        if (!isTimeStation) return null
+        const entry = measurements.find(
+          m => m.station_id === stationId && m.player_id === player.id
+        )
+        if (!entry) return null
+        const numeric = Number(String(entry.value ?? '').replace(',', '.'))
+        return Number.isFinite(numeric) ? numeric : null
+      }, [isTimeStation, measurements, player.id, stationId])
+      const normalizedRuns = React.useMemo(() => {
+        if (storedRuns.length) return storedRuns
+        if (measurementRun !== null) return [measurementRun]
+        return []
+      }, [storedRuns, measurementRun])
+      const normalizedValue = React.useMemo(() => {
+        if (val) return val
+        if (measurementRun !== null) return measurementRun.toFixed(2)
+        return ''
+      }, [val, measurementRun])
 
-      const [localVal, setLocalVal] = React.useState<string>(val)
-      const [localRuns, setLocalRuns] = React.useState<number[]>(storedRuns)
+      const [localVal, setLocalVal] = React.useState<string>(normalizedValue)
+      const [localRuns, setLocalRuns] = React.useState<number[]>(normalizedRuns)
       const [stopwatchStart, setStopwatchStart] = React.useState<number | null>(null)
       const [elapsed, setElapsed] = React.useState<number>(0)
       const [timerId, setTimerId] = React.useState<ReturnType<typeof setInterval> | null>(null)
       const running = stopwatchStart !== null
 
       React.useEffect(() => {
-        setLocalVal(val)
-      }, [val])
+        setLocalVal(normalizedValue)
+      }, [normalizedValue])
 
       React.useEffect(() => {
-        setLocalRuns(storedRuns)
-      }, [storedRuns])
+        setLocalRuns(normalizedRuns)
+      }, [normalizedRuns])
 
       React.useEffect(() => {
         return () => {
@@ -992,7 +1013,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
               type="button"
               onClick={running ? stopStopwatch : startStopwatch}
             >
-              {running ? 'Stopp' : 'Start'}
+              {running ? 'STOP' : 'START'}
             </button>
             <button className="btn btn-capture" type="button" onClick={resetStopwatch}>
               RESET
@@ -1023,45 +1044,47 @@ setProject(res.item||null)).catch(()=>setProject(null))
     }
 
     return (
-      <section className="capture-panel">
-        <div className="capture-panel__header font-league capture-title">{heading}</div>
-        <div className="capture-panel__player">
-          {!player && (
-            <p className="capture-panel__player-label">SPIELER*IN WÄHLEN</p>
-          )}
-          <p className="capture-panel__player-name capture-player-name">
-            {(player ? player.display_name : 'NAME').toUpperCase()}
-          </p>
-          {!player && (
-            <div className="capture-panel__player-select">
-              <select
-                className="input capture-panel__select"
-                value={currentPlayerId}
-                onChange={e => setCurrentPlayerId(e.target.value)}
-              >
-                <option value="">Bitte wählen…</option>
-                {players.map(pl => (
-                  <option key={pl.id} value={pl.id}>
-                    {pl.display_name}
-                    {pl.fav_number ? ` #${pl.fav_number}` : ''}
-                    {pl.birth_year ? ` (${pl.birth_year})` : ''}
-                  </option>
-                ))}
-              </select>
+      <div className="capture-panel-shell">
+        <section className="capture-panel">
+          <div className="capture-panel__header font-league capture-title">{heading}</div>
+          <div className="capture-panel__player">
+            {!player && (
+              <p className="capture-panel__player-label">SPIELER*IN WÄHLEN</p>
+            )}
+            <p className="capture-panel__player-name capture-player-name">
+              {(player ? player.display_name : 'NAME').toUpperCase()}
+            </p>
+            {!player && (
+              <div className="capture-panel__player-select">
+                <select
+                  className="input capture-panel__select"
+                  value={currentPlayerId}
+                  onChange={e => setCurrentPlayerId(e.target.value)}
+                >
+                  <option value="">Bitte wählen…</option>
+                  {players.map(pl => (
+                    <option key={pl.id} value={pl.id}>
+                      {pl.display_name}
+                      {pl.fav_number ? ` #${pl.fav_number}` : ''}
+                      {pl.birth_year ? ` (${pl.birth_year})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+          {player && (
+            <div className="capture-panel__highscore">
+              <span>AKTUELLER HIGHSCORE:</span>
+              <span className="capture-panel__highscore-value">{highscoreDisplay}</span>
             </div>
           )}
-        </div>
-        {player && (
-          <div className="capture-panel__highscore">
-            <span>AKTUELLER HIGHSCORE:</span>
-            <span className="capture-panel__highscore-value">{highscoreDisplay}</span>
-          </div>
-        )}
-        {player && letzterRunDisplay && (
-          <div className="capture-panel__saved">Letzter Run: {letzterRunDisplay}</div>
-        )}
-        {content}
-      </section>
+          {player && letzterRunDisplay && (
+            <div className="capture-panel__saved">Letzter Run: {letzterRunDisplay}</div>
+          )}
+          {content}
+        </section>
+      </div>
     )
   }
 
