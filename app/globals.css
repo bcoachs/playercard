@@ -705,27 +705,19 @@ a, .btn {
 }
 
 @media (max-width: 640px) {
-.capture-panel {
-  --capture-panel-stack-width: clamp(280px, 92vw, 520px);
-  width: 100%;
-  max-width: clamp(320px, 92vw, 640px);
-  margin-inline: auto;              /* absolute Zentrierung */
-  padding-block: clamp(12px, 3vw, 20px);
+  .capture-panel {
+    width: 100%;
+    margin-inline: 0;
+    padding-block: clamp(14px, 5vw, 24px);
+    padding-inline: clamp(12px, 5.6vw, 24px);
+    padding-left: max(env(safe-area-inset-left), 0px);
+    padding-right: max(env(safe-area-inset-right), 0px);
+    border-radius: 24px;
+  }
 
-  /* entfernt den fixen Innenrand links/rechts */
-  padding-inline: max(env(safe-area-inset-left), 0px);
-  box-sizing: border-box;
-
-  border-radius: 32px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.42), rgba(15, 23, 42, 0.68));
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(18px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: clamp(6px, 2vw, 16px);
-  text-align: center;
+  .capture-panel__highscore {
+    width: 100%;
+  }
 }
 
   .capture-panel__highscore {
