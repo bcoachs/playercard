@@ -637,6 +637,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
     const stationUnit = station.unit || ''
     const stationUnitLabel = stationUnit ? `(${stationUnit})` : ''
+    const stationId = station.id
 
     const handleSave = (target: Player) => {
       void saveOne(station, target)
@@ -852,12 +853,12 @@ setProject(res.item||null)).catch(()=>setProject(null))
       const measurementRun = React.useMemo(() => {
         if (!isTimeStation) return null
         const entry = measurements.find(
-          m => m.station_id === station.id && m.player_id === player.id
+          m => m.station_id === stationId && m.player_id === player.id
         )
         if (!entry) return null
         const numeric = Number(String(entry.value ?? '').replace(',', '.'))
         return Number.isFinite(numeric) ? numeric : null
-      }, [isTimeStation, measurements, player.id, station.id])
+      }, [isTimeStation, measurements, player.id, stationId])
       const normalizedRuns = React.useMemo(() => {
         if (storedRuns.length) return storedRuns
         if (measurementRun !== null) return [measurementRun]
