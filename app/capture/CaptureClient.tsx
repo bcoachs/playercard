@@ -494,6 +494,13 @@ setProject(res.item||null)).catch(()=>setProject(null))
     alert('Gespeichert.')
   }
 
+  const updatePlayerValues = useCallback((playerId: string, patch: Record<string, any>) => {
+    setValues(prev => {
+      const existing = prev[playerId] ?? {}
+      return { ...prev, [playerId]: { ...existing, ...patch } }
+    })
+  }, [setValues])
+
   // CSV Maps laden (nur einmal). Bei Fehler bleibt Map null → Fallback in Score.
   useEffect(() => {
     if (USE_S1_CSV_CAPTURE) {
@@ -572,35 +579,47 @@ setProject(res.item||null)).catch(()=>setProject(null))
           const displayIdx = idx ?? '?'
           const hrefIdx = idx ?? 1
           const href = `/station${hrefIdx}.pdf`
-          const label = `S${displayIdx} - Stationsskizze`
+          const sketchLabel = `S${displayIdx}-Skizze`
+
+          const handleSelectStation = () => {
+            setSelected(s.id)
+            setCurrentPlayerId('')
+            router.replace(
+              projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`
+            )
+          }
 
           return (
             <div key={s.id} className="capture-stations__row">
               <button
                 className="btn capture-stations__station-button"
-                onClick={() => {
-                  setSelected(s.id)
-                  setCurrentPlayerId('')
-                  router.replace(
-                    projectId ? `?project=${projectId}&station=${s.id}` : `?station=${s.id}`
-                  )
-                }}
+                onClick={handleSelectStation}
                 style={s.id === selected ? { filter: 'brightness(1.12)' } : {}}
               >
                 {`S${displayIdx} - ${s.name}`}
               </button>
-              <a
-                className="btn btn-icon capture-stations__sketch-button"
-                href={href}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={label}
-              >
-                <span className="btn-icon__label">{label}</span>
-                <span className="btn-icon__icon" aria-hidden>
-                  📄
-                </span>
-              </a>
+              {currentPlayerId ? (
+                <button
+                  type="button"
+                  className="btn capture-stations__switch-button"
+                  onClick={handleSelectStation}
+                >
+                  Spielerwechsel
+                </button>
+              ) : (
+                <a
+                  className="btn btn-icon capture-stations__sketch-button"
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={sketchLabel}
+                >
+                  <span className="btn-icon__label">{sketchLabel}</span>
+                  <span className="btn-icon__icon" aria-hidden>
+                    📄
+                  </span>
+                </a>
+              )}
             </div>
           )
         })}
@@ -627,7 +646,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
     const highscoreDisplay = stationHighscore !== null
       ? String(stationHighscore).padStart(3, '0')
       : '###'
-    const sketchLabel = `S${displayIdx} - Stationsskizze`
+    const sketchLabel = `S${displayIdx}-Skizze`
 
     const renderPdfButton = () => (
       <a
@@ -661,12 +680,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 min={0}
                 max={3}
                 value={h10}
-                onChange={e =>
-                  setValues(prev => ({
-                    ...prev,
-                    [player.id]: { ...prev[player.id], h10: Number(e.target.value) },
-                  }))
-                }
+                onChange={e => updatePlayerValues(player.id, { h10: Number(e.target.value) })}
                 onKeyDown={e => e.stopPropagation()}
                 onKeyDownCapture={e => e.stopPropagation()}
                 onKeyUp={e => e.stopPropagation()}
@@ -681,12 +695,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 min={0}
                 max={2}
                 value={h14}
-                onChange={e =>
-                  setValues(prev => ({
-                    ...prev,
-                    [player.id]: { ...prev[player.id], h14: Number(e.target.value) },
-                  }))
-                }
+                onChange={e => updatePlayerValues(player.id, { h14: Number(e.target.value) })}
                 onKeyDown={e => e.stopPropagation()}
                 onKeyDownCapture={e => e.stopPropagation()}
                 onKeyUp={e => e.stopPropagation()}
@@ -701,12 +710,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 min={0}
                 max={1}
                 value={h18}
-                onChange={e =>
-                  setValues(prev => ({
-                    ...prev,
-                    [player.id]: { ...prev[player.id], h18: Number(e.target.value) },
-                  }))
-                }
+                onChange={e => updatePlayerValues(player.id, { h18: Number(e.target.value) })}
                 onKeyDown={e => e.stopPropagation()}
                 onKeyDownCapture={e => e.stopPropagation()}
                 onKeyUp={e => e.stopPropagation()}
@@ -742,12 +746,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 min={0}
                 max={3}
                 value={ul}
-                onChange={e =>
-                  setValues(prev => ({
-                    ...prev,
-                    [player.id]: { ...prev[player.id], ul: Number(e.target.value) },
-                  }))
-                }
+                onChange={e => updatePlayerValues(player.id, { ul: Number(e.target.value) })}
                 onKeyDown={e => e.stopPropagation()}
                 onKeyDownCapture={e => e.stopPropagation()}
                 onKeyUp={e => e.stopPropagation()}
@@ -762,12 +761,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 min={0}
                 max={3}
                 value={ur}
-                onChange={e =>
-                  setValues(prev => ({
-                    ...prev,
-                    [player.id]: { ...prev[player.id], ur: Number(e.target.value) },
-                  }))
-                }
+                onChange={e => updatePlayerValues(player.id, { ur: Number(e.target.value) })}
                 onKeyDown={e => e.stopPropagation()}
                 onKeyDownCapture={e => e.stopPropagation()}
                 onKeyUp={e => e.stopPropagation()}
@@ -782,12 +776,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 min={0}
                 max={3}
                 value={ll}
-                onChange={e =>
-                  setValues(prev => ({
-                    ...prev,
-                    [player.id]: { ...prev[player.id], ll: Number(e.target.value) },
-                  }))
-                }
+                onChange={e => updatePlayerValues(player.id, { ll: Number(e.target.value) })}
                 onKeyDown={e => e.stopPropagation()}
                 onKeyDownCapture={e => e.stopPropagation()}
                 onKeyUp={e => e.stopPropagation()}
@@ -802,12 +791,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 min={0}
                 max={3}
                 value={lr}
-                onChange={e =>
-                  setValues(prev => ({
-                    ...prev,
-                    [player.id]: { ...prev[player.id], lr: Number(e.target.value) },
-                  }))
-                }
+                onChange={e => updatePlayerValues(player.id, { lr: Number(e.target.value) })}
                 onKeyDown={e => e.stopPropagation()}
                 onKeyDownCapture={e => e.stopPropagation()}
                 onKeyUp={e => e.stopPropagation()}
@@ -867,7 +851,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
         setElapsed(finalVal)
         setTimerId(null)
         setLocalVal(valStr)
-        setValues(prev => ({ ...prev, [player.id]: { ...prev[player.id], value: valStr } }))
+        updatePlayerValues(player.id, { value: valStr })
       }
 
       const resetStopwatch = () => {
@@ -876,7 +860,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
         setElapsed(0)
         setTimerId(null)
         setLocalVal('')
-        setValues(prev => ({ ...prev, [player.id]: { ...prev[player.id], value: '' } }))
+        updatePlayerValues(player.id, { value: '' })
       }
 
       const formatTime = (seconds: number) => {
@@ -894,7 +878,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
       const handleManualChange = (inputVal: string) => {
         const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
         setLocalVal(sanitized)
-        setValues(prev => ({ ...prev, [player.id]: { ...prev[player.id], value: sanitized } }))
+        updatePlayerValues(player.id, { value: sanitized })
       }
 
       if (!isTimeStation) {
@@ -978,11 +962,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
     let content: React.ReactNode
     if (!player) {
-      content = (
-        <p className="capture-panel__hint">
-          Bitte Spieler*in auswählen, um Messwerte zu erfassen.
-        </p>
-      )
+      content = null
     } else if (n.includes('passgenauigkeit')) {
       content = <PassForm player={player} />
     } else if (n.includes('schusspräzision')) {
@@ -999,27 +979,31 @@ setProject(res.item||null)).catch(()=>setProject(null))
           <p className="capture-panel__player-name">
             {(player ? player.display_name : 'NAME').toUpperCase()}
           </p>
-          <div className="capture-panel__player-select">
-            <select
-              className="input capture-panel__select"
-              value={currentPlayerId}
-              onChange={e => setCurrentPlayerId(e.target.value)}
-            >
-              <option value="">Bitte wählen…</option>
-              {players.map(pl => (
-                <option key={pl.id} value={pl.id}>
-                  {pl.display_name}
-                  {pl.fav_number ? ` #${pl.fav_number}` : ''}
-                  {pl.birth_year ? ` (${pl.birth_year})` : ''}
-                </option>
-              ))}
-            </select>
+          {!player && (
+            <div className="capture-panel__player-select">
+              <select
+                className="input capture-panel__select"
+                value={currentPlayerId}
+                onChange={e => setCurrentPlayerId(e.target.value)}
+              >
+                <option value="">Bitte wählen…</option>
+                {players.map(pl => (
+                  <option key={pl.id} value={pl.id}>
+                    {pl.display_name}
+                    {pl.fav_number ? ` #${pl.fav_number}` : ''}
+                    {pl.birth_year ? ` (${pl.birth_year})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+        {player && (
+          <div className="capture-panel__highscore">
+            <span>AKTUELLER HIGHSCORE:</span>
+            <span className="capture-panel__highscore-value">{highscoreDisplay}</span>
           </div>
-        </div>
-        <div className="capture-panel__highscore">
-          <span>AKTUELLER HIGHSCORE:</span>
-          <span className="capture-panel__highscore-value">{highscoreDisplay}</span>
-        </div>
+        )}
         {player && playerScore !== undefined && (
           <div className="capture-panel__saved">Bisheriger Score: {playerScore}</div>
         )}
