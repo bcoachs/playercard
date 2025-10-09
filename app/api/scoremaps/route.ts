@@ -28,19 +28,31 @@ export async function GET(req: Request){
     return NextResponse.json({ items: [] })
   }
 
+  const gender = (searchParams.get('gender') || 'female').toLowerCase()
+
   let path = ''
-  if (station === 'S1') path = 'config/s1.csv'
+  if (station === 'S1') path = `config/s1_${gender}.csv`
   if (station === 'S2') path = 'config/s2.csv'
+  if (station === 'S6') path = `config/s6_${gender}.csv`
+
+  const fallbacks: string[] = []
+  if (station === 'S1') {
+    const legacy = gender === 'male' ? 'config/S1_Beweglichkeit_m.csv' : 'config/S1_Beweglichkeit_w.csv'
+    fallbacks.push(legacy)
+    if (gender === 'male') {
+      fallbacks.push('config/s1_female.csv', 'config/S1_Beweglichkeit_w.csv')
+    }
+    fallbacks.push('config/s1.csv', 'config/S1_Beweglichkeit.csv')
+  }
   if (station === 'S6') {
-    const gender = (searchParams.get('gender') || 'female').toLowerCase()
-    path = `config/s6_${gender}.csv`
+    fallbacks.push('config/s6_female.csv')
   }
 
   let dl = await supabaseAdmin.storage.from('config').download(path)
 
-  // Fallback für S6 male → female
-  if (!dl.data && station === 'S6' && path.endsWith('_male.csv')) {
-    dl = await supabaseAdmin.storage.from('config').download('config/s6_female.csv')
+  while (!dl.data && fallbacks.length) {
+    const fb = fallbacks.shift()!
+    dl = await supabaseAdmin.storage.from('config').download(fb)
   }
 
   if (!dl.data) {
@@ -69,13 +81,12 @@ export async function POST(req: Request){
   const file = fd.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'file missing' }, { status: 400 })
 
+  const gender = (searchParams.get('gender') || 'female').toLowerCase()
+
   let path = ''
-  if (station === 'S1') path = 'config/s1.csv'
+  if (station === 'S1') path = `config/s1_${gender}.csv`
   if (station === 'S2') path = 'config/s2.csv'
-  if (station === 'S6') {
-    const gender = (searchParams.get('gender') || 'female').toLowerCase()
-    path = `config/s6_${gender}.csv`
-  }
+  if (station === 'S6') path = `config/s6_${gender}.csv`
 
   const arrayBuf = await file.arrayBuffer()
   const { error } = await supabaseAdmin.storage.from('config').upload(

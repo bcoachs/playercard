@@ -78,7 +78,7 @@ export default function BasePage() {
           <div className="text-center">
             <Link
               href={captureHref}
-              className={`btn pill ${projectId && stationId ? '' : 'pointer-events-none opacity-50'}`}
+              className={`btn ${projectId && stationId ? '' : 'pointer-events-none opacity-50'}`}
             >
               Zur Eingabemaske
             </Link>
