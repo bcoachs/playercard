@@ -97,7 +97,7 @@ export default function NewProjectPage() {
           </div>
 
           <div className="flex justify-end">
-            <button className="btn pill" disabled={submitting}>
+            <button className="btn" disabled={submitting}>
               {submitting ? 'Anlegen…' : 'Run anlegen'}
             </button>
           </div>
