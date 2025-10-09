@@ -676,9 +676,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
       lastRunScore !== undefined ? String(lastRunScore).padStart(3, '0') : null
     const sketchLabel = `S${displayIdx}-Skizze`
 
-    const renderPdfButton = () => (
+    const renderPdfButton = (extraClass = '') => (
       <a
-        className="btn btn-icon capture-panel__pdf-button"
+        className={`btn btn-icon capture-panel__pdf-button${extraClass ? ` ${extraClass}` : ''}`}
         href={sketchHref}
         target="_blank"
         rel="noreferrer"
@@ -872,10 +872,11 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
       const formatTime = (seconds: number) => {
         if (!Number.isFinite(seconds) || seconds < 0) seconds = 0
-        const mm = Math.floor(seconds / 60)
-        const ss = Math.floor(seconds % 60)
-        const ms = Math.floor((seconds - Math.floor(seconds)) * 100)
-        return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}:${String(ms).padStart(2, '0')}`
+        const totalHundredths = Math.round(seconds * 100)
+        const ss = Math.floor(totalHundredths / 100)
+        const hh = Math.abs(totalHundredths % 100)
+        const cappedSeconds = Math.min(ss, 99)
+        return `${String(cappedSeconds).padStart(2, '0')}:${String(hh).padStart(2, '0')}`
       }
 
       const startStopwatch = () => {
@@ -966,7 +967,9 @@ setProject(res.item||null)).catch(()=>setProject(null))
       return (
         <>
           <div className="capture-panel__timer">
-            <div className="capture-panel__timer-display">{formatted}</div>
+            <div className={`capture-panel__timer-display timer-display${running ? ' is-running' : ''}`}>
+              {formatted}
+            </div>
             <div className={`capture-panel__timer-bar${running ? ' is-running' : ''}`} />
           </div>
           <div className="capture-panel__runs">
@@ -977,32 +980,32 @@ setProject(res.item||null)).catch(()=>setProject(null))
                 <div key={idx} className="capture-panel__run-row">
                   <span className="capture-panel__run-label">{`RUN ${idx + 1}:`}</span>
                   <span className="capture-panel__run-value">
-                    {hasRun ? formatTime(runVal) : '--:--:--'}
+                    {hasRun ? formatTime(runVal) : '--:--'}
                   </span>
                 </div>
               )
             })}
           </div>
-          <div className="capture-panel__buttons">
+          <div className="capture-panel__buttons capture-actions">
             <button
-              className="btn"
+              className="btn btn-capture"
               type="button"
               onClick={running ? stopStopwatch : startStopwatch}
             >
               {running ? 'Stopp' : 'Start'}
             </button>
-            <button className="btn" type="button" onClick={resetStopwatch}>
+            <button className="btn btn-capture" type="button" onClick={resetStopwatch}>
               RESET
             </button>
             <button
-              className="btn"
+              className="btn btn-capture"
               type="button"
               onClick={() => handleSave(player)}
               disabled={saveDisabled}
             >
               SPEICHERN
             </button>
-            {renderPdfButton()}
+            {renderPdfButton('btn-capture')}
           </div>
         </>
       )
@@ -1021,12 +1024,12 @@ setProject(res.item||null)).catch(()=>setProject(null))
 
     return (
       <section className="capture-panel">
-        <div className="capture-panel__header font-league">{heading}</div>
+        <div className="capture-panel__header font-league capture-title">{heading}</div>
         <div className="capture-panel__player">
           {!player && (
             <p className="capture-panel__player-label">SPIELER*IN WÄHLEN</p>
           )}
-          <p className="capture-panel__player-name">
+          <p className="capture-panel__player-name capture-player-name">
             {(player ? player.display_name : 'NAME').toUpperCase()}
           </p>
           {!player && (
