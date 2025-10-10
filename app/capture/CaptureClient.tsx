@@ -36,7 +36,10 @@ const ST_INDEX: Record<string, number> = {
   'Beweglichkeit': 1, 'Technik': 2, 'Passgenauigkeit': 3, 'Schusskraft': 4, 'Schusspräzision': 5, 'Schnelligkeit': 6
 }
 
-const RUNS_COUNT = 3
+const TIME_RUNS_COUNT = 3
+const SHOT_RUNS_COUNT = 5
+const SHOT_MIN = 20
+const SHOT_MAX = 130
 
 /** Standard-Normierung (Fallback, wenn keine CSV) */
 function normScore(st: Station, raw: number){
@@ -408,13 +411,17 @@ setProject(res.item||null)).catch(()=>setProject(null))
       return rawHits
     }
 
+    const limit = n.includes('schusskraft') ? SHOT_RUNS_COUNT : TIME_RUNS_COUNT
     const runs = Array.isArray(v.runs)
       ? v.runs
           .map((entry: unknown) => Number(entry))
           .filter((entry: number) => Number.isFinite(entry))
-          .slice(-RUNS_COUNT)
+          .slice(-limit)
       : []
     if (runs.length) {
+      if (n.includes('schusskraft')) {
+        return Math.max(...runs)
+      }
       return Math.min(...runs)
     }
 
@@ -649,32 +656,49 @@ setProject(res.item||null)).catch(()=>setProject(null))
     const player = players.find(x => x.id === currentPlayerId) || null
     const playerScore = player ? saved[player.id] : undefined
     const playerValues = player ? values[player.id] : undefined
+    const isTimeStation =
+      n.includes('beweglichkeit') || n.includes('technik') || n.includes('schnelligkeit')
+    const isShotStation = n.includes('schusskraft')
+    const runLimit = isShotStation ? SHOT_RUNS_COUNT : TIME_RUNS_COUNT
     const rawRuns = Array.isArray(playerValues?.runs)
       ? (playerValues?.runs as unknown[])
       : []
     const playerRuns = rawRuns
       .map((entry: unknown) => Number(entry))
       .filter((entry: number) => Number.isFinite(entry))
-      .slice(-RUNS_COUNT)
+      .slice(-runLimit)
     const runScores = player && playerRuns.length
       ? playerRuns.map(run => scoreFor(station, player, run))
       : []
     const lastRunScore = runScores.length
       ? runScores[runScores.length - 1]
       : playerScore
-    const isTimeStation =
-      n.includes('beweglichkeit') || n.includes('technik') || n.includes('schnelligkeit')
-    const bestLocalScore = isTimeStation
+    const measurementEntry = player
+      ? measurements.find(m => m.station_id === stationId && m.player_id === player.id)
+      : null
+    const measurementRaw = measurementEntry
+      ? Number(String(measurementEntry.value ?? '').replace(',', '.'))
+      : NaN
+    const normalizedMeasurementRaw = Number.isFinite(measurementRaw) ? measurementRaw : null
+    const bestLocalScore = (isTimeStation || isShotStation)
       ? (runScores.length ? Math.max(...runScores) : undefined)
       : undefined
-    const effectiveHighscore =
+    const effectiveScoreHighscore =
       bestLocalScore ?? playerScore ?? (stationHighscore !== null ? stationHighscore : undefined)
+    const formatShotValue = (val: number) => {
+      if (!Number.isFinite(val)) return '-- km/h'
+      const rounded = Math.round(val * 10) / 10
+      const text = Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)
+      return `${text} km/h`
+    }
     const highscoreDisplay =
-      effectiveHighscore !== undefined
-        ? String(effectiveHighscore).padStart(3, '0')
+      effectiveScoreHighscore !== undefined
+        ? String(Math.round(effectiveScoreHighscore)).padStart(3, '0')
         : '###'
     const letzterRunDisplay =
-      lastRunScore !== undefined ? String(lastRunScore).padStart(3, '0') : null
+      lastRunScore !== undefined
+        ? String(Math.round(lastRunScore)).padStart(3, '0')
+        : null
     const sketchLabel = `S${displayIdx}-Skizze`
 
     const renderPdfButton = (extraClass = '') => (
@@ -691,6 +715,134 @@ setProject(res.item||null)).catch(()=>setProject(null))
         </span>
       </a>
     )
+
+    function ShotPowerForm({ player }: { player: Player }) {
+      const v = values[player.id] || {}
+      const storedRuns = React.useMemo(() => {
+        if (!Array.isArray(v.runs)) return [] as number[]
+        return (v.runs as unknown[])
+          .map(entry => Number(entry))
+          .filter(entry => Number.isFinite(entry))
+          .slice(-SHOT_RUNS_COUNT)
+      }, [v.runs])
+
+      const clampShotValue = React.useCallback((value: number) => {
+        if (!Number.isFinite(value)) return SHOT_MIN
+        const rounded = Math.round(value)
+        return Math.max(SHOT_MIN, Math.min(SHOT_MAX, rounded))
+      }, [])
+
+      const baseSliderValue = React.useMemo(() => {
+        if (normalizedMeasurementRaw !== null) {
+          return clampShotValue(normalizedMeasurementRaw)
+        }
+        return clampShotValue((SHOT_MIN + SHOT_MAX) / 2)
+      }, [clampShotValue, normalizedMeasurementRaw])
+
+      const [localRuns, setLocalRuns] = React.useState<number[]>(storedRuns)
+      const [sliderValue, setSliderValue] = React.useState<number>(
+        storedRuns.length ? clampShotValue(storedRuns[storedRuns.length - 1]) : baseSliderValue
+      )
+
+      React.useEffect(() => {
+        setLocalRuns(storedRuns)
+      }, [storedRuns])
+
+      React.useEffect(() => {
+        if (storedRuns.length) {
+          setSliderValue(clampShotValue(storedRuns[storedRuns.length - 1]))
+        } else {
+          setSliderValue(baseSliderValue)
+        }
+      }, [storedRuns, baseSliderValue, clampShotValue])
+
+      const handleSliderChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setSliderValue(clampShotValue(Number(event.target.value)))
+      }
+
+      const handleAddShot = () => {
+        const numericValue = clampShotValue(sliderValue)
+        const nextRuns = [...localRuns, numericValue].slice(-SHOT_RUNS_COUNT)
+        setLocalRuns(nextRuns)
+        const best = Math.max(...nextRuns)
+        updatePlayerValues(player.id, {
+          runs: nextRuns,
+          value: String(best),
+        })
+      }
+
+      const handleReset = () => {
+        setLocalRuns([])
+        setSliderValue(baseSliderValue)
+        updatePlayerValues(player.id, { runs: [], value: '' })
+      }
+
+      const saveDisabled = !localRuns.length || !currentPlayerId
+
+      return (
+        <div className="capture-panel__form-card capture-panel__form-card--single capture-panel__form-card--shot">
+          <label className="capture-panel__input-label">Messwert {stationUnitLabel}</label>
+          <div className="capture-panel__shot-controls">
+            <div className="capture-panel__shot-slider">
+              <div className="capture-panel__slider-value">
+                <span className="capture-panel__slider-value-number">{sliderValue}</span>
+                <span className="capture-panel__slider-value-unit">km/h</span>
+              </div>
+              <input
+                className="capture-panel__slider"
+                type="range"
+                min={SHOT_MIN}
+                max={SHOT_MAX}
+                step={1}
+                value={sliderValue}
+                onChange={handleSliderChange}
+              />
+              <div className="capture-panel__slider-scale">
+                <span>{SHOT_MIN}</span>
+                <span>{SHOT_MAX}</span>
+              </div>
+            </div>
+            <button
+              className="btn btn-capture capture-panel__shot-add"
+              type="button"
+              onClick={handleAddShot}
+            >
+              Run hinzufügen
+            </button>
+          </div>
+          <div className="capture-panel__runs capture-panel__runs--shot">
+            {Array.from({ length: SHOT_RUNS_COUNT }).map((_, idx) => {
+              const runVal = localRuns[idx]
+              const hasRun = typeof runVal === 'number' && Number.isFinite(runVal)
+              return (
+                <div key={idx} className="capture-panel__run-row">
+                  <span className="capture-panel__run-label">{`RUN ${idx + 1}:`}</span>
+                  <span className="capture-panel__run-value">
+                    {hasRun ? formatShotValue(runVal) : '-- km/h'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <div className="capture-panel__buttons">
+            <div className="capture-actions capture-actions--shot">
+              <button
+                className="btn btn-capture"
+                type="button"
+                onClick={() => handleSave(player)}
+                disabled={saveDisabled}
+              >
+                SPEICHERN
+              </button>
+              <button className="btn btn-capture" type="button" onClick={handleReset}>
+                RESET
+              </button>
+              {renderPdfButton('btn-capture')}
+            </div>
+          </div>
+        </div>
+      )
+    }
 
     function PassForm({ player }: { player: Player }) {
       const v = values[player.id] || {}
@@ -843,30 +995,28 @@ setProject(res.item||null)).catch(()=>setProject(null))
       const val = v.value ?? ''
       const isTimeStation =
         n.includes('beweglichkeit') || n.includes('technik') || n.includes('schnelligkeit')
+
+      if (isShotStation) {
+        return <ShotPowerForm player={player} />
+      }
+
       const storedRuns = React.useMemo(() => {
         if (!Array.isArray(v.runs)) return []
         return (v.runs as unknown[])
           .map(entry => Number(entry))
           .filter(entry => Number.isFinite(entry))
-          .slice(-RUNS_COUNT)
+          .slice(-TIME_RUNS_COUNT)
       }, [v.runs])
-      const measurementRun = React.useMemo(() => {
-        if (!isTimeStation) return null
-        const entry = measurements.find(
-          m => m.station_id === stationId && m.player_id === player.id
-        )
-        if (!entry) return null
-        const numeric = Number(String(entry.value ?? '').replace(',', '.'))
-        return Number.isFinite(numeric) ? numeric : null
-      }, [isTimeStation, measurements, player.id, stationId])
       const normalizedRuns = React.useMemo(() => {
         return storedRuns
       }, [storedRuns])
       const normalizedValue = React.useMemo(() => {
         if (val) return val
-        if (!isTimeStation && measurementRun !== null) return measurementRun.toFixed(2)
+        if (!isTimeStation && normalizedMeasurementRaw !== null) {
+          return normalizedMeasurementRaw.toFixed(2)
+        }
         return ''
-      }, [val, measurementRun, isTimeStation])
+      }, [val, isTimeStation, normalizedMeasurementRaw])
 
       const [localVal, setLocalVal] = React.useState<string>(normalizedValue)
       const [localRuns, setLocalRuns] = React.useState<number[]>(normalizedRuns)
@@ -914,7 +1064,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
         if (timerId) clearInterval(timerId)
         const finalVal = (Date.now() - (stopwatchStart || Date.now())) / 1000
         const valStr = finalVal.toFixed(2)
-        const nextRuns = [...localRuns, finalVal].slice(-RUNS_COUNT)
+        const nextRuns = [...localRuns, finalVal].slice(-TIME_RUNS_COUNT)
         const best = nextRuns.length ? Math.min(...nextRuns) : finalVal
         setStopwatchStart(null)
         setElapsed(finalVal)
@@ -937,12 +1087,6 @@ setProject(res.item||null)).catch(()=>setProject(null))
         updatePlayerValues(player.id, { runs: [], value: '' })
       }
 
-      const handleManualChange = (inputVal: string) => {
-        const sanitized = inputVal.replace(/[^0-9.,]/g, '').replace(',', '.')
-        setLocalVal(sanitized)
-        updatePlayerValues(player.id, { value: sanitized })
-      }
-
       const displaySeconds = running
         ? elapsed
         : localRuns.length
@@ -952,9 +1096,6 @@ setProject(res.item||null)).catch(()=>setProject(null))
       const saveDisabled = isTimeStation
         ? localRuns.length === 0 || !currentPlayerId
         : !localVal || !currentPlayerId
-
-
-        // … bestehender Code bleibt
         if (!isTimeStation) {
           return (
             <div className="capture-panel__form-card capture-panel__form-card--single">
@@ -964,7 +1105,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
               <input
                 className="input capture-panel__input"
                 type="number"
-                defaultValue={val ?? ''}  // initialer Wert, nicht per State gebunden
+                defaultValue={normalizedValue}
                 onBlur={e => {
                   const sanitized = e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.')
                   // nur bei Verlassen des Feldes speichern
@@ -986,40 +1127,6 @@ setProject(res.item||null)).catch(()=>setProject(null))
             </div>
           )
         }
-
-
-
-
-      
-     /* funktionierende version aber mit fehler in der Schusskrafteingabe if (!isTimeStation) {
-        return (
-          <div className="capture-panel__form-card capture-panel__form-card--single">
-            <label className="capture-panel__input-label">
-              Messwert {stationUnitLabel}
-            </label>
-            <input
-              className="input capture-panel__input"
-              type="number"
-              value={localVal}
-              onChange={e => handleManualChange(e.target.value)}
-              
-              placeholder={stationUnit || 'Wert'}
-            />
-            <div className="capture-panel__form-actions capture-panel__form-actions--inline">
-              <button
-                className="btn"
-                type="button"
-                onClick={() => handleSave(player)}
-                disabled={saveDisabled}
-              >
-                Speichern
-              </button>
-              {renderPdfButton()}
-            </div>
-          </div>
-        )
-      }
-*/ 
       return (
         <>
           <div className="capture-panel__timer">
@@ -1029,7 +1136,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
             <div className={`capture-panel__timer-bar${running ? ' is-running' : ''}`} />
           </div>
           <div className="capture-panel__runs">
-            {Array.from({ length: RUNS_COUNT }).map((_, idx) => {
+            {Array.from({ length: TIME_RUNS_COUNT }).map((_, idx) => {
               const runVal = localRuns[idx]
               const hasRun = typeof runVal === 'number' && Number.isFinite(runVal)
               return (
