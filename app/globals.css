@@ -770,20 +770,7 @@ a, .btn {
     text-align: left;
   }
 
- /* Randlose Kachel bei kleineren Bildschirmen */
-@media (max-width: 900px) {
-  .capture-panel {
-    /* volle Breite, nicht mehr zentriert */
-    max-width: none;     /* entfernt das Limit von 640px */
-    margin-inline: 0;    /* setzt margin-left und margin-right auf 0 */
-  }
-  .hero-stack {
-    /* optional: Innenabstand links und rechts entfernen */
-    padding-inline: 0;
-    margin-inline: 0;
-    max-width: 100%;
-  }
-}
+
   
    
 }
