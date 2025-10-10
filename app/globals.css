@@ -460,9 +460,10 @@ a, .btn {
 .capture-panel__highscore {
   width: var(--capture-panel-stack-width);
   display: flex;
+  flex-direction: column;
   justify-content: center;
-  align-items: baseline;
-  gap: clamp(6px, 1.5vw, 14px);
+  align-items: center;
+  gap: clamp(0.25rem, 1.2vw, 0.5rem);
   font-size: clamp(1rem, 2.4vw, 1.35rem);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -721,15 +722,18 @@ a, .btn {
     width: 100%;
     margin-inline: 0;
     padding-block: clamp(14px, 5vw, 24px);
-    --capture-mobile-padding: clamp(0px, 1.5vw, 5px);
-    padding-inline: var(--capture-mobile-padding);
-    padding-left: max(env(safe-area-inset-left), var(--capture-mobile-padding));
-    padding-right: max(env(safe-area-inset-right), var(--capture-mobile-padding));
+    padding-left: max(env(safe-area-inset-left), 0px);
+    padding-right: max(env(safe-area-inset-right), 0px);
     border-radius: 24px;
   }
 
   .capture-panel__highscore {
     width: 100%;
+  }
+
+  .capture-stations {
+    padding-left: 0;
+    padding-right: 0;
   }
  }
 
