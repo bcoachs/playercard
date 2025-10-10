@@ -961,13 +961,10 @@ setProject(res.item||null)).catch(()=>setProject(null))
             </label>
             <input
               className="input capture-panel__input"
-              type="tel"
+              type="number"
               value={localVal}
               onChange={e => handleManualChange(e.target.value)}
-              onKeyDown={e => e.stopPropagation()}
-              onKeyDownCapture={e => e.stopPropagation()}
-              onKeyUp={e => e.stopPropagation()}
-              onKeyPress={e => e.stopPropagation()}
+              
               placeholder={stationUnit || 'Wert'}
             />
             <div className="capture-panel__form-actions capture-panel__form-actions--inline">
