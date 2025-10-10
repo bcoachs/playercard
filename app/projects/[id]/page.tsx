@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import BackFab from '../../components/BackFab'
@@ -22,6 +22,7 @@ type Player = {
   fav_position: string | null
   nationality: string | null
   gender?: 'male' | 'female' | null
+  photo_url?: string | null
 }
 type Project = { id: string; name: string; date: string | null; logo_url?: string | null }
 type Measurement = { player_id: string; station_id: string; value: number }
@@ -216,6 +217,186 @@ export default function ProjectDashboard() {
   const [pPos, setPPos] = useState('')
   const [pNat, setPNat] = useState('')
   const [pGender, setPGender] = useState<'male' | 'female' | ''>('')
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null)
+
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deleteId, setDeleteId] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const [isPhotoDialogOpen, setIsPhotoDialogOpen] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+
+  function stopMediaStream() {
+    const stream = mediaStreamRef.current
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop())
+      mediaStreamRef.current = null
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      stopMediaStream()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isPhotoDialogOpen) {
+      stopMediaStream()
+      return
+    }
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Kamera wird nicht unterstützt.')
+      return
+    }
+
+    setCameraError(null)
+
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => {
+        mediaStreamRef.current = stream
+        const video = videoRef.current
+        if (video) {
+          video.srcObject = stream
+          video.play().catch(() => {})
+        }
+      })
+      .catch(() => {
+        setCameraError('Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.')
+        stopMediaStream()
+      })
+
+    return () => {
+      stopMediaStream()
+    }
+  }, [isPhotoDialogOpen])
+
+  useEffect(() => {
+    if (!showDeleteDialog) return
+    if (!players.length) {
+      setDeleteId('')
+      return
+    }
+    if (!players.some(p => p.id === deleteId)) {
+      setDeleteId(players[0].id)
+    }
+  }, [deleteId, players, showDeleteDialog])
+
+  function openPhotoCapture() {
+    setCameraError(null)
+    setIsPhotoDialogOpen(true)
+  }
+
+  function closePhotoCapture() {
+    setIsPhotoDialogOpen(false)
+    stopMediaStream()
+  }
+
+  async function capturePhoto() {
+    const video = videoRef.current
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      setCameraError('Kein Videosignal verfügbar.')
+      return
+    }
+
+    const aspect = 85.6 / 53.98
+    let drawWidth = video.videoWidth
+    let drawHeight = Math.round(drawWidth / aspect)
+    if (drawHeight > video.videoHeight) {
+      drawHeight = video.videoHeight
+      drawWidth = Math.round(drawHeight * aspect)
+    }
+
+    const sx = Math.max(0, (video.videoWidth - drawWidth) / 2)
+    const sy = Math.max(0, (video.videoHeight - drawHeight) / 2)
+    const canvas = document.createElement('canvas')
+    canvas.width = drawWidth
+    canvas.height = drawHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      setCameraError('Foto konnte nicht verarbeitet werden.')
+      return
+    }
+
+    ctx.drawImage(video, sx, sy, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+    setPhotoPreview(dataUrl)
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', 0.92)
+    )
+    setPhotoBlob(blob ?? null)
+    setCameraError(null)
+    closePhotoCapture()
+  }
+
+  function openDeleteDialog() {
+    if (!players.length) return
+    const initial = editId && players.some(p => p.id === editId) ? editId : players[0].id
+    setDeleteId(initial)
+    setShowDeleteDialog(true)
+  }
+
+  function closeDeleteDialog() {
+    setShowDeleteDialog(false)
+  }
+
+  async function deletePlayerById(id: string, opts?: { skipConfirm?: boolean }) {
+    if (!id) return false
+
+    if (!opts?.skipConfirm) {
+      const yes = confirm('Willst du wirklich diesen Spieler löschen?')
+      if (!yes) return false
+    }
+
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/players?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const text = await res.text()
+        alert(text || 'Fehler beim Löschen')
+        return false
+      }
+
+      const updated = await fetch(`/api/projects/${projectId}/players`, { cache: 'no-store' }).then(r => r.json())
+      const nextPlayers: Player[] = updated.items || []
+      setPlayers(nextPlayers)
+
+      if (editId === id) {
+        resetForm()
+      }
+
+      if (showDeleteDialog) {
+        if (nextPlayers.length) {
+          setDeleteId(nextPlayers[0].id)
+        } else {
+          setDeleteId('')
+        }
+      }
+
+      return true
+    } catch (err) {
+      alert('Fehler beim Löschen')
+      return false
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  async function confirmDeleteFromDialog() {
+    if (!deleteId) return
+    const success = await deletePlayerById(deleteId, { skipConfirm: true })
+    if (success) {
+      closeDeleteDialog()
+    }
+  }
 
   // S1 CSV (global)
   const [s1Female, setS1Female] = useState<Record<string, number[]> | null>(null)
@@ -432,6 +613,13 @@ export default function ProjectDashboard() {
     setPPos(p.fav_position || '')
     setPNat(p.nationality || '')
     setPGender((p.gender as any) || '')
+    const existingPhoto = (p as any).photo_url || (p as any).photo
+    if (typeof existingPhoto === 'string' && existingPhoto) {
+      setPhotoPreview(existingPhoto)
+    } else {
+      setPhotoPreview(null)
+    }
+    setPhotoBlob(null)
   }
   function resetForm() {
     setEditId('')
@@ -442,6 +630,8 @@ export default function ProjectDashboard() {
     setPPos('')
     setPNat('')
     setPGender('')
+    setPhotoPreview(null)
+    setPhotoBlob(null)
   }
 
   /* Actions: Create/Update/Delete */
@@ -463,6 +653,7 @@ export default function ProjectDashboard() {
     if (pPos) body.append('fav_position', pPos)
     if (pNat) body.append('nationality', pNat)
     if (pGender) body.append('gender', pGender)
+    if (photoBlob) body.append('photo', photoBlob, `player-${Date.now()}.jpg`)
     const method = editId ? 'PUT' : 'POST'
     if (editId) body.append('id', editId)
     const res = await fetch(`/api/projects/${projectId}/players`, { method, body })
@@ -476,21 +667,6 @@ export default function ProjectDashboard() {
     if (!editId) resetForm()
   }
 
-  async function deletePlayer() {
-    if (!editId) return
-    const yes = confirm('Willst du wirklich diesen Spieler löschen?')
-    if (!yes) return
-    const res = await fetch(`/api/projects/${projectId}/players?id=${encodeURIComponent(editId)}`, { method: 'DELETE' })
-    if (!res.ok) {
-      const t = await res.text()
-      alert(t || 'Fehler beim Löschen')
-      return
-    }
-    const updated = await fetch(`/api/projects/${projectId}/players`, { cache: 'no-store' }).then(r => r.json())
-    setPlayers(updated.items || [])
-    resetForm()
-  }
-
   // abgeleitetes Alter (unter dem Jahrgang anzeigen)
   const derivedAge = useMemo(() => {
     if (!pYear || String(pYear).length !== 4) return null
@@ -498,78 +674,124 @@ export default function ProjectDashboard() {
     return a
   }, [pYear, eventYear])
 
+  const photoButtonLabel = photoPreview ? 'Foto neu aufnehmen' : 'Foto aufnehmen'
+  const canDeletePlayers = players.length > 0
+  const playercardHref = `/projects/${projectId}/playercard`
+
   /* Render */
   return (
     <main>
       {/* Sektion 1: Spieler-Eingabe über player.jpg */}
       <section className="hero-full safe-area bg-player">
-        <div className="container w-full px-5">
-          <div className="flex items-start justify-between mb-5">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-extrabold hero-text">
-                Run: {project?.name ?? '—'}
-              </h1>
-              {project?.date && <div className="hero-sub">{String(project.date)}</div>}
+        <div className="matrix-shell matrix-shell--hero">
+          <div className="matrix-hero__header">
+            <div className="matrix-hero__title-group">
+              <h1 className="matrix-hero__title hero-text">Run: {project?.name ?? '—'}</h1>
+              {project?.date && (
+                <div className="matrix-hero__subtitle hero-sub">{String(project.date)}</div>
+              )}
             </div>
             {project?.logo_url && (
-              <img src={project.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
+              <img src={project.logo_url} alt="Logo" className="matrix-hero__logo" />
             )}
           </div>
 
-          {/* Formular-Card (dunkles Glas) */}
-          <div className="card-glass-dark max-w-5xl">
-            <div className="text-lg font-semibold mb-3">
-              {editId ? 'Spieler bearbeiten' : 'Spieler hinzufügen'}
-            </div>
-            <form onSubmit={addOrUpdatePlayer} className="grid gap-3 md:grid-cols-3">
-              <div>
-                <label className="block text-xs font-semibold mb-1">Name *</label>
-                <input className="input" value={pName} onChange={e => setPName(e.target.value)} placeholder="Vorname Nachname" />
+          <div className="card-glass-dark max-w-5xl w-full">
+            <div className="matrix-form__title">{editId ? 'Spieler bearbeiten' : 'Spieler hinzufügen'}</div>
+
+            <form onSubmit={addOrUpdatePlayer} className="matrix-form grid gap-4 md:grid-cols-4">
+              <div className="matrix-form__photo md:col-span-1">
+                <div className="playercard-photo-wrapper">
+                  {photoPreview ? (
+                    <img
+                      src={photoPreview}
+                      alt={pName ? `${pName} – Spielerfoto` : 'Spielerfoto'}
+                      className="playercard-photo"
+                    />
+                  ) : (
+                    <div className="playercard-photo playercard-photo--empty">
+                      <span>Foto folgt</span>
+                    </div>
+                  )}
+                </div>
+                <div className="playercard-photo-hint">85,6 mm × 53,98 mm</div>
+                <button type="button" className="btn-secondary w-full" onClick={openPhotoCapture}>
+                  {photoButtonLabel}
+                </button>
               </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">Jahrgang *</label>
-                <input className="input" inputMode="numeric" pattern="\d{4}" placeholder="YYYY" value={pYear} onChange={e => setPYear(e.target.value as any)} />
-                {derivedAge !== null && (
-                  <div style={{ marginTop: 4, fontSize: 12, color: 'rgba(255,255,255,.9)' }}>
-                    Alter am Eventdatum: <strong>{derivedAge}</strong>
+
+              <div className="md:col-span-3">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold mb-1">Name *</label>
+                    <input
+                      className="input"
+                      value={pName}
+                      onChange={e => setPName(e.target.value)}
+                      placeholder="Vorname Nachname"
+                    />
                   </div>
-                )}
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">Jahrgang *</label>
+                    <input
+                      className="input"
+                      inputMode="numeric"
+                      pattern="\d{4}"
+                      placeholder="YYYY"
+                      value={pYear}
+                      onChange={e => setPYear(e.target.value as any)}
+                    />
+                    {derivedAge !== null && (
+                      <div className="matrix-form__hint">
+                        Alter am Eventdatum: <strong>{derivedAge}</strong>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">Verein</label>
+                    <input className="input" value={pClub} onChange={e => setPClub(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">Lieblingsnummer</label>
+                    <input
+                      className="input"
+                      inputMode="numeric"
+                      value={pNum}
+                      onChange={e => setPNum(e.target.value === '' ? '' : Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">Position</label>
+                    <select className="input" value={pPos} onChange={e => setPPos(e.target.value)}>
+                      <option value="">–</option>
+                      {['TS', 'IV', 'AV', 'ZM', 'OM', 'LOM', 'ROM', 'ST'].map(x => (
+                        <option key={x} value={x}>
+                          {x}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">Nationalität</label>
+                    <input
+                      className="input"
+                      value={pNat}
+                      onChange={e => setPNat(e.target.value)}
+                      placeholder="DE, FR, ..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">Geschlecht</label>
+                    <select className="input" value={pGender} onChange={e => setPGender(e.target.value as any)}>
+                      <option value="">–</option>
+                      <option value="male">männlich</option>
+                      <option value="female">weiblich</option>
+                    </select>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">Verein</label>
-                <input className="input" value={pClub} onChange={e => setPClub(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">Lieblingsnummer</label>
-                <input className="input" inputMode="numeric" value={pNum} onChange={e => setPNum(e.target.value === '' ? '' : Number(e.target.value))} />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">Position</label>
-                <select className="input" value={pPos} onChange={e => setPPos(e.target.value)}>
-                  <option value="">–</option>
-                  {['TS', 'IV', 'AV', 'ZM', 'OM', 'LOM', 'ROM', 'ST'].map(x => (
-                    <option key={x} value={x}>
-                      {x}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">Nationalität</label>
-                <input className="input" value={pNat} onChange={e => setPNat(e.target.value)} placeholder="DE, FR, ..." />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">Geschlecht</label>
-                <select className="input" value={pGender} onChange={e => setPGender(e.target.value as any)}>
-                  <option value="">–</option>
-                  <option value="male">männlich</option>
-                  <option value="female">weiblich</option>
-                </select>
-              </div>
-              {/* Luft nach „Geschlecht“ */}
-              <div className="md:col-span-3" />
-              {/* Buttons mit Abstand, rechts ausgerichtet */}
-              <div className="md:col-span-3 flex items-center gap-3 justify-end">
+
+              <div className="md:col-span-4 flex flex-wrap items-center gap-3 justify-end">
                 <button className="btn" type="submit">
                   {editId ? 'Spieler speichern' : 'Spieler anlegen'}
                 </button>
@@ -577,104 +799,177 @@ export default function ProjectDashboard() {
                   Capture
                 </Link>
                 {editId && (
-                  <button type="button" className="btn" onClick={deletePlayer}>
-                    Spieler löschen
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => deletePlayerById(editId)}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? 'Löschen…' : 'Spieler löschen'}
                   </button>
                 )}
               </div>
-              {/* zusätzliche Leerzeile */}
-              <div className="md:col-span-3 h-2" />
             </form>
           </div>
         </div>
       </section>
+
       {/* Sektion 2: Matrix über matrix.jpg mit „Glass“-Rahmen + Abstand & Hover */}
       <section className="bg-matrix page-pad">
-        <div className="container w-full px-5 py-8">
-          {/* kleiner äußerer Rand */}
-          <div className="mx-2 md:mx-3 mt-2">
-            <div className="card-glass-dark table-dark overflow-x-auto">
-              <div className="mb-3">
-                <div className="text-lg font-semibold">Spieler-Matrix</div>
-                <div className="text-sm" style={{ color: 'rgba(255,255,255,.82)' }}>
-                  Ø = Durchschnitt über alle erfassten Stationen. Klick auf einen Spieler lädt die Daten oben ins Formular.
-                </div>
-              </div>
-              <table className="w-full text-sm matrix-table">
-                <thead>
-                  <tr className="text-left">
-                    <th className="p-2 whitespace-nowrap">Spieler</th>
-                    <th className="p-2 whitespace-nowrap">Ø</th>
-                    {stations.length
-                      ? ST_ORDER.map(n => {
-                          const st = stations.find(s => s.name === n)
-                          return st ? (
-                            <th key={st.id} className="p-2 whitespace-nowrap">
-                              {st.name}
-                            </th>
-                          ) : null
-                        })
-                      : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(({ player, perStation, avg }) => (
-                    <tr key={player.id} className="align-top hoverable-row" onClick={() => fillForm(player)} style={{ cursor: 'pointer' }}>
-                      <td className="p-2 whitespace-nowrap font-medium">
-                        {player.display_name}
-                        {Number.isFinite(player.fav_number as any) ? ` #${player.fav_number}` : ''}
-                      </td>
-                      <td className="p-2">
-                        <span className="badge-green">{avg}</span>
-                      </td>
-                      {perStation.map(cell => {
-                        const score = cell.score
-                        const raw = cell.raw
-                        return (
-                          <td key={cell.id} className="p-2">
-                            {typeof score === 'number' ? (
-                              <div>
-                                <span className="badge-green">{score}</span>
-                                <div className="text-[11px]" style={{ color: 'rgba(255,255,255,.75)' }}>
-                                  {typeof raw === 'number' ? `${raw}${cell.unit ? ` ${cell.unit}` : ''}` : '—'}
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-xs" style={{ color: 'rgba(255,255,255,.7)' }}>
-                                —
-                              </span>
-                            )}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                  {!rows.length && (
-                    <tr>
-                      <td colSpan={2 + stations.length} className="p-3 text-center" style={{ color: 'rgba(255,255,255,.85)' }}>
-                        Noch keine Spieler.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+        <div className="matrix-shell matrix-shell--table">
+          <div className="matrix-header">
+            <div>
+              <div className="matrix-title">Spieler-Matrix</div>
+              <p className="matrix-subtitle">
+                Ø = Durchschnitt über alle erfassten Stationen. Klick auf einen Spieler lädt die Daten oben ins Formular.
+              </p>
             </div>
-            {(USE_S1_CSV || USE_S4_CSV || USE_S6_CSV) && (
-              <div className="csv-status-note text-sm">
-                {USE_S1_CSV && s1Status !== 'off' && (
-                  <div className="csv-status-note__line">S1-Tabellen: {statusText(s1Status)}</div>
-                )}
-                {USE_S4_CSV && s4Status !== 'off' && (
-                  <div className="csv-status-note__line">S4-Tabellen: {statusText(s4Status)}</div>
-                )}
-                {USE_S6_CSV && s6Status !== 'off' && (
-                  <div className="csv-status-note__line">S6-Tabellen: {statusText(s6Status)}</div>
-                )}
-              </div>
-            )}
+            <div className="matrix-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={openDeleteDialog}
+                disabled={!canDeletePlayers || isDeleting}
+              >
+                Spieler löschen
+              </button>
+              <Link href={playercardHref} className="btn-secondary">
+                Playercard
+              </Link>
+            </div>
           </div>
+
+          <div className="card-glass-dark table-dark overflow-x-auto">
+            <table className="w-full text-sm matrix-table">
+              <thead>
+                <tr className="text-left">
+                  <th className="p-2 whitespace-nowrap">Spieler</th>
+                  <th className="p-2 whitespace-nowrap">Ø</th>
+                  {stations.length
+                    ? ST_ORDER.map(n => {
+                        const st = stations.find(s => s.name === n)
+                        return st ? (
+                          <th key={st.id} className="p-2 whitespace-nowrap">
+                            {st.name}
+                          </th>
+                        ) : null
+                      })
+                    : null}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ player, perStation, avg }) => (
+                  <tr key={player.id} className="align-top hoverable-row" onClick={() => fillForm(player)} style={{ cursor: 'pointer' }}>
+                    <td className="p-2 whitespace-nowrap font-medium">
+                      {player.display_name}
+                      {Number.isFinite(player.fav_number as any) ? ` #${player.fav_number}` : ''}
+                    </td>
+                    <td className="p-2">
+                      <span className="badge-green">{avg}</span>
+                    </td>
+                    {perStation.map(cell => {
+                      const score = cell.score
+                      const raw = cell.raw
+                      return (
+                        <td key={cell.id} className="p-2">
+                          {typeof score === 'number' ? (
+                            <div>
+                              <span className="badge-green">{score}</span>
+                              <div className="text-[11px]" style={{ color: 'rgba(255,255,255,.75)' }}>
+                                {typeof raw === 'number' ? `${raw}${cell.unit ? ` ${cell.unit}` : ''}` : '—'}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs" style={{ color: 'rgba(255,255,255,.7)' }}>
+                              —
+                            </span>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+                {!rows.length && (
+                  <tr>
+                    <td colSpan={2 + stations.length} className="p-3 text-center" style={{ color: 'rgba(255,255,255,.85)' }}>
+                      Noch keine Spieler.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {(USE_S1_CSV || USE_S4_CSV || USE_S6_CSV) && (
+            <div className="csv-status-note text-sm">
+              {USE_S1_CSV && s1Status !== 'off' && (
+                <div className="csv-status-note__line">S1-Tabellen: {statusText(s1Status)}</div>
+              )}
+              {USE_S4_CSV && s4Status !== 'off' && (
+                <div className="csv-status-note__line">S4-Tabellen: {statusText(s4Status)}</div>
+              )}
+              {USE_S6_CSV && s6Status !== 'off' && (
+                <div className="csv-status-note__line">S6-Tabellen: {statusText(s6Status)}</div>
+              )}
+            </div>
+          )}
         </div>
       </section>
+
+      {showDeleteDialog && (
+        <div className="matrix-modal">
+          <div className="matrix-modal__card card-glass-dark">
+            <div className="matrix-modal__title">Spieler löschen</div>
+            <p className="matrix-modal__text">
+              Wähle den Spieler, der aus der Matrix entfernt werden soll.
+            </p>
+            <select
+              className="input"
+              value={deleteId}
+              onChange={e => setDeleteId(e.target.value)}
+            >
+              {players.map(player => (
+                <option key={player.id} value={player.id}>
+                  {player.display_name}
+                </option>
+              ))}
+            </select>
+            <div className="matrix-modal__actions">
+              <button type="button" className="btn-secondary" onClick={closeDeleteDialog} disabled={isDeleting}>
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={confirmDeleteFromDialog}
+                disabled={!deleteId || isDeleting}
+              >
+                {isDeleting ? 'Löschen…' : 'Spieler löschen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isPhotoDialogOpen && (
+        <div className="matrix-modal">
+          <div className="matrix-modal__card card-glass-dark matrix-modal__card--wide">
+            <div className="matrix-modal__title">Spielerfoto aufnehmen</div>
+            <div className="camera-shell">
+              <video ref={videoRef} className="camera-preview" playsInline autoPlay muted />
+              {cameraError && <div className="camera-error">{cameraError}</div>}
+            </div>
+            <div className="matrix-modal__actions">
+              <button type="button" className="btn-secondary" onClick={closePhotoCapture}>
+                Abbrechen
+              </button>
+              <button type="button" className="btn" onClick={capturePhoto} disabled={!!cameraError}>
+                Foto speichern
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <BackFab />
     </main>
   )
