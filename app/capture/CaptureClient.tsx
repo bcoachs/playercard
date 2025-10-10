@@ -680,40 +680,24 @@ setProject(res.item||null)).catch(()=>setProject(null))
       ? Number(String(measurementEntry.value ?? '').replace(',', '.'))
       : NaN
     const normalizedMeasurementRaw = Number.isFinite(measurementRaw) ? measurementRaw : null
-    const bestLocalScore = isTimeStation
+    const bestLocalScore = (isTimeStation || isShotStation)
       ? (runScores.length ? Math.max(...runScores) : undefined)
       : undefined
     const effectiveScoreHighscore =
       bestLocalScore ?? playerScore ?? (stationHighscore !== null ? stationHighscore : undefined)
-    const bestShotRaw = isShotStation
-      ? (playerRuns.length
-          ? Math.max(...playerRuns)
-          : normalizedMeasurementRaw ?? undefined)
-      : undefined
-    const lastShotRaw = isShotStation
-      ? (playerRuns.length
-          ? playerRuns[playerRuns.length - 1]
-          : normalizedMeasurementRaw ?? undefined)
-      : undefined
     const formatShotValue = (val: number) => {
       if (!Number.isFinite(val)) return '-- km/h'
       const rounded = Math.round(val * 10) / 10
       const text = Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)
       return `${text} km/h`
     }
-    const highscoreDisplay = isShotStation
-      ? bestShotRaw !== undefined
-        ? formatShotValue(bestShotRaw)
-        : '---'
-      : effectiveScoreHighscore !== undefined
-        ? String(effectiveScoreHighscore).padStart(3, '0')
+    const highscoreDisplay =
+      effectiveScoreHighscore !== undefined
+        ? String(Math.round(effectiveScoreHighscore)).padStart(3, '0')
         : '###'
-    const letzterRunDisplay = isShotStation
-      ? lastShotRaw !== undefined
-        ? formatShotValue(lastShotRaw)
-        : null
-      : lastRunScore !== undefined
-        ? String(lastRunScore).padStart(3, '0')
+    const letzterRunDisplay =
+      lastRunScore !== undefined
+        ? String(Math.round(lastRunScore)).padStart(3, '0')
         : null
     const sketchLabel = `S${displayIdx}-Skizze`
 
