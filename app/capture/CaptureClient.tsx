@@ -1140,7 +1140,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
   const heroSubtitle = selected ? undefined : project ? project.name : undefined
 
   return (
-    <main>
+    <main className="capture-page">
       {/* align="center" stellt sicher, dass der Inhalt auch vertikal zentriert wird */}
       <Hero title={heroTitle} image="/base.jpg" subtitle={heroSubtitle} align="center">
         {/*
