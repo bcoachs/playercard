@@ -129,7 +129,7 @@ main {
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 900px) {
   .hero-inner {
     padding-inline: clamp(16px, 6vw, 28px);
   }
@@ -227,7 +227,7 @@ a, .btn {
 }
 
 /* Für kleine Screens: Buttons etwas schmaler */
-@media (max-width: 640px) {
+@media (max-width: 900px) {
   :root {
     --btn-wide: 240px;
     --btn-wide-height: 48px;
@@ -295,7 +295,7 @@ a, .btn {
   width: min(100%, 820px);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 900px) {
   .pills {
     width: min(100%, 360px);
   }
@@ -692,7 +692,7 @@ a, .btn {
   }
 }
 
-@media (min-width: 640px) {
+@media (min-width: 900px) {
   .capture-stations {
     gap: clamp(18px, 2.8vw, 32px);
   }
@@ -719,7 +719,7 @@ a, .btn {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 900px) {
   .capture-panel {
     width: 100%;
     margin-inline: 0;
