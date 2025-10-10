@@ -772,6 +772,20 @@ a, .btn {
   width: 100%;
 }
 
+.capture-actions.capture-actions--shot {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: clamp(8px, 2vw, 12px);
+  flex-wrap: wrap;
+}
+
+.capture-actions--shot > .btn-capture {
+  width: auto;
+  min-width: clamp(120px, 24vw, 160px);
+  text-align: center;
+}
+
 .timer-display.is-running {
   background: rgba(236, 3, 71, 0.16);
   box-shadow: inset 0 0 0 1px rgba(236, 3, 71, 0.4);
@@ -800,6 +814,11 @@ a, .btn {
 @media (min-width: 720px) {
   .capture-actions {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(10px, 2.4vw, 16px);
+  }
+
+  .capture-actions.capture-actions--shot {
+    justify-content: center;
     gap: clamp(10px, 2.4vw, 16px);
   }
 }

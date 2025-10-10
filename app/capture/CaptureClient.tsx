@@ -840,19 +840,21 @@ setProject(res.item||null)).catch(()=>setProject(null))
               )
             })}
           </div>
-          <div className="capture-panel__buttons capture-actions">
-            <button className="btn btn-capture" type="button" onClick={handleReset}>
-              RESET
-            </button>
-            <button
-              className="btn btn-capture"
-              type="button"
-              onClick={() => handleSave(player)}
-              disabled={saveDisabled}
-            >
-              SPEICHERN
-            </button>
-            {renderPdfButton('btn-capture')}
+          <div className="capture-panel__buttons">
+            <div className="capture-actions capture-actions--shot">
+              <button
+                className="btn btn-capture"
+                type="button"
+                onClick={() => handleSave(player)}
+                disabled={saveDisabled}
+              >
+                SPEICHERN
+              </button>
+              <button className="btn btn-capture" type="button" onClick={handleReset}>
+                RESET
+              </button>
+              {renderPdfButton('btn-capture')}
+            </div>
           </div>
         </div>
       )
