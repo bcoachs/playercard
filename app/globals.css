@@ -129,27 +129,6 @@ main {
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
 }
 
-@media (max-width: 900px) {
-  .hero-inner {
-    padding-inline: clamp(16px, 6vw, 28px);
-  }
-
-  .hero-inner--top {
-    padding-top: clamp(16px, 10vw, 48px);
-  }
-
-  .hero-children {
-    padding-inline: clamp(0px, 1.5vw, 5px);
-    padding-left: max(env(safe-area-inset-left), clamp(0px, 1.5vw, 5px));
-    padding-right: max(env(safe-area-inset-right), clamp(0px, 1.5vw, 5px));
-  }
-
-  .hero-stack {
-     padding-inline: 0;
-    margin-inline: 0;
-    max-width: 100%;
-  }
-}
 .safe-area {
   padding-top: calc(24px + env(safe-area-inset-top));
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
@@ -219,10 +198,10 @@ a, .btn {
   flex-direction: column;
   align-items: center;
   width: 100%;
-  max-width: min(100%, 960px);
-  margin-inline: auto;
+  max-width: 100%;
+  margin-inline: 0;
   gap: clamp(20px, 4vw, 32px);
-  padding-inline: clamp(0px, 4vw, 32px);
+  padding-inline: 0;
   box-sizing: border-box;
 }
 
@@ -385,13 +364,12 @@ a, .btn {
 .capture-panel {
   --capture-panel-stack-width: clamp(280px, 92vw, 520px);
   width: 100%;
-  max-width: clamp(320px, 92vw, 640px);
-  margin-left: auto;
-  margin-right: auto;
+  max-width: none;
+  margin-inline: 0;
   padding-block: clamp(12px, 3vw, 20px);
-  padding-inline: clamp(12px, 3vw, 20px);
-  padding-left: max(env(safe-area-inset-left), clamp(12px, 3vw, 20px));
-  padding-right: max(env(safe-area-inset-right), clamp(12px, 3vw, 20px));
+  padding-inline: 0;
+  padding-left: 0;
+  padding-right: 0;
   border-radius: 32px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.42), rgba(15, 23, 42, 0.68));
@@ -716,42 +694,6 @@ a, .btn {
 
   .btn-icon__icon {
     display: none;
-  }
-}
-
-@media (max-width: 900px) {
-  .capture-panel {
-    width: 100%;
-    margin-inline: 0;
-    padding-block: clamp(14px, 5vw, 24px);
-    padding-left: max(env(safe-area-inset-left), 0px);
-    padding-right: max(env(safe-area-inset-right), 0px);
-    border-radius: 24px;
-  }
-
-  .capture-panel__highscore {
-    width: 100%;
-  }
-
-  .capture-stations {
-    padding-left: 0;
-    padding-right: 0;
-  }
- }
-
-
-@media (max-width: 520px) {
-  .capture-actions {
-    gap: clamp(10px, 3vw, 16px);
-  }
-
-  .btn-capture {
-    padding: clamp(6px, 3.2vw, 10px) clamp(10px, 6vw, 16px);
-    font-size: clamp(0.85rem, 4.2vw, 1rem);
-  }
-
-  .capture-panel__run-row {
-    padding: clamp(5px, 2vw, 9px) clamp(2px, 1.5vw, 8px);
   }
 }
 
