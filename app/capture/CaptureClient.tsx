@@ -559,7 +559,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
   function ProjectsSelect(){
     if (qProject) return null
     return (
-      <div className="card glass w-full text-left">  
+      <div className="card glass mx-0 text-left">  
         <label className="block text-sm font-semibold mb-2">Projekt wählen</label>
         <select className="input" value={projectId}
           onChange={e=>{ setProjectId(e.target.value); setSelected(''); setValues({}); setSaved({}) }}>
