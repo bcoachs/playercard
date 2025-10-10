@@ -963,7 +963,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
               className="input capture-panel__input"
               type="number"
               value={localVal}
-              /* onChange={e => handleManualChange(e.target.value)} */
+              onChange={e => handleManualChange(e.target.value)}
               
               placeholder={stationUnit || 'Wert'}
             />
