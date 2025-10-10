@@ -796,7 +796,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
       const saveDisabled = !localRuns.length || !currentPlayerId
 
       return (
-        <div className="capture-panel__form-card capture-panel__form-card--single">
+        <div className="capture-panel__form-card capture-panel__form-card--single capture-panel__form-card--shot">
           <label className="capture-panel__input-label">Messwert {stationUnitLabel}</label>
           <div className="capture-panel__shot-controls">
             <div className="capture-panel__shot-slider">

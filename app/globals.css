@@ -511,6 +511,14 @@ a, .btn {
   align-items: stretch;
 }
 
+.capture-panel__form-card--shot {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  gap: clamp(14px, 3vw, 24px);
+}
+
 .capture-panel__inputs-grid {
   width: 100%;
   display: grid;
