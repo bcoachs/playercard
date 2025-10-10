@@ -953,7 +953,45 @@ setProject(res.item||null)).catch(()=>setProject(null))
         ? localRuns.length === 0 || !currentPlayerId
         : !localVal || !currentPlayerId
 
-      if (!isTimeStation) {
+
+        // … bestehender Code bleibt
+        if (!isTimeStation) {
+          return (
+            <div className="capture-panel__form-card capture-panel__form-card--single">
+              <label className="capture-panel__input-label">
+                Messwert {stationUnitLabel}
+              </label>
+              <input
+                className="input capture-panel__input"
+                type="number"
+                defaultValue={val ?? ''}  // initialer Wert, nicht per State gebunden
+                onBlur={e => {
+                  const sanitized = e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.')
+                  // nur bei Verlassen des Feldes speichern
+                  updatePlayerValues(player.id, { value: sanitized })
+                }}
+                placeholder={stationUnit || 'Wert'}
+              />
+              <div className="capture-panel__form-actions capture-panel__form-actions--inline">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => handleSave(player)}
+                  disabled={!currentPlayerId}
+                >
+                  Speichern
+                </button>
+                {renderPdfButton()}
+              </div>
+            </div>
+          )
+        }
+
+
+
+
+      
+     /* funktionierende version aber mit fehler in der Schusskrafteingabe if (!isTimeStation) {
         return (
           <div className="capture-panel__form-card capture-panel__form-card--single">
             <label className="capture-panel__input-label">
@@ -981,7 +1019,7 @@ setProject(res.item||null)).catch(()=>setProject(null))
           </div>
         )
       }
-
+*/ 
       return (
         <>
           <div className="capture-panel__timer">
