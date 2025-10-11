@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import BackFab from '../../components/BackFab'
@@ -41,6 +41,10 @@ const ST_INDEX: Record<string, number> = ST_ORDER.reduce((acc, n, i) => {
   acc[n] = i
   return acc
 }, {} as Record<string, number>)
+
+const CARD_WIDTH_MM = 53.98
+const CARD_HEIGHT_MM = 85.6
+const CARD_ASPECT = CARD_WIDTH_MM / CARD_HEIGHT_MM
 
 /* S1 via CSV global (optional, default an) */
 const USE_S1_CSV = (() => {
@@ -219,6 +223,8 @@ export default function ProjectDashboard() {
   const [pGender, setPGender] = useState<'male' | 'female' | ''>('')
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null)
+  const [photoCleared, setPhotoCleared] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteId, setDeleteId] = useState('')
@@ -259,6 +265,9 @@ export default function ProjectDashboard() {
 
     setCameraError(null)
 
+    // Kamera-Berechtigungen: navigator.mediaDevices.getUserMedia({ video: true })
+    // fragt beim ersten Zugriff automatisch nach Erlaubnis. Nutzer:innen müssen
+    // diese bestätigen, damit der Stream freigegeben wird.
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: 'environment' } })
       .then(stream => {
@@ -271,6 +280,7 @@ export default function ProjectDashboard() {
       })
       .catch(() => {
         setCameraError('Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.')
+        alert('Kamera konnte nicht geladen werden. Berechtigung fehlt.')
         stopMediaStream()
       })
 
@@ -307,12 +317,11 @@ export default function ProjectDashboard() {
       return
     }
 
-    const aspect = 85.6 / 53.98
-    let drawWidth = video.videoWidth
-    let drawHeight = Math.round(drawWidth / aspect)
-    if (drawHeight > video.videoHeight) {
-      drawHeight = video.videoHeight
-      drawWidth = Math.round(drawHeight * aspect)
+    let drawHeight = video.videoHeight
+    let drawWidth = Math.round(drawHeight * CARD_ASPECT)
+    if (drawWidth > video.videoWidth) {
+      drawWidth = video.videoWidth
+      drawHeight = Math.round(drawWidth / CARD_ASPECT)
     }
 
     const sx = Math.max(0, (video.videoWidth - drawWidth) / 2)
@@ -333,8 +342,45 @@ export default function ProjectDashboard() {
       canvas.toBlob(resolve, 'image/jpeg', 0.92)
     )
     setPhotoBlob(blob ?? null)
+    setPhotoCleared(false)
     setCameraError(null)
     closePhotoCapture()
+  }
+
+  function triggerPhotoUpload() {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+      fileInputRef.current.click()
+    }
+  }
+
+  function handlePhotoFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      alert('Bitte eine Bilddatei auswählen.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const result = ev.target?.result
+      if (typeof result === 'string') {
+        setPhotoPreview(result)
+      }
+    }
+    reader.readAsDataURL(file)
+    setPhotoBlob(file)
+    setPhotoCleared(false)
+  }
+
+  function clearPhoto() {
+    setPhotoPreview(null)
+    setPhotoBlob(null)
+    setPhotoCleared(true)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   function openDeleteDialog() {
@@ -616,8 +662,10 @@ export default function ProjectDashboard() {
     const existingPhoto = (p as any).photo_url || (p as any).photo
     if (typeof existingPhoto === 'string' && existingPhoto) {
       setPhotoPreview(existingPhoto)
+      setPhotoCleared(false)
     } else {
       setPhotoPreview(null)
+      setPhotoCleared(false)
     }
     setPhotoBlob(null)
   }
@@ -632,6 +680,7 @@ export default function ProjectDashboard() {
     setPGender('')
     setPhotoPreview(null)
     setPhotoBlob(null)
+    setPhotoCleared(false)
   }
 
   /* Actions: Create/Update/Delete */
@@ -653,7 +702,12 @@ export default function ProjectDashboard() {
     if (pPos) body.append('fav_position', pPos)
     if (pNat) body.append('nationality', pNat)
     if (pGender) body.append('gender', pGender)
-    if (photoBlob) body.append('photo', photoBlob, `player-${Date.now()}.jpg`)
+    if (photoBlob) {
+      const fileName = photoBlob instanceof File && photoBlob.name ? photoBlob.name : `player-${Date.now()}.jpg`
+      body.append('photo', photoBlob, fileName)
+    } else if (photoCleared && editId) {
+      body.append('remove_photo', '1')
+    }
     const method = editId ? 'PUT' : 'POST'
     if (editId) body.append('id', editId)
     const res = await fetch(`/api/projects/${projectId}/players`, { method, body })
@@ -675,8 +729,17 @@ export default function ProjectDashboard() {
   }, [pYear, eventYear])
 
   const photoButtonLabel = photoPreview ? 'Foto neu aufnehmen' : 'Foto aufnehmen'
+  const canRemovePhoto = Boolean(photoPreview)
   const canDeletePlayers = players.length > 0
   const playercardHref = `/projects/${projectId}/playercard`
+  const projectName = project?.name?.trim() ?? ''
+  const matrixHeading = projectName || 'Spielermatrix'
+
+  useEffect(() => {
+    if (projectName) {
+      document.title = projectName
+    }
+  }, [projectName])
 
   /* Render */
   return (
@@ -686,7 +749,7 @@ export default function ProjectDashboard() {
         <div className="matrix-shell matrix-shell--hero">
           <div className="matrix-hero__header">
             <div className="matrix-hero__title-group">
-              <h1 className="matrix-hero__title hero-text">Run: {project?.name ?? '—'}</h1>
+              <h1 className="matrix-hero__title hero-text">{matrixHeading}</h1>
               {project?.date && (
                 <div className="matrix-hero__subtitle hero-sub">{String(project.date)}</div>
               )}
@@ -714,10 +777,30 @@ export default function ProjectDashboard() {
                     </div>
                   )}
                 </div>
-                <div className="playercard-photo-hint">85,6 mm × 53,98 mm</div>
-                <button type="button" className="btn-secondary w-full" onClick={openPhotoCapture}>
-                  {photoButtonLabel}
-                </button>
+                <div className="playercard-photo-hint">53,98 mm × 85,6 mm</div>
+                <div className="player-photo-actions">
+                  <button type="button" className="btn-secondary" onClick={openPhotoCapture}>
+                    {photoButtonLabel}
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={triggerPhotoUpload}>
+                    Bild laden
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-secondary--danger"
+                    onClick={clearPhoto}
+                    disabled={!canRemovePhoto}
+                  >
+                    Bild löschen
+                  </button>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoFileChange}
+                />
               </div>
 
               <div className="md:col-span-3">
@@ -798,16 +881,6 @@ export default function ProjectDashboard() {
                 <Link href={`/capture?project=${projectId}`} className="btn">
                   Capture
                 </Link>
-                {editId && (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => deletePlayerById(editId)}
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? 'Löschen…' : 'Spieler löschen'}
-                  </button>
-                )}
               </div>
             </form>
           </div>
@@ -818,10 +891,11 @@ export default function ProjectDashboard() {
       <section className="bg-matrix page-pad">
         <div className="matrix-shell matrix-shell--table">
           <div className="matrix-header">
-            <div>
-              <div className="matrix-title">Spieler-Matrix</div>
+            <div className="matrix-header__title">
+              <div className="matrix-title">{matrixHeading}</div>
               <p className="matrix-subtitle">
-                Ø = Durchschnitt über alle erfassten Stationen. Klick auf einen Spieler lädt die Daten oben ins Formular.
+                Spieler-Matrix – Ø = Durchschnitt über alle erfassten Stationen. Klick auf einen Spieler lädt die Daten
+                oben ins Formular.
               </p>
             </div>
             <div className="matrix-actions">
