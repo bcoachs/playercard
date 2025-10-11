@@ -424,8 +424,18 @@ a, .btn {
 .player-photo-actions {
   width: 100%;
   display: flex;
-  flex-direction: column;
-  gap: clamp(8px, 2vw, 14px);
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(8px, 1.8vw, 14px);
+}
+
+.player-photo-actions > * {
+  flex: 0 1 auto;
+}
+
+.player-photo-actions .btn-secondary {
+  min-width: clamp(140px, 28vw, 200px);
+  text-align: center;
 }
 
 .matrix-form__hint {

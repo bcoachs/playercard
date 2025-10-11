@@ -1,4 +1,5 @@
 // app/api/projects/[id]/players/route.ts
+import { Buffer } from 'node:buffer'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
@@ -19,6 +20,14 @@ function genderOrNull(v: FormDataEntryValue | null) {
   const s = String(v || '').toLowerCase()
   if (s === 'male' || s === 'female') return s as 'male' | 'female'
   return null
+}
+
+async function fileToDataUrl(file: File | null) {
+  if (!file) return null
+  const arrayBuffer = await file.arrayBuffer()
+  const base64 = Buffer.from(arrayBuffer).toString('base64')
+  const type = file.type || 'image/jpeg'
+  return `data:${type};base64,${base64}`
 }
 
 /** GET /api/projects/:id/players
@@ -54,6 +63,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   const fav_position = strOrNull(fd.get('fav_position'))
   const nationality = strOrNull(fd.get('nationality'))
   const gender = genderOrNull(fd.get('gender'))
+  const photoEntry = fd.get('photo')
+  const photoFile = photoEntry && typeof photoEntry !== 'string' ? (photoEntry as File) : null
+  const photoDataUrl = photoFile ? await fileToDataUrl(photoFile) : null
 
   if (!display_name) {
     return NextResponse.json({ error: 'display_name is required' }, { status: 400 })
@@ -62,20 +74,21 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'birth_year (YYYY) is required' }, { status: 400 })
   }
 
+  const payload: Record<string, any> = {
+    project_id: projectId,
+    display_name,
+    birth_year,
+    club,
+    fav_number,
+    fav_position,
+    nationality,
+    gender, // nullable in DB
+  }
+  if (photoDataUrl) payload.photo = photoDataUrl
+
   const { data, error } = await supabaseAdmin
     .from('players')
-    .insert([
-      {
-        project_id: projectId,
-        display_name,
-        birth_year,
-        club,
-        fav_number,
-        fav_position,
-        nationality,
-        gender, // nullable in DB
-      },
-    ])
+    .insert([payload])
     .select('*')
     .single()
 
@@ -108,6 +121,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const fav_position = strOrNull(fd.get('fav_position'))
   const nationality = strOrNull(fd.get('nationality'))
   const gender = genderOrNull(fd.get('gender'))
+  const removePhoto = String(fd.get('remove_photo') || '').toLowerCase() === '1'
+  const photoEntry = fd.get('photo')
+  const photoFile = photoEntry && typeof photoEntry !== 'string' ? (photoEntry as File) : null
+  const photoDataUrl = photoFile ? await fileToDataUrl(photoFile) : null
 
   if (display_name !== null) patch.display_name = display_name
   if (birth_year !== null) patch.birth_year = birth_year
@@ -116,6 +133,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (fav_position !== null) patch.fav_position = fav_position
   if (nationality !== null) patch.nationality = nationality
   if (gender !== null) patch.gender = gender
+  if (photoDataUrl !== null) patch.photo = photoDataUrl
+  else if (removePhoto) patch.photo = null
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'no fields to update' }, { status: 400 })

@@ -732,7 +732,14 @@ export default function ProjectDashboard() {
   const canRemovePhoto = Boolean(photoPreview)
   const canDeletePlayers = players.length > 0
   const playercardHref = `/projects/${projectId}/playercard`
-  const matrixHeading = project?.name?.trim() || 'Projekt'
+  const projectName = project?.name?.trim() ?? ''
+  const matrixHeading = projectName || 'Spielermatrix'
+
+  useEffect(() => {
+    if (projectName) {
+      document.title = projectName
+    }
+  }, [projectName])
 
   /* Render */
   return (
@@ -772,15 +779,15 @@ export default function ProjectDashboard() {
                 </div>
                 <div className="playercard-photo-hint">53,98 mm × 85,6 mm</div>
                 <div className="player-photo-actions">
-                  <button type="button" className="btn-secondary w-full" onClick={openPhotoCapture}>
+                  <button type="button" className="btn-secondary" onClick={openPhotoCapture}>
                     {photoButtonLabel}
                   </button>
-                  <button type="button" className="btn-secondary w-full" onClick={triggerPhotoUpload}>
+                  <button type="button" className="btn-secondary" onClick={triggerPhotoUpload}>
                     Bild laden
                   </button>
                   <button
                     type="button"
-                    className="btn-secondary btn-secondary--danger w-full"
+                    className="btn-secondary btn-secondary--danger"
                     onClick={clearPhoto}
                     disabled={!canRemovePhoto}
                   >
@@ -874,16 +881,6 @@ export default function ProjectDashboard() {
                 <Link href={`/capture?project=${projectId}`} className="btn">
                   Capture
                 </Link>
-                {editId && (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => deletePlayerById(editId)}
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? 'Löschen…' : 'Spieler löschen'}
-                  </button>
-                )}
               </div>
             </form>
           </div>
