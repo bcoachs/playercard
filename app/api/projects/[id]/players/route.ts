@@ -1,4 +1,6 @@
 // app/api/projects/[id]/players/route.ts
+import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
@@ -19,6 +21,50 @@ function genderOrNull(v: FormDataEntryValue | null) {
   const s = String(v || '').toLowerCase()
   if (s === 'male' || s === 'female') return s as 'male' | 'female'
   return null
+}
+
+const PLAYER_PHOTO_BUCKET = 'player-photos'
+
+function inferExtension(file: File) {
+  const name = file.name || ''
+  const dot = name.lastIndexOf('.')
+  if (dot >= 0 && dot < name.length - 1) {
+    return name.slice(dot + 1).toLowerCase()
+  }
+  const type = (file.type || '').toLowerCase()
+  if (type === 'image/png') return 'png'
+  if (type === 'image/webp') return 'webp'
+  if (type === 'image/gif') return 'gif'
+  return 'jpg'
+}
+
+async function uploadPlayerPhoto(projectId: string, file: File) {
+  const arrayBuffer = await file.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+  const ext = inferExtension(file)
+  const path = `${projectId}/${randomUUID()}.${ext}`
+
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from(PLAYER_PHOTO_BUCKET)
+    .upload(path, buffer, { contentType: file.type || 'image/jpeg', upsert: true })
+
+  if (uploadError) {
+    throw new Error(uploadError.message)
+  }
+
+  const { data: publicData, error: publicError } = supabaseAdmin.storage
+    .from(PLAYER_PHOTO_BUCKET)
+    .getPublicUrl(path)
+
+  if (publicError) {
+    throw new Error(publicError.message)
+  }
+
+  const publicUrl = publicData?.publicUrl
+  if (!publicUrl) {
+    throw new Error('Konnte keine öffentliche URL für das Spielerfoto abrufen')
+  }
+  return publicUrl
 }
 
 /** GET /api/projects/:id/players
@@ -54,6 +100,17 @@ export async function POST(req: NextRequest, { params }: Params) {
   const fav_position = strOrNull(fd.get('fav_position'))
   const nationality = strOrNull(fd.get('nationality'))
   const gender = genderOrNull(fd.get('gender'))
+  const photoEntry = fd.get('photo')
+  const photoFile = photoEntry && typeof photoEntry !== 'string' ? (photoEntry as File) : null
+  let photoUrl: string | null = null
+  if (photoFile) {
+    try {
+      photoUrl = await uploadPlayerPhoto(projectId, photoFile)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Foto-Upload fehlgeschlagen'
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
+  }
 
   if (!display_name) {
     return NextResponse.json({ error: 'display_name is required' }, { status: 400 })
@@ -62,20 +119,21 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'birth_year (YYYY) is required' }, { status: 400 })
   }
 
+  const payload: Record<string, any> = {
+    project_id: projectId,
+    display_name,
+    birth_year,
+    club,
+    fav_number,
+    fav_position,
+    nationality,
+    gender, // nullable in DB
+  }
+  if (photoUrl) payload.photo_url = photoUrl
+
   const { data, error } = await supabaseAdmin
     .from('players')
-    .insert([
-      {
-        project_id: projectId,
-        display_name,
-        birth_year,
-        club,
-        fav_number,
-        fav_position,
-        nationality,
-        gender, // nullable in DB
-      },
-    ])
+    .insert([payload])
     .select('*')
     .single()
 
@@ -108,6 +166,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const fav_position = strOrNull(fd.get('fav_position'))
   const nationality = strOrNull(fd.get('nationality'))
   const gender = genderOrNull(fd.get('gender'))
+  const removePhoto = String(fd.get('remove_photo') || '').toLowerCase() === '1'
+  const photoEntry = fd.get('photo')
+  const photoFile = photoEntry && typeof photoEntry !== 'string' ? (photoEntry as File) : null
+  let photoUrl: string | null = null
+  if (photoFile) {
+    try {
+      photoUrl = await uploadPlayerPhoto(projectId, photoFile)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Foto-Upload fehlgeschlagen'
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
+  }
 
   if (display_name !== null) patch.display_name = display_name
   if (birth_year !== null) patch.birth_year = birth_year
@@ -116,6 +186,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (fav_position !== null) patch.fav_position = fav_position
   if (nationality !== null) patch.nationality = nationality
   if (gender !== null) patch.gender = gender
+  if (photoUrl !== null) patch.photo_url = photoUrl
+  else if (removePhoto) patch.photo_url = null
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'no fields to update' }, { status: 400 })
