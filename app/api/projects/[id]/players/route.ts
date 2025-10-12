@@ -1,5 +1,6 @@
 // app/api/projects/[id]/players/route.ts
 import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
@@ -22,12 +23,48 @@ function genderOrNull(v: FormDataEntryValue | null) {
   return null
 }
 
-async function fileToDataUrl(file: File | null) {
-  if (!file) return null
+const PLAYER_PHOTO_BUCKET = 'player-photos'
+
+function inferExtension(file: File) {
+  const name = file.name || ''
+  const dot = name.lastIndexOf('.')
+  if (dot >= 0 && dot < name.length - 1) {
+    return name.slice(dot + 1).toLowerCase()
+  }
+  const type = (file.type || '').toLowerCase()
+  if (type === 'image/png') return 'png'
+  if (type === 'image/webp') return 'webp'
+  if (type === 'image/gif') return 'gif'
+  return 'jpg'
+}
+
+async function uploadPlayerPhoto(projectId: string, file: File) {
   const arrayBuffer = await file.arrayBuffer()
-  const base64 = Buffer.from(arrayBuffer).toString('base64')
-  const type = file.type || 'image/jpeg'
-  return `data:${type};base64,${base64}`
+  const buffer = Buffer.from(arrayBuffer)
+  const ext = inferExtension(file)
+  const path = `${projectId}/${randomUUID()}.${ext}`
+
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from(PLAYER_PHOTO_BUCKET)
+    .upload(path, buffer, { contentType: file.type || 'image/jpeg', upsert: true })
+
+  if (uploadError) {
+    throw new Error(uploadError.message)
+  }
+
+  const publicUrlResponse = supabaseAdmin.storage
+    .from(PLAYER_PHOTO_BUCKET)
+    .getPublicUrl(path)
+
+  if ('error' in publicUrlResponse && publicUrlResponse.error) {
+    throw new Error('Fehler beim Abrufen der Bild-URL aus Supabase.')
+  }
+
+  const { publicUrl } = publicUrlResponse.data
+  if (!publicUrl) {
+    throw new Error('Konnte keine öffentliche URL für das Spielerfoto abrufen')
+  }
+  return publicUrl
 }
 
 /** GET /api/projects/:id/players
@@ -65,7 +102,15 @@ export async function POST(req: NextRequest, { params }: Params) {
   const gender = genderOrNull(fd.get('gender'))
   const photoEntry = fd.get('photo')
   const photoFile = photoEntry && typeof photoEntry !== 'string' ? (photoEntry as File) : null
-  const photoDataUrl = photoFile ? await fileToDataUrl(photoFile) : null
+  let photoUrl: string | null = null
+  if (photoFile) {
+    try {
+      photoUrl = await uploadPlayerPhoto(projectId, photoFile)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Foto-Upload fehlgeschlagen'
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
+  }
 
   if (!display_name) {
     return NextResponse.json({ error: 'display_name is required' }, { status: 400 })
@@ -84,7 +129,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     nationality,
     gender, // nullable in DB
   }
-  if (photoDataUrl) payload.photo = photoDataUrl
+  if (photoUrl) payload.photo_url = photoUrl
 
   const { data, error } = await supabaseAdmin
     .from('players')
@@ -124,7 +169,15 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const removePhoto = String(fd.get('remove_photo') || '').toLowerCase() === '1'
   const photoEntry = fd.get('photo')
   const photoFile = photoEntry && typeof photoEntry !== 'string' ? (photoEntry as File) : null
-  const photoDataUrl = photoFile ? await fileToDataUrl(photoFile) : null
+  let photoUrl: string | null = null
+  if (photoFile) {
+    try {
+      photoUrl = await uploadPlayerPhoto(projectId, photoFile)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Foto-Upload fehlgeschlagen'
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
+  }
 
   if (display_name !== null) patch.display_name = display_name
   if (birth_year !== null) patch.birth_year = birth_year
@@ -133,8 +186,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (fav_position !== null) patch.fav_position = fav_position
   if (nationality !== null) patch.nationality = nationality
   if (gender !== null) patch.gender = gender
-  if (photoDataUrl !== null) patch.photo = photoDataUrl
-  else if (removePhoto) patch.photo = null
+  if (photoUrl !== null) patch.photo_url = photoUrl
+  else if (removePhoto) patch.photo_url = null
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'no fields to update' }, { status: 400 })

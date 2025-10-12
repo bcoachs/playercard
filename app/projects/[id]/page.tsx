@@ -659,7 +659,7 @@ export default function ProjectDashboard() {
     setPPos(p.fav_position || '')
     setPNat(p.nationality || '')
     setPGender((p.gender as any) || '')
-    const existingPhoto = (p as any).photo_url || (p as any).photo
+    const existingPhoto = p.photo_url ?? null
     if (typeof existingPhoto === 'string' && existingPhoto) {
       setPhotoPreview(existingPhoto)
       setPhotoCleared(false)
