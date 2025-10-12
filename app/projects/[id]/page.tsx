@@ -259,35 +259,11 @@ export default function ProjectDashboard() {
       stream.getTracks().forEach(track => track.stop())
       mediaStreamRef.current = null
     }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
+    const video = videoRef.current
+    if (video) {
+      video.srcObject = null
     }
   }, [])
-
-  const startCamera = useCallback(async () => {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      setCameraError('Kamera wird nicht unterstützt.')
-      return
-    }
-
-    try {
-      setCameraError(null)
-      // navigator.mediaDevices.getUserMedia({ video: true }) fragt beim ersten Zugriff automatisch nach
-      // der Kamerafreigabe. Nutzer:innen müssen diese Bestätigung zulassen, damit der Stream startet.
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      mediaStreamRef.current = stream
-      const video = videoRef.current
-      if (video) {
-        video.srcObject = stream
-        await video.play().catch(() => {})
-      }
-    } catch (err) {
-      console.error('Webcam-Zugriff verweigert:', err)
-      setCameraError('Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.')
-      alert('Kamera konnte nicht geladen werden. Berechtigung fehlt.')
-      stopMediaStream()
-    }
-  }, [stopMediaStream])
 
   useEffect(() => {
     return () => {
@@ -300,12 +276,46 @@ export default function ProjectDashboard() {
       stopMediaStream()
       return
     }
-    startCamera()
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Kamera wird nicht unterstützt.')
+      return
+    }
+
+    let cancelled = false
+
+    const initCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        if (cancelled) {
+          stream.getTracks().forEach(track => track.stop())
+          return
+        }
+        mediaStreamRef.current = stream
+        const video = videoRef.current
+        if (video) {
+          video.srcObject = stream
+          video.autoplay = true
+          video.muted = true
+          video.playsInline = true
+          await video.play().catch(() => {})
+        }
+        setCameraError(null)
+      } catch (err) {
+        console.error('Webcam-Zugriff verweigert:', err)
+        setCameraError('Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.')
+        alert('Kamera konnte nicht geladen werden. Berechtigung fehlt.')
+        stopMediaStream()
+      }
+    }
+
+    void initCamera()
 
     return () => {
+      cancelled = true
       stopMediaStream()
     }
-  }, [isPhotoDialogOpen, startCamera, stopMediaStream])
+  }, [isPhotoDialogOpen, stopMediaStream])
 
   useEffect(() => {
     if (!showDeleteDialog) return
