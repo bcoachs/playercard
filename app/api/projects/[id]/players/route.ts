@@ -23,7 +23,10 @@ function genderOrNull(v: FormDataEntryValue | null) {
   return null
 }
 
-const PLAYER_PHOTO_BUCKET = process.env.PLAYER_PHOTO_BUCKET
+const PLAYER_PHOTO_BUCKET =
+  process.env.PLAYER_PHOTO_BUCKET ||
+  process.env.NEXT_PUBLIC_PLAYER_PHOTO_BUCKET ||
+  'PLAYER_PHOTO_BUCKET'
 
 function inferExtension(file: File) {
   const name = file.name || ''
