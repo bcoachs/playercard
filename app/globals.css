@@ -1293,3 +1293,40 @@ a, .btn {
 }
 
 
+
+/* Playercard UI Helpers */
+.input-modern {
+  @apply w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none transition;
+}
+
+.input-modern:focus {
+  @apply border-white/40 ring-2 ring-white/40;
+}
+
+.input-modern::placeholder {
+  color: rgba(226, 232, 240, 0.55);
+}
+
+.input-modern:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+input[type='range'] {
+  accent-color: #ec4899;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #f43f5e;
+  border: none;
+}
+
+input[type='range']::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #f43f5e;
+  border: none;
+}

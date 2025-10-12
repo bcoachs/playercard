@@ -1,0 +1,16 @@
+export const PLAYER_POSITIONS = [
+  'TW',
+  'IV',
+  'LV',
+  'RV',
+  'ZM',
+  'ZDM',
+  'ZOM',
+  'LM',
+  'RM',
+  'LF',
+  'RF',
+  'ST',
+  'MS',
+  'HS',
+]
