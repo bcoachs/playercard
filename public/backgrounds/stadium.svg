@@ -1,0 +1,25 @@
+<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="stadium-sky" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="45%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <radialGradient id="stadium-light" cx="50%" cy="0%" r="70%">
+      <stop offset="0%" stop-color="rgba(255, 255, 255, 0.7)" />
+      <stop offset="100%" stop-color="rgba(255, 255, 255, 0)" />
+    </radialGradient>
+    <linearGradient id="stadium-field" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#14532d" />
+      <stop offset="100%" stop-color="#22c55e" />
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#stadium-sky)" />
+  <rect y="1280" width="1080" height="640" fill="url(#stadium-field)" opacity="0.7" />
+  <ellipse cx="540" cy="420" rx="740" ry="420" fill="url(#stadium-light)" />
+  <g fill="rgba(255, 255, 255, 0.12)">
+    <circle cx="150" cy="320" r="90" />
+    <circle cx="930" cy="360" r="110" />
+    <circle cx="540" cy="180" r="160" />
+  </g>
+</svg>
