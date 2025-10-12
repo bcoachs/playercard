@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "id": "aurora",
+      "label": "Aurora Glow",
+      "src": "/backgrounds/aurora.svg"
+    },
+    {
+      "id": "stadium",
+      "label": "Stadionlichter",
+      "src": "/backgrounds/stadium.svg"
+    },
+    {
+      "id": "focus-grid",
+      "label": "Focus Grid",
+      "src": "/backgrounds/focus-grid.svg"
+    }
+  ]
+}
