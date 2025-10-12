@@ -4,6 +4,7 @@ import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState }
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import BackFab from '../../components/BackFab'
+import PhotoCaptureModal from './PhotoCaptureModal'
 
 type Station = {
   id: string
@@ -41,10 +42,6 @@ const ST_INDEX: Record<string, number> = ST_ORDER.reduce((acc, n, i) => {
   acc[n] = i
   return acc
 }, {} as Record<string, number>)
-
-const CARD_WIDTH_MM = 53.98
-const CARD_HEIGHT_MM = 85.6
-const CARD_ASPECT = CARD_WIDTH_MM / CARD_HEIGHT_MM
 
 /* S1 via CSV global (optional, default an) */
 const USE_S1_CSV = (() => {
@@ -231,10 +228,6 @@ export default function ProjectDashboard() {
   const [isDeleting, setIsDeleting] = useState(false)
 
   const [isPhotoDialogOpen, setIsPhotoDialogOpen] = useState(false)
-  const [cameraError, setCameraError] = useState<string | null>(null)
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
-  const videoRef = useRef<HTMLVideoElement | null>(null)
-  const mediaStreamRef = useRef<MediaStream | null>(null)
 
   const refreshPlayers = useCallback(async (): Promise<Player[] | null> => {
     try {
@@ -253,70 +246,6 @@ export default function ProjectDashboard() {
     }
   }, [projectId])
 
-  const stopMediaStream = useCallback(() => {
-    const stream = mediaStreamRef.current
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop())
-      mediaStreamRef.current = null
-    }
-    const video = videoRef.current
-    if (video) {
-      video.srcObject = null
-    }
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      stopMediaStream()
-    }
-  }, [stopMediaStream])
-
-  useEffect(() => {
-    if (!isPhotoDialogOpen) {
-      stopMediaStream()
-      return
-    }
-
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      setCameraError('Kamera wird nicht unterstützt.')
-      return
-    }
-
-    let cancelled = false
-
-    const initCamera = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        if (cancelled) {
-          stream.getTracks().forEach(track => track.stop())
-          return
-        }
-        mediaStreamRef.current = stream
-        const video = videoRef.current
-        if (video) {
-          video.srcObject = stream
-          video.autoplay = true
-          video.muted = true
-          video.playsInline = true
-          await video.play().catch(() => {})
-        }
-        setCameraError(null)
-      } catch (err) {
-        console.error('Webcam-Zugriff verweigert:', err)
-        setCameraError('Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.')
-        alert('Kamera konnte nicht geladen werden. Berechtigung fehlt.')
-        stopMediaStream()
-      }
-    }
-
-    void initCamera()
-
-    return () => {
-      cancelled = true
-      stopMediaStream()
-    }
-  }, [isPhotoDialogOpen, stopMediaStream])
-
   useEffect(() => {
     if (!showDeleteDialog) return
     if (!players.length) {
@@ -329,103 +258,29 @@ export default function ProjectDashboard() {
   }, [deleteId, players, showDeleteDialog])
 
   function openPhotoCapture() {
-    setCameraError(null)
     setIsPhotoDialogOpen(true)
   }
 
   function closePhotoCapture() {
     setIsPhotoDialogOpen(false)
-    setIsUploadingPhoto(false)
-    setCameraError(null)
-    stopMediaStream()
   }
 
-  async function capturePhoto() {
-    const video = videoRef.current
-    if (!video || !video.videoWidth || !video.videoHeight) {
-      setCameraError('Kein Videosignal verfügbar.')
-      return
-    }
+  function handleLocalCapture({ dataUrl, file }: { dataUrl: string; file: File }) {
+    setPhotoPreview(dataUrl)
+    setPhotoBlob(file)
+    setPhotoCleared(false)
+  }
 
-    let drawHeight = video.videoHeight
-    let drawWidth = Math.round(drawHeight * CARD_ASPECT)
-    if (drawWidth > video.videoWidth) {
-      drawWidth = video.videoWidth
-      drawHeight = Math.round(drawWidth / CARD_ASPECT)
-    }
-
-    const sx = Math.max(0, (video.videoWidth - drawWidth) / 2)
-    const sy = Math.max(0, (video.videoHeight - drawHeight) / 2)
-    const canvas = document.createElement('canvas')
-    canvas.width = drawWidth
-    canvas.height = drawHeight
-    const ctx = canvas.getContext('2d')
-    if (!ctx) {
-      setCameraError('Foto konnte nicht verarbeitet werden.')
-      return
-    }
-
-    ctx.drawImage(video, sx, sy, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight)
-    const blob = await new Promise<Blob | null>(resolve =>
-      canvas.toBlob(resolve, 'image/jpeg', 0.92)
-    )
-
-    if (!blob) {
-      setCameraError('Foto konnte nicht verarbeitet werden.')
-      return
-    }
-
-    if (!editId) {
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
-      const file = new File([blob], `player-${Date.now()}.jpg`, { type: 'image/jpeg' })
-      setPhotoPreview(dataUrl)
-      setPhotoBlob(file)
-      setPhotoCleared(false)
-      setCameraError(null)
-      closePhotoCapture()
-      return
-    }
-
-    setIsUploadingPhoto(true)
-    try {
-      const formData = new FormData()
-      formData.append('project_id', projectId)
-      formData.append('player_id', editId)
-      formData.append('photo', blob)
-
-      const response = await fetch(`/api/projects/${projectId}/players`, {
-        method: 'POST',
-        body: formData,
-      })
-
-      if (!response.ok) {
-        const err = await response.text()
-        throw new Error(err || 'Foto-Upload fehlgeschlagen')
-      }
-
-      const payload = await response.json().catch(() => ({}))
-      const publicUrl: string | null = payload?.publicUrl ?? null
-
-      if (!publicUrl) {
-        throw new Error('Foto-Upload fehlgeschlagen')
-      }
-
-      setPlayers(prev =>
-        prev.map(player =>
-          player.id === editId ? { ...player, photo_url: publicUrl } : player
-        )
+  function handleExistingPlayerCapture(publicUrl: string) {
+    if (!editId) return
+    setPlayers(prev =>
+      prev.map(player =>
+        player.id === editId ? { ...player, photo_url: publicUrl } : player
       )
-      setPhotoPreview(publicUrl)
-      setPhotoBlob(null)
-      setPhotoCleared(false)
-      setCameraError(null)
-      closePhotoCapture()
-    } catch (err) {
-      console.error('Spielerfoto konnte nicht gespeichert werden.', err)
-      alert('Spielerfoto konnte nicht gespeichert werden.')
-    } finally {
-      setIsUploadingPhoto(false)
-    }
+    )
+    setPhotoPreview(publicUrl)
+    setPhotoBlob(null)
+    setPhotoCleared(false)
   }
 
   function triggerPhotoUpload() {
@@ -1111,33 +966,13 @@ export default function ProjectDashboard() {
       )}
 
       {isPhotoDialogOpen && (
-        <div className="matrix-modal">
-          <div className="matrix-modal__card card-glass-dark matrix-modal__card--wide">
-            <div className="matrix-modal__title">Spielerfoto aufnehmen</div>
-            <div className="camera-shell">
-              <video ref={videoRef} className="camera-preview" playsInline autoPlay muted />
-              {cameraError && <div className="camera-error">{cameraError}</div>}
-            </div>
-            <div className="matrix-modal__actions">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={closePhotoCapture}
-                disabled={isUploadingPhoto}
-              >
-                Abbrechen
-              </button>
-              <button
-                type="button"
-                className="btn"
-                onClick={capturePhoto}
-                disabled={!!cameraError || isUploadingPhoto}
-              >
-                {isUploadingPhoto ? 'Speichern…' : 'Foto speichern'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <PhotoCaptureModal
+          projectId={projectId}
+          playerId={editId || null}
+          onClose={closePhotoCapture}
+          onLocalCapture={handleLocalCapture}
+          onExistingPlayerCapture={handleExistingPlayerCapture}
+        />
       )}
       <BackFab />
     </main>
