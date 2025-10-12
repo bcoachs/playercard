@@ -361,6 +361,18 @@ a, .btn {
   width: 100%;
 }
 
+.matrix-form {
+  margin-inline: auto;
+  width: 100%;
+  max-width: clamp(320px, 100%, 980px);
+  justify-items: center;
+}
+
+.matrix-form .md\:col-span-1,
+.matrix-form .md\:col-span-3 {
+  width: 100%;
+}
+
 .card-glass-dark.table-dark {
   padding: clamp(18px, 3.8vw, 28px);
   width: 100%;
@@ -436,6 +448,30 @@ a, .btn {
 .player-photo-actions .btn-secondary {
   min-width: clamp(140px, 28vw, 200px);
   text-align: center;
+}
+
+.player-manage-actions {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(8px, 1.8vw, 14px);
+  margin-top: clamp(8px, 2vw, 14px);
+}
+
+.player-manage-actions .btn-secondary {
+  min-width: clamp(140px, 28vw, 200px);
+}
+
+.playercard-link-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-top: clamp(12px, 2.4vw, 18px);
+}
+
+.playercard-link-wrapper .btn-secondary {
+  min-width: clamp(160px, 32vw, 220px);
 }
 
 .matrix-form__hint {
@@ -589,6 +625,7 @@ a, .btn {
 .camera-error {
   position: absolute;
   inset: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
