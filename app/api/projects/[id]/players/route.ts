@@ -96,6 +96,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   const photoEntry = fd.get('photo')
   const photoFile = photoEntry && typeof photoEntry !== 'string' ? (photoEntry as File) : null
   const playerIdForPhoto = strOrNull(fd.get('player_id'))
+  const projectIdFromBody = strOrNull(fd.get('project_id'))
+
+  if (projectIdFromBody && projectIdFromBody !== projectId) {
+    return NextResponse.json({ error: 'Projektkennung stimmt nicht überein' }, { status: 400 })
+  }
 
   if (playerIdForPhoto) {
     if (!photoFile) {
@@ -123,7 +128,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         return NextResponse.json({ error: 'Spieler nicht gefunden' }, { status: 404 })
       }
 
-      return NextResponse.json({ item: data })
+      return NextResponse.json({ item: data, publicUrl: photoUrl })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Foto-Upload fehlgeschlagen'
       return NextResponse.json({ error: message }, { status: 500 })
