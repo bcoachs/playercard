@@ -54,8 +54,12 @@ export async function POST(req: NextRequest) {
     const path = `projects/${projectId}/assets/logo.${ext}`
     const up = await supabaseAdmin.storage.from('projects').upload(path, logoFile, { upsert: true, contentType: logoFile.type || undefined })
     if (!up.error) {
-      const pub = supabaseAdmin.storage.from('projects').getPublicUrl(path)
-      logo_url = pub.data.publicUrl
+      const { data, error } = supabaseAdmin.storage.from('projects').getPublicUrl(path)
+      if (error) {
+        console.error('Supabase Error:', error.message)
+      } else {
+        logo_url = data.publicUrl
+      }
       await supabaseAdmin.from('projects').update({ logo_url }).eq('id', projectId)
     }
   }

@@ -52,15 +52,13 @@ async function uploadPlayerPhoto(projectId: string, file: File) {
     throw new Error(uploadError.message)
   }
 
-  const { data: publicData, error: publicError } = supabaseAdmin.storage
-    .from(PLAYER_PHOTO_BUCKET)
-    .getPublicUrl(path)
+  const { data, error } = supabaseAdmin.storage.from(PLAYER_PHOTO_BUCKET).getPublicUrl(path)
 
-  if (publicError) {
-    throw new Error(publicError.message)
+  if (error) {
+    throw new Error(error.message)
   }
 
-  const publicUrl = publicData?.publicUrl
+  const publicUrl = data?.publicUrl
   if (!publicUrl) {
     throw new Error('Konnte keine öffentliche URL für das Spielerfoto abrufen')
   }
