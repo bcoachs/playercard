@@ -378,33 +378,37 @@ export default function ProjectDashboard() {
 
     setIsUploadingPhoto(true)
     try {
-      const fileName = `${editId}-${Date.now()}.jpg`
       const formData = new FormData()
+      formData.append('project_id', projectId)
       formData.append('player_id', editId)
-      formData.append('photo', blob, fileName)
+      formData.append('photo', blob)
 
-      const res = await fetch(`/api/projects/${projectId}/players`, {
+      const response = await fetch(`/api/projects/${projectId}/players`, {
         method: 'POST',
         body: formData,
       })
 
-      if (!res.ok) {
-        const message = await res.text()
-        throw new Error(message || 'Spielerfoto konnte nicht gespeichert werden.')
+      if (!response.ok) {
+        const err = await response.text()
+        throw new Error(err || 'Foto-Upload fehlgeschlagen')
       }
 
-      const payload = await res.json().catch(() => ({}))
-      const updatedPhotoUrl: string | null = payload?.item?.photo_url ?? payload?.photo_url ?? null
+      const payload = await response.json().catch(() => ({}))
+      const publicUrl: string | null = payload?.publicUrl ?? null
 
-      if (!updatedPhotoUrl) {
-        throw new Error('Spielerfoto konnte nicht gespeichert werden.')
+      if (!publicUrl) {
+        throw new Error('Foto-Upload fehlgeschlagen')
       }
 
-      setPhotoPreview(updatedPhotoUrl)
+      setPlayers(prev =>
+        prev.map(player =>
+          player.id === editId ? { ...player, photo_url: publicUrl } : player
+        )
+      )
+      setPhotoPreview(publicUrl)
       setPhotoBlob(null)
       setPhotoCleared(false)
       setCameraError(null)
-      await refreshPlayers()
       closePhotoCapture()
     } catch (err) {
       console.error('Spielerfoto konnte nicht gespeichert werden.', err)
