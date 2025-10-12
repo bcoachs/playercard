@@ -4,7 +4,6 @@ import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState }
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import BackFab from '../../components/BackFab'
-import { supabase } from '@/lib/supabaseClient'
 
 type Station = {
   id: string
@@ -46,7 +45,6 @@ const ST_INDEX: Record<string, number> = ST_ORDER.reduce((acc, n, i) => {
 const CARD_WIDTH_MM = 53.98
 const CARD_HEIGHT_MM = 85.6
 const CARD_ASPECT = CARD_WIDTH_MM / CARD_HEIGHT_MM
-const PLAYER_PHOTO_BUCKET = 'player-photos'
 
 /* S1 via CSV global (optional, default an) */
 const USE_S1_CSV = (() => {
@@ -369,8 +367,9 @@ export default function ProjectDashboard() {
 
     if (!editId) {
       const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+      const file = new File([blob], `player-${Date.now()}.jpg`, { type: 'image/jpeg' })
       setPhotoPreview(dataUrl)
-      setPhotoBlob(blob)
+      setPhotoBlob(file)
       setPhotoCleared(false)
       setCameraError(null)
       closePhotoCapture()
@@ -379,32 +378,29 @@ export default function ProjectDashboard() {
 
     setIsUploadingPhoto(true)
     try {
-      const filePath = `${projectId}/${editId}-${Date.now()}.jpg`
-      const { error: uploadError } = await supabase.storage
-        .from(PLAYER_PHOTO_BUCKET)
-        .upload(filePath, blob, { contentType: 'image/jpeg', upsert: true })
+      const fileName = `${editId}-${Date.now()}.jpg`
+      const formData = new FormData()
+      formData.append('player_id', editId)
+      formData.append('photo', blob, fileName)
 
-      if (uploadError) {
-        throw new Error(uploadError.message)
+      const res = await fetch(`/api/projects/${projectId}/players`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const message = await res.text()
+        throw new Error(message || 'Spielerfoto konnte nicht gespeichert werden.')
       }
 
-      const { data } = supabase.storage.from(PLAYER_PHOTO_BUCKET).getPublicUrl(filePath)
-      const publicUrl = data?.publicUrl
-      if (!publicUrl) {
-        throw new Error('Konnte keine Foto-URL ermitteln.')
+      const payload = await res.json().catch(() => ({}))
+      const updatedPhotoUrl: string | null = payload?.item?.photo_url ?? payload?.photo_url ?? null
+
+      if (!updatedPhotoUrl) {
+        throw new Error('Spielerfoto konnte nicht gespeichert werden.')
       }
 
-      const { error: updateError } = await supabase
-        .from('players')
-        .update({ photo_url: publicUrl })
-        .eq('id', editId)
-        .eq('project_id', projectId)
-
-      if (updateError) {
-        throw new Error(updateError.message)
-      }
-
-      setPhotoPreview(publicUrl)
+      setPhotoPreview(updatedPhotoUrl)
       setPhotoBlob(null)
       setPhotoCleared(false)
       setCameraError(null)
