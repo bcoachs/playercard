@@ -748,6 +748,9 @@ export default function ProjectDashboard() {
     setPhotoPreview(null)
     setPhotoBlob(null)
     setPhotoCleared(false)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   /* Actions: Create/Update/Delete */
@@ -825,11 +828,12 @@ export default function ProjectDashboard() {
             )}
           </div>
 
-          <div className="card-glass-dark max-w-5xl w-full">
-            <div className="matrix-form__title">{editId ? 'Spieler bearbeiten' : 'Spieler hinzufügen'}</div>
-
-            <form onSubmit={addOrUpdatePlayer} className="matrix-form grid gap-4 md:grid-cols-4">
-              <div className="matrix-form__photo md:col-span-1">
+          <div className="card-glass-dark max-w-5xl w-full mx-auto">
+            <form
+              onSubmit={addOrUpdatePlayer}
+              className="matrix-form grid gap-4 md:grid-cols-4 justify-items-center"
+            >
+              <div className="matrix-form__photo md:col-span-1 w-full">
                 <div className="playercard-photo-wrapper">
                   {photoPreview ? (
                     <img
@@ -860,6 +864,24 @@ export default function ProjectDashboard() {
                     Bild löschen
                   </button>
                 </div>
+                <div className="player-manage-actions">
+                  <button type="button" className="btn-secondary" onClick={resetForm}>
+                    Neuer Spieler
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-secondary--danger"
+                    onClick={openDeleteDialog}
+                    disabled={!canDeletePlayers || isDeleting}
+                  >
+                    Spieler löschen
+                  </button>
+                </div>
+                <div className="playercard-link-wrapper">
+                  <Link href={playercardHref} className="btn-secondary">
+                    Playercard
+                  </Link>
+                </div>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -869,7 +891,7 @@ export default function ProjectDashboard() {
                 />
               </div>
 
-              <div className="md:col-span-3">
+              <div className="md:col-span-3 w-full">
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="md:col-span-2">
                     <label className="block text-xs font-semibold mb-1">Name *</label>
@@ -963,19 +985,6 @@ export default function ProjectDashboard() {
                 Spieler-Matrix – Ø = Durchschnitt über alle erfassten Stationen. Klick auf einen Spieler lädt die Daten
                 oben ins Formular.
               </p>
-            </div>
-            <div className="matrix-actions">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={openDeleteDialog}
-                disabled={!canDeletePlayers || isDeleting}
-              >
-                Spieler löschen
-              </button>
-              <Link href={playercardHref} className="btn-secondary">
-                Playercard
-              </Link>
             </div>
           </div>
 
