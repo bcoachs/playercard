@@ -93,6 +93,43 @@ export async function POST(req: NextRequest, { params }: Params) {
   const projectId = params.id
   const fd = await req.formData()
 
+  const photoEntry = fd.get('photo')
+  const photoFile = photoEntry && typeof photoEntry !== 'string' ? (photoEntry as File) : null
+  const playerIdForPhoto = strOrNull(fd.get('player_id'))
+
+  if (playerIdForPhoto) {
+    if (!photoFile) {
+      return NextResponse.json({ error: 'photo is required' }, { status: 400 })
+    }
+
+    try {
+      const photoUrl = await uploadPlayerPhoto(projectId, photoFile)
+      const { data, error } = await supabaseAdmin
+        .from('players')
+        .update({ photo_url: photoUrl })
+        .eq('id', playerIdForPhoto)
+        .eq('project_id', projectId)
+        .select('*')
+        .single()
+
+      if (error) {
+        if ((error as any)?.code === 'PGRST116') {
+          return NextResponse.json({ error: 'Spieler nicht gefunden' }, { status: 404 })
+        }
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+
+      if (!data) {
+        return NextResponse.json({ error: 'Spieler nicht gefunden' }, { status: 404 })
+      }
+
+      return NextResponse.json({ item: data })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Foto-Upload fehlgeschlagen'
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
+  }
+
   const display_name = strOrNull(fd.get('display_name'))
   const birth_year = numOrNull(fd.get('birth_year'))
   const club = strOrNull(fd.get('club'))
@@ -100,8 +137,6 @@ export async function POST(req: NextRequest, { params }: Params) {
   const fav_position = strOrNull(fd.get('fav_position'))
   const nationality = strOrNull(fd.get('nationality'))
   const gender = genderOrNull(fd.get('gender'))
-  const photoEntry = fd.get('photo')
-  const photoFile = photoEntry && typeof photoEntry !== 'string' ? (photoEntry as File) : null
   let photoUrl: string | null = null
   if (photoFile) {
     try {

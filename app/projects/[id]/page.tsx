@@ -1,6 +1,6 @@
 "use client"
 
-import React, { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
+import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import BackFab from '../../components/BackFab'
@@ -232,10 +232,28 @@ export default function ProjectDashboard() {
 
   const [isPhotoDialogOpen, setIsPhotoDialogOpen] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
 
-  function stopMediaStream() {
+  const refreshPlayers = useCallback(async (): Promise<Player[] | null> => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/players`, { cache: 'no-store' })
+      if (!res.ok) {
+        console.error('Spielerliste konnte nicht geladen werden.', await res.text())
+        return null
+      }
+      const payload = await res.json().catch(() => ({}))
+      const items: Player[] = payload.items || []
+      setPlayers(items)
+      return items
+    } catch (err) {
+      console.error('Spielerliste konnte nicht geladen werden.', err)
+      return null
+    }
+  }, [projectId])
+
+  const stopMediaStream = useCallback(() => {
     const stream = mediaStreamRef.current
     if (stream) {
       stream.getTracks().forEach(track => track.stop())
@@ -244,50 +262,50 @@ export default function ProjectDashboard() {
     if (videoRef.current) {
       videoRef.current.srcObject = null
     }
-  }
+  }, [])
+
+  const startCamera = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Kamera wird nicht unterstützt.')
+      return
+    }
+
+    try {
+      setCameraError(null)
+      // navigator.mediaDevices.getUserMedia({ video: true }) fragt beim ersten Zugriff automatisch nach
+      // der Kamerafreigabe. Nutzer:innen müssen diese Bestätigung zulassen, damit der Stream startet.
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      mediaStreamRef.current = stream
+      const video = videoRef.current
+      if (video) {
+        video.srcObject = stream
+        await video.play().catch(() => {})
+      }
+    } catch (err) {
+      console.error('Webcam-Zugriff verweigert:', err)
+      setCameraError('Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.')
+      alert('Kamera konnte nicht geladen werden. Berechtigung fehlt.')
+      stopMediaStream()
+    }
+  }, [stopMediaStream])
 
   useEffect(() => {
     return () => {
       stopMediaStream()
     }
-  }, [])
+  }, [stopMediaStream])
 
   useEffect(() => {
     if (!isPhotoDialogOpen) {
       stopMediaStream()
       return
     }
-
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      setCameraError('Kamera wird nicht unterstützt.')
-      return
-    }
-
-    setCameraError(null)
-
-    // Kamera-Berechtigungen: navigator.mediaDevices.getUserMedia({ video: true })
-    // fragt beim ersten Zugriff automatisch nach Erlaubnis. Nutzer:innen müssen
-    // diese bestätigen, damit der Stream freigegeben wird.
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: 'environment' } })
-      .then(stream => {
-        mediaStreamRef.current = stream
-        const video = videoRef.current
-        if (video) {
-          video.srcObject = stream
-          video.play().catch(() => {})
-        }
-      })
-      .catch(() => {
-        setCameraError('Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.')
-        alert('Kamera konnte nicht geladen werden. Berechtigung fehlt.')
-        stopMediaStream()
-      })
+    startCamera()
 
     return () => {
       stopMediaStream()
     }
-  }, [isPhotoDialogOpen])
+  }, [isPhotoDialogOpen, startCamera, stopMediaStream])
 
   useEffect(() => {
     if (!showDeleteDialog) return
@@ -307,6 +325,8 @@ export default function ProjectDashboard() {
 
   function closePhotoCapture() {
     setIsPhotoDialogOpen(false)
+    setIsUploadingPhoto(false)
+    setCameraError(null)
     stopMediaStream()
   }
 
@@ -336,15 +356,62 @@ export default function ProjectDashboard() {
     }
 
     ctx.drawImage(video, sx, sy, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight)
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
-    setPhotoPreview(dataUrl)
-    const blob = await new Promise<Blob | null>((resolve) =>
+    const blob = await new Promise<Blob | null>(resolve =>
       canvas.toBlob(resolve, 'image/jpeg', 0.92)
     )
-    setPhotoBlob(blob ?? null)
-    setPhotoCleared(false)
-    setCameraError(null)
-    closePhotoCapture()
+
+    if (!blob) {
+      setCameraError('Foto konnte nicht verarbeitet werden.')
+      return
+    }
+
+    if (!editId) {
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+      const file = new File([blob], `player-${Date.now()}.jpg`, { type: 'image/jpeg' })
+      setPhotoPreview(dataUrl)
+      setPhotoBlob(file)
+      setPhotoCleared(false)
+      setCameraError(null)
+      closePhotoCapture()
+      return
+    }
+
+    setIsUploadingPhoto(true)
+    try {
+      const fileName = `${editId}-${Date.now()}.jpg`
+      const formData = new FormData()
+      formData.append('player_id', editId)
+      formData.append('photo', blob, fileName)
+
+      const res = await fetch(`/api/projects/${projectId}/players`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const message = await res.text()
+        throw new Error(message || 'Spielerfoto konnte nicht gespeichert werden.')
+      }
+
+      const payload = await res.json().catch(() => ({}))
+      const updatedPhotoUrl: string | null = payload?.item?.photo_url ?? payload?.photo_url ?? null
+
+      if (!updatedPhotoUrl) {
+        throw new Error('Spielerfoto konnte nicht gespeichert werden.')
+      }
+
+      setPhotoPreview(updatedPhotoUrl)
+      setPhotoBlob(null)
+      setPhotoCleared(false)
+      setCameraError(null)
+      await refreshPlayers()
+      closePhotoCapture()
+    } catch (err) {
+      console.error('Spielerfoto konnte nicht gespeichert werden.', err)
+      alert('Spielerfoto konnte nicht gespeichert werden.')
+    } finally {
+      setIsUploadingPhoto(false)
+    }
   }
 
   function triggerPhotoUpload() {
@@ -411,9 +478,7 @@ export default function ProjectDashboard() {
         return false
       }
 
-      const updated = await fetch(`/api/projects/${projectId}/players`, { cache: 'no-store' }).then(r => r.json())
-      const nextPlayers: Player[] = updated.items || []
-      setPlayers(nextPlayers)
+      const nextPlayers = (await refreshPlayers()) ?? []
 
       if (editId === id) {
         resetForm()
@@ -480,14 +545,12 @@ export default function ProjectDashboard() {
         setStations(st)
       })
 
-    fetch(`/api/projects/${projectId}/players`, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(res => setPlayers(res.items || []))
+    void refreshPlayers()
 
     fetch(`/api/projects/${projectId}/measurements`, { cache: 'no-store' })
       .then(r => r.json())
       .then(res => setMeas(res.items || []))
-  }, [projectId])
+  }, [projectId, refreshPlayers])
 
   // S1 CSV global laden
   useEffect(() => {
@@ -716,8 +779,7 @@ export default function ProjectDashboard() {
       alert(js?.error || 'Fehler beim Speichern')
       return
     }
-    const updated = await fetch(`/api/projects/${projectId}/players`, { cache: 'no-store' }).then(r => r.json())
-    setPlayers(updated.items || [])
+    await refreshPlayers()
     if (!editId) resetForm()
   }
 
@@ -1034,11 +1096,21 @@ export default function ProjectDashboard() {
               {cameraError && <div className="camera-error">{cameraError}</div>}
             </div>
             <div className="matrix-modal__actions">
-              <button type="button" className="btn-secondary" onClick={closePhotoCapture}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={closePhotoCapture}
+                disabled={isUploadingPhoto}
+              >
                 Abbrechen
               </button>
-              <button type="button" className="btn" onClick={capturePhoto} disabled={!!cameraError}>
-                Foto speichern
+              <button
+                type="button"
+                className="btn"
+                onClick={capturePhoto}
+                disabled={!!cameraError || isUploadingPhoto}
+              >
+                {isUploadingPhoto ? 'Speichern…' : 'Foto speichern'}
               </button>
             </div>
           </div>
