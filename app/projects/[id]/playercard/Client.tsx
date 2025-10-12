@@ -2,6 +2,7 @@
 
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import PlayerHeader from './PlayerHeader'
 import PlayerImage from './PlayerImage'
 import PlayerStats, { PlayerStat } from './PlayerStats'
@@ -21,7 +22,7 @@ const STAT_INDEX: Record<string, number> = STAT_ORDER.reduce((acc, name, index) 
   return acc
 }, {} as Record<string, number>)
 
-type RemoveBackgroundFn = (file: Blob) => Promise<Blob>
+type RemoveBackgroundFn = (file: Blob | File | string) => Promise<Blob>
 
 let cachedRemoveBackground: RemoveBackgroundFn | null = null
 
@@ -31,10 +32,12 @@ async function loadRemoveBackground(): Promise<RemoveBackgroundFn> {
     throw new Error('removeBackground kann nur im Browser geladen werden')
   }
   const mod = await import('@imgly/background-removal')
-  if (typeof mod.removeBackground !== 'function') {
+  const remove = typeof mod.default === 'function' ? mod.default : mod.removeBackground
+  if (typeof remove !== 'function') {
     throw new Error('removeBackground konnte nicht geladen werden')
   }
-  cachedRemoveBackground = mod.removeBackground
+  const config = { device: 'cpu' as const }
+  cachedRemoveBackground = (file: Blob | File | string) => remove(file, config)
   return cachedRemoveBackground
 }
 
@@ -257,12 +260,18 @@ type PlayercardClientProps = {
 }
 
 export default function PlayercardClient({ projectId }: PlayercardClientProps) {
+  const searchParams = useSearchParams()
+  const initialPlayerFromQuery = useMemo(() => {
+    if (!searchParams) return ''
+    return searchParams.get('player') || searchParams.get('focusPlayer') || ''
+  }, [searchParams])
+
   const [project, setProject] = useState<Project | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [stations, setStations] = useState<Station[]>([])
   const [measurements, setMeasurements] = useState<Measurement[]>([])
 
-  const [selectedPlayerId, setSelectedPlayerId] = useState('')
+  const [selectedPlayerId, setSelectedPlayerId] = useState(() => initialPlayerFromQuery)
 
   const [backgroundOptions, setBackgroundOptions] = useState<BackgroundOption[]>(DEFAULT_BACKGROUNDS)
   const [selectedBackgroundId, setSelectedBackgroundId] = useState(DEFAULT_BACKGROUNDS[0].id)
@@ -283,19 +292,28 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
   const [processingError, setProcessingError] = useState<string | null>(null)
   const [originalImage, setOriginalImage] = useState<string | null>(null)
   const [displayImage, setDisplayImage] = useState<string | null>(null)
+  const [imageData, setImageData] = useState<{ url: string | null; blob: Blob | null } | null>(null)
   const [objectUrl, setObjectUrl] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const applyDisplayImage = useCallback((url: string | null, options?: { objectUrl?: boolean }) => {
-    setDisplayImage(url)
-    setObjectUrl(prev => {
-      if (prev && prev !== url) {
-        URL.revokeObjectURL(prev)
-      }
-      return options?.objectUrl ? url : null
-    })
-  }, [])
+  const applyDisplayImage = useCallback(
+    (url: string | null, options?: { objectUrl?: boolean; blob?: Blob | null }) => {
+      setDisplayImage(url)
+      setImageData(() => {
+        const blob = options?.blob ?? null
+        if (!url && !blob) return null
+        return { url, blob }
+      })
+      setObjectUrl(prev => {
+        if (prev && prev !== url) {
+          URL.revokeObjectURL(prev)
+        }
+        return options?.objectUrl ? url : null
+      })
+    },
+    []
+  )
 
   useEffect(() => {
     let isMounted = true
@@ -436,8 +454,29 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
   useEffect(() => {
     if (!players.length) return
     if (selectedPlayerId && players.some(player => player.id === selectedPlayerId)) return
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = window.localStorage.getItem('playercard:selectedPlayer')
+        if (stored && players.some(player => player.id === stored)) {
+          setSelectedPlayerId(stored)
+          return
+        }
+      } catch (err) {
+        console.warn('Gespeicherte Playercard-Auswahl konnte nicht gelesen werden', err)
+      }
+    }
     setSelectedPlayerId(players[0].id)
   }, [players, selectedPlayerId])
+
+  useEffect(() => {
+    if (!selectedPlayerId) return
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem('playercard:selectedPlayer', selectedPlayerId)
+    } catch (err) {
+      console.warn('Playercard-Auswahl konnte nicht gespeichert werden', err)
+    }
+  }, [selectedPlayerId])
 
   const selectedPlayer = useMemo(() => {
     if (!selectedPlayerId) return null
@@ -457,7 +496,7 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
     const photo = selectedPlayer?.photo_url ?? null
     setOriginalImage(photo)
     setProcessingError(null)
-    applyDisplayImage(photo, { objectUrl: false })
+    applyDisplayImage(photo, { objectUrl: false, blob: null })
   }, [selectedPlayer, applyDisplayImage])
 
   const eventYear = useMemo(() => {
@@ -557,19 +596,19 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
         const remove = await loadRemoveBackground()
         const blob = await remove(file)
         const url = URL.createObjectURL(blob)
-        applyDisplayImage(url, { objectUrl: true })
+        applyDisplayImage(url, { objectUrl: true, blob })
       } catch (err) {
         console.error('Freistellung fehlgeschlagen', err)
         const fallback = options?.fallbackUrl
         if (fallback) {
-          applyDisplayImage(fallback, { objectUrl: false })
+          applyDisplayImage(fallback, { objectUrl: false, blob: file })
         } else {
           try {
             const fallbackUrl = URL.createObjectURL(file)
-            applyDisplayImage(fallbackUrl, { objectUrl: true })
+            applyDisplayImage(fallbackUrl, { objectUrl: true, blob: file })
           } catch (fallbackErr) {
             console.error('Fallback-Bild konnte nicht erzeugt werden', fallbackErr)
-            applyDisplayImage(null)
+            applyDisplayImage(null, { objectUrl: false, blob: null })
           }
         }
         setProcessingError(options?.errorMessage || 'Freistellung fehlgeschlagen. Bitte erneut versuchen.')
@@ -605,7 +644,7 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
       } catch (err) {
         if (cancelled) return
         console.error('Automatische Freistellung fehlgeschlagen', err)
-        applyDisplayImage(ensuredUrl, { objectUrl: false })
+        applyDisplayImage(ensuredUrl, { objectUrl: false, blob: null })
         setProcessingError('Freistellung nicht möglich. Originalfoto wird angezeigt.')
       }
     }
@@ -648,7 +687,7 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
 
   const resetToOriginal = useCallback(() => {
     setProcessingError(null)
-    applyDisplayImage(originalImage, { objectUrl: false })
+    applyDisplayImage(originalImage, { objectUrl: false, blob: null })
   }, [originalImage, applyDisplayImage])
 
   const canReapply = Boolean(originalImage)
@@ -707,7 +746,7 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
                 onReset={canReset ? resetToOriginal : undefined}
                 onReapply={canReapply ? reapplyBackgroundRemoval : undefined}
                 processingError={processingError}
-                hasImage={Boolean(displayImage)}
+                hasImage={Boolean(imageData?.blob || imageData?.url)}
               />
               <input
                 ref={fileInputRef}

@@ -1,6 +1,17 @@
 declare module '@imgly/background-removal' {
-  export function removeBackground(
+  type DeviceOption = 'cpu' | 'gpu' | 'webgpu' | 'wasm' | string
+
+  export type RemoveBackgroundOptions = {
+    device?: DeviceOption
+    [key: string]: unknown
+  }
+
+  export type RemoveBackground = (
     file: Blob | File | string,
-    options?: Record<string, unknown>
-  ): Promise<Blob>
+    options?: RemoveBackgroundOptions
+  ) => Promise<Blob>
+
+  export const removeBackground: RemoveBackground
+  const defaultExport: RemoveBackground
+  export default defaultExport
 }
