@@ -23,7 +23,10 @@ function genderOrNull(v: FormDataEntryValue | null) {
   return null
 }
 
-const PLAYER_PHOTO_BUCKET = 'player-photos'
+const PLAYER_PHOTO_BUCKET =
+  process.env.PLAYER_PHOTO_BUCKET ||
+  process.env.NEXT_PUBLIC_PLAYER_PHOTO_BUCKET ||
+  'PLAYER_PHOTO_BUCKET'
 
 function inferExtension(file: File) {
   const name = file.name || ''
@@ -39,6 +42,9 @@ function inferExtension(file: File) {
 }
 
 async function uploadPlayerPhoto(projectId: string, file: File) {
+  if (!PLAYER_PHOTO_BUCKET) {
+    throw new Error('PLAYER_PHOTO_BUCKET environment variable is not configured')
+  }
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
   const ext = inferExtension(file)
@@ -96,6 +102,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   const photoEntry = fd.get('photo')
   const photoFile = photoEntry && typeof photoEntry !== 'string' ? (photoEntry as File) : null
   const playerIdForPhoto = strOrNull(fd.get('player_id'))
+  const projectIdFromBody = strOrNull(fd.get('project_id'))
+
+  if (projectIdFromBody && projectIdFromBody !== projectId) {
+    return NextResponse.json({ error: 'Projektkennung stimmt nicht überein' }, { status: 400 })
+  }
 
   if (playerIdForPhoto) {
     if (!photoFile) {
@@ -123,7 +134,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         return NextResponse.json({ error: 'Spieler nicht gefunden' }, { status: 404 })
       }
 
-      return NextResponse.json({ item: data })
+      return NextResponse.json({ item: data, publicUrl: photoUrl })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Foto-Upload fehlgeschlagen'
       return NextResponse.json({ error: message }, { status: 500 })
