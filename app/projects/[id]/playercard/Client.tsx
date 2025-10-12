@@ -6,7 +6,6 @@ import PlayerHeader from './PlayerHeader'
 import PlayerImage from './PlayerImage'
 import PlayerStats, { PlayerStat } from './PlayerStats'
 import BackgroundSelector, { BackgroundOption } from './BackgroundSelector'
-import { removeBackground } from '@imgly/background-removal'
 
 const STAT_ORDER = [
   'Beweglichkeit',
@@ -21,6 +20,23 @@ const STAT_INDEX: Record<string, number> = STAT_ORDER.reduce((acc, name, index) 
   acc[name] = index
   return acc
 }, {} as Record<string, number>)
+
+type RemoveBackgroundFn = (file: Blob) => Promise<Blob>
+
+let cachedRemoveBackground: RemoveBackgroundFn | null = null
+
+async function loadRemoveBackground(): Promise<RemoveBackgroundFn> {
+  if (cachedRemoveBackground) return cachedRemoveBackground
+  if (typeof window === 'undefined') {
+    throw new Error('removeBackground kann nur im Browser geladen werden')
+  }
+  const mod = await import('@imgly/background-removal')
+  if (typeof mod.removeBackground !== 'function') {
+    throw new Error('removeBackground konnte nicht geladen werden')
+  }
+  cachedRemoveBackground = mod.removeBackground
+  return cachedRemoveBackground
+}
 
 type Station = {
   id: string
@@ -506,7 +522,8 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
     setProcessingError(null)
     setIsProcessingImage(true)
     try {
-      const blob = await removeBackground(file)
+      const remove = await loadRemoveBackground()
+      const blob = await remove(file)
       const url = URL.createObjectURL(blob)
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl)
