@@ -71,6 +71,11 @@ type ScoreMap = Record<string, number[]>
 
 type CsvStatus = 'idle' | 'loading' | 'ready' | 'error'
 
+type ProcessFileOptions = {
+  fallbackUrl?: string | null
+  errorMessage?: string
+}
+
 const DEFAULT_BACKGROUNDS: BackgroundOption[] = [
   {
     id: 'gradient-dark',
@@ -282,36 +287,66 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
+  const applyDisplayImage = useCallback((url: string | null, options?: { objectUrl?: boolean }) => {
+    setDisplayImage(url)
+    setObjectUrl(prev => {
+      if (prev && prev !== url) {
+        URL.revokeObjectURL(prev)
+      }
+      return options?.objectUrl ? url : null
+    })
+  }, [])
+
   useEffect(() => {
     let isMounted = true
     async function load() {
       setIsLoading(true)
       setLoadError(null)
       try {
-        const [projectRes, stationRes, playerRes, measurementRes] = await Promise.all([
-          fetch(`/api/projects/${projectId}`, { cache: 'no-store' }),
-          fetch(`/api/projects/${projectId}/stations`, { cache: 'no-store' }),
-          fetch(`/api/projects/${projectId}/players`, { cache: 'no-store' }),
+        const [dashboardRes, measurementRes] = await Promise.all([
+          fetch(`/api/projects/${projectId}/dashboard`, { cache: 'no-store' }),
           fetch(`/api/projects/${projectId}/measurements`, { cache: 'no-store' }),
         ])
-        if (!projectRes.ok) throw new Error('Projekt konnte nicht geladen werden.')
-        if (!stationRes.ok) throw new Error('Stationen konnten nicht geladen werden.')
-        if (!playerRes.ok) throw new Error('Spieler konnten nicht geladen werden.')
-        if (!measurementRes.ok) throw new Error('Messwerte konnten nicht geladen werden.')
 
-        const projectData = await projectRes.json().catch(() => ({}))
-        const stationData = await stationRes.json().catch(() => ({}))
-        const playerData = await playerRes.json().catch(() => ({}))
-        const measurementData = await measurementRes.json().catch(() => ({}))
+        const errors: string[] = []
 
-        if (!isMounted) return
+        if (dashboardRes.ok) {
+          const dashboardData = await dashboardRes.json().catch(() => ({}))
+          if (isMounted) {
+            setProject(dashboardData.project || null)
+            setStations(Array.isArray(dashboardData.stations) ? dashboardData.stations : [])
+            setPlayers(Array.isArray(dashboardData.players) ? dashboardData.players : [])
+          }
+        } else {
+          errors.push('Projekt konnte nicht geladen werden.')
+          if (isMounted) {
+            setProject(null)
+            setStations([])
+            setPlayers([])
+          }
+        }
 
-        setProject(projectData.item || null)
-        setStations(Array.isArray(stationData.items) ? stationData.items : [])
-        setPlayers(Array.isArray(playerData.items) ? playerData.items : [])
-        setMeasurements(Array.isArray(measurementData.items) ? measurementData.items : [])
+        if (measurementRes.ok) {
+          const measurementData = await measurementRes.json().catch(() => ({}))
+          if (isMounted) {
+            setMeasurements(Array.isArray(measurementData.items) ? measurementData.items : [])
+          }
+        } else {
+          errors.push('Messwerte konnten nicht geladen werden.')
+          if (isMounted) {
+            setMeasurements([])
+          }
+        }
+
+        if (isMounted) {
+          setLoadError(errors.length ? errors.join(' ') : null)
+        }
       } catch (err) {
         if (!isMounted) return
+        setProject(null)
+        setStations([])
+        setPlayers([])
+        setMeasurements([])
         setLoadError(err instanceof Error ? err.message : 'Unbekannter Fehler beim Laden')
       } finally {
         if (isMounted) setIsLoading(false)
@@ -421,13 +456,9 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
   useEffect(() => {
     const photo = selectedPlayer?.photo_url ?? null
     setOriginalImage(photo)
-    setDisplayImage(photo)
     setProcessingError(null)
-    if (objectUrl) {
-      URL.revokeObjectURL(objectUrl)
-      setObjectUrl(null)
-    }
-  }, [selectedPlayer])
+    applyDisplayImage(photo, { objectUrl: false })
+  }, [selectedPlayer, applyDisplayImage])
 
   const eventYear = useMemo(() => {
     if (!project?.date) return new Date().getFullYear()
@@ -518,25 +549,73 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
     }
   }, [])
 
-  const processFile = useCallback(async (file: File) => {
-    setProcessingError(null)
-    setIsProcessingImage(true)
-    try {
-      const remove = await loadRemoveBackground()
-      const blob = await remove(file)
-      const url = URL.createObjectURL(blob)
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl)
+  const processFile = useCallback(
+    async (file: File, options?: ProcessFileOptions) => {
+      setProcessingError(null)
+      setIsProcessingImage(true)
+      try {
+        const remove = await loadRemoveBackground()
+        const blob = await remove(file)
+        const url = URL.createObjectURL(blob)
+        applyDisplayImage(url, { objectUrl: true })
+      } catch (err) {
+        console.error('Freistellung fehlgeschlagen', err)
+        const fallback = options?.fallbackUrl
+        if (fallback) {
+          applyDisplayImage(fallback, { objectUrl: false })
+        } else {
+          try {
+            const fallbackUrl = URL.createObjectURL(file)
+            applyDisplayImage(fallbackUrl, { objectUrl: true })
+          } catch (fallbackErr) {
+            console.error('Fallback-Bild konnte nicht erzeugt werden', fallbackErr)
+            applyDisplayImage(null)
+          }
+        }
+        setProcessingError(options?.errorMessage || 'Freistellung fehlgeschlagen. Bitte erneut versuchen.')
+      } finally {
+        setIsProcessingImage(false)
       }
-      setObjectUrl(url)
-      setDisplayImage(url)
-    } catch (err) {
-      console.error('Freistellung fehlgeschlagen', err)
-      setProcessingError('Freistellung fehlgeschlagen. Bitte erneut versuchen.')
-    } finally {
-      setIsProcessingImage(false)
+    },
+    [applyDisplayImage]
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    const photoUrl = selectedPlayer?.photo_url ?? null
+    if (!photoUrl) {
+      return () => {
+        cancelled = true
+      }
     }
-  }, [objectUrl])
+
+    const ensuredUrl = photoUrl as string
+
+    async function autoRemove() {
+      try {
+        const response = await fetch(ensuredUrl, { cache: 'no-store' })
+        if (!response.ok) throw new Error('Originalbild konnte nicht geladen werden.')
+        const blob = await response.blob()
+        if (cancelled) return
+        const file = new File([blob], 'player-photo.png', { type: blob.type || 'image/png' })
+        await processFile(file, {
+          fallbackUrl: ensuredUrl,
+          errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
+        })
+      } catch (err) {
+        if (cancelled) return
+        console.error('Automatische Freistellung fehlgeschlagen', err)
+        applyDisplayImage(ensuredUrl, { objectUrl: false })
+        setProcessingError('Freistellung nicht möglich. Originalfoto wird angezeigt.')
+      }
+    }
+
+    autoRemove()
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedPlayer?.photo_url, processFile, applyDisplayImage])
 
   const handleFileChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -546,7 +625,9 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
         setProcessingError('Bitte eine Bilddatei auswählen.')
         return
       }
-      processFile(file)
+      processFile(file, {
+        errorMessage: 'Freistellung fehlgeschlagen. Das hochgeladene Bild wird verwendet.',
+      })
     },
     [processFile]
   )
@@ -556,18 +637,19 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
     setProcessingError(null)
     fetch(originalImage)
       .then(res => res.blob())
-      .then(blob => processFile(new File([blob], 'player-photo.png', { type: blob.type || 'image/png' })))
+      .then(blob =>
+        processFile(new File([blob], 'player-photo.png', { type: blob.type || 'image/png' }), {
+          fallbackUrl: originalImage,
+          errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
+        })
+      )
       .catch(() => setProcessingError('Originalbild konnte nicht geladen werden.'))
   }, [originalImage, processFile])
 
   const resetToOriginal = useCallback(() => {
     setProcessingError(null)
-    setDisplayImage(originalImage)
-    if (objectUrl) {
-      URL.revokeObjectURL(objectUrl)
-      setObjectUrl(null)
-    }
-  }, [originalImage, objectUrl])
+    applyDisplayImage(originalImage, { objectUrl: false })
+  }, [originalImage, applyDisplayImage])
 
   const canReapply = Boolean(originalImage)
   const canReset = Boolean(originalImage) && displayImage !== originalImage
