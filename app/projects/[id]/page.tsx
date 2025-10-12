@@ -600,6 +600,13 @@ export default function ProjectDashboard() {
       setPhotoCleared(false)
     }
     setPhotoBlob(null)
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('playercard:selectedPlayer', p.id)
+      } catch (err) {
+        console.warn('Playercard-Auswahl konnte nicht gespeichert werden', err)
+      }
+    }
   }
   function resetForm() {
     setEditId('')
@@ -615,6 +622,13 @@ export default function ProjectDashboard() {
     setPhotoCleared(false)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.removeItem('playercard:selectedPlayer')
+      } catch (err) {
+        console.warn('Playercard-Auswahl konnte nicht entfernt werden', err)
+      }
     }
   }
 
@@ -665,7 +679,13 @@ export default function ProjectDashboard() {
   const photoButtonLabel = photoPreview ? 'Foto neu aufnehmen' : 'Foto aufnehmen'
   const canRemovePhoto = Boolean(photoPreview)
   const canDeletePlayers = players.length > 0
-  const playercardHref = `/projects/${projectId}/playercard`
+  const playercardHref = useMemo(() => {
+    if (editId) {
+      const encoded = encodeURIComponent(editId)
+      return `/projects/${projectId}/playercard?player=${encoded}`
+    }
+    return `/projects/${projectId}/playercard`
+  }, [projectId, editId])
   const projectName = project?.name?.trim() ?? ''
   const matrixHeading = projectName || 'Spielermatrix'
 
