@@ -23,7 +23,7 @@ function genderOrNull(v: FormDataEntryValue | null) {
   return null
 }
 
-const PLAYER_PHOTO_BUCKET = 'player-photos'
+const PLAYER_PHOTO_BUCKET = process.env.PLAYER_PHOTO_BUCKET
 
 function inferExtension(file: File) {
   const name = file.name || ''
@@ -39,6 +39,9 @@ function inferExtension(file: File) {
 }
 
 async function uploadPlayerPhoto(projectId: string, file: File) {
+  if (!PLAYER_PHOTO_BUCKET) {
+    throw new Error('PLAYER_PHOTO_BUCKET environment variable is not configured')
+  }
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
   const ext = inferExtension(file)
