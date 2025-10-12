@@ -16,7 +16,9 @@
     "@supabase/ssr": "0.4.1",
     "qrcode": "1.5.4",
     "zod": "3.23.8",
-    "react-hook-form": "7.53.0"
+    "react-hook-form": "7.53.0",
+    "@imgly/background-removal": "^1.7.0",
+    "onnxruntime-web": "^1.21.0"
   },
   "devDependencies": {
     "typescript": "5.5.4",
