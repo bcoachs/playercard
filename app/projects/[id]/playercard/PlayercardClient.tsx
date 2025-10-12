@@ -1,12 +1,25 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import Link from 'next/link'
-import { PLAYER_CARD_BACKGROUNDS } from '@/data/backgrounds'
+import {
+  PLAYER_CARD_BACKGROUNDS,
+  type PlayercardBackground,
+} from '@/data/backgrounds'
 import { findNationality, NATIONALITIES } from '@/data/nationalities'
 import { PLAYER_POSITIONS } from '@/data/positions'
 
+// -----------------------------------------------------------------------------
+// Typen & Konstanten
+// -----------------------------------------------------------------------------
 type Player = {
   id: string
   display_name: string
@@ -25,7 +38,9 @@ type StatKey =
   | 'shotAccuracy'
   | 'pace'
 
-const STAT_FIELDS: { key: StatKey; label: string }[] = [
+type StatField = { key: StatKey; label: string }
+
+const STAT_FIELDS: StatField[] = [
   { key: 'agility', label: 'Beweglichkeit' },
   { key: 'technique', label: 'Technik' },
   { key: 'passing', label: 'Passgenauigkeit' },
@@ -44,6 +59,7 @@ type CardState = {
   favouritePositions: string
   rating: number
   backgroundId: string
+  seasonLabel: string
   stats: Record<StatKey, number>
   photo?: string | null
   clubLogo?: string | null
@@ -51,8 +67,6 @@ type CardState = {
 
 const STORAGE_SELECTED_PLAYER = 'playercard:selectedPlayer'
 const STORAGE_CARD_STATE = 'playercard:cardOptions'
-
-type Html2CanvasFn = (element: HTMLElement, options?: Record<string, unknown>) => Promise<HTMLCanvasElement>
 
 const DEFAULT_STATS: Record<StatKey, number> = {
   agility: 78,
@@ -63,6 +77,14 @@ const DEFAULT_STATS: Record<StatKey, number> = {
   pace: 83,
 }
 
+function formatSeasonLabel() {
+  const formatter = new Intl.DateTimeFormat('de-DE', {
+    month: 'long',
+    year: 'numeric',
+  })
+  return formatter.format(new Date())
+}
+
 function createDefaultState(player?: Player | null): CardState {
   return {
     playerId: player?.id ?? null,
@@ -70,10 +92,11 @@ function createDefaultState(player?: Player | null): CardState {
     club: player?.club ?? '',
     position: player?.fav_position ?? '',
     favouriteNumber: player?.fav_number ? String(player.fav_number) : '',
-    nationality: player?.nationality ?? '',
+    nationality: player?.nationality ? player.nationality.toUpperCase() : '',
     favouritePositions: player?.fav_position ?? '',
     rating: 86,
     backgroundId: PLAYER_CARD_BACKGROUNDS[0]?.id ?? 'aurora',
+    seasonLabel: formatSeasonLabel(),
     stats: { ...DEFAULT_STATS },
     photo: player?.photo_url ?? null,
     clubLogo: null,
@@ -84,6 +107,7 @@ function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ')
 }
 
+// html2canvas wird nur im Browser geladen
 async function ensureHtml2Canvas(): Promise<Html2CanvasFn> {
   if (typeof window === 'undefined') {
     throw new Error('html2canvas kann nur im Browser geladen werden')
@@ -94,23 +118,30 @@ async function ensureHtml2Canvas(): Promise<Html2CanvasFn> {
   }
 
   await new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[data-playercard-html2canvas="1"]')
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[data-playercard-html2canvas="1"]',
+    )
     if (existing) {
       if (window.html2canvas) {
         resolve()
         return
       }
       existing.addEventListener('load', () => resolve(), { once: true })
-      existing.addEventListener('error', () => reject(new Error('html2canvas konnte nicht geladen werden')), { once: true })
+      existing.addEventListener('error', () =>
+        reject(new Error('html2canvas konnte nicht geladen werden')),
+        { once: true },
+      )
       return
     }
 
     const script = document.createElement('script')
-    script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'
+    script.src =
+      'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'
     script.async = true
     script.setAttribute('data-playercard-html2canvas', '1')
     script.onload = () => resolve()
-    script.onerror = () => reject(new Error('html2canvas konnte nicht geladen werden'))
+    script.onerror = () =>
+      reject(new Error('html2canvas konnte nicht geladen werden'))
     document.head.appendChild(script)
   })
 
@@ -121,6 +152,11 @@ async function ensureHtml2Canvas(): Promise<Html2CanvasFn> {
   return window.html2canvas
 }
 
+type Html2CanvasFn = (
+  element: HTMLElement,
+  options?: Record<string, unknown>,
+) => Promise<HTMLCanvasElement>
+
 type Props = {
   projectId: string
   initialPlayerId?: string
@@ -128,17 +164,26 @@ type Props = {
 
 type ApiState = 'idle' | 'loading' | 'error'
 
-export default function PlayercardClient({ projectId, initialPlayerId = '' }: Props) {
+// -----------------------------------------------------------------------------
+// Hauptkomponente
+// -----------------------------------------------------------------------------
+export default function PlayercardClient({
+  projectId,
+  initialPlayerId = '',
+}: Props) {
   const [players, setPlayers] = useState<Player[]>([])
   const [apiState, setApiState] = useState<ApiState>('idle')
   const [selectedPlayerId, setSelectedPlayerId] = useState(initialPlayerId)
-  const [cardState, setCardState] = useState<CardState>(() => createDefaultState(null))
+  const [cardState, setCardState] = useState<CardState>(() =>
+    createDefaultState(null),
+  )
   const [cardStateRestored, setCardStateRestored] = useState(false)
   const [showSelector, setShowSelector] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [downloading, setDownloading] = useState(false)
   const cardRef = useRef<HTMLDivElement | null>(null)
 
+  // Spieler laden
   useEffect(() => {
     setApiState('loading')
     setErrorMessage('')
@@ -155,11 +200,14 @@ export default function PlayercardClient({ projectId, initialPlayerId = '' }: Pr
       })
       .catch(err => {
         console.error(err)
-        setErrorMessage(err instanceof Error ? err.message : 'Unbekannter Fehler')
+        setErrorMessage(
+          err instanceof Error ? err.message : 'Unbekannter Fehler',
+        )
         setApiState('error')
       })
   }, [projectId])
 
+  // lokale Speicherung wiederherstellen
   useEffect(() => {
     if (typeof window === 'undefined') return
     const savedPlayer = window.localStorage.getItem(STORAGE_SELECTED_PLAYER)
@@ -199,10 +247,11 @@ export default function PlayercardClient({ projectId, initialPlayerId = '' }: Pr
   }, [apiState, selectedPlayerId])
 
   const selectedPlayer = useMemo(
-    () => players.find(p => p.id === selectedPlayerId) || null,
+    () => players.find(player => player.id === selectedPlayerId) || null,
     [players, selectedPlayerId],
   )
 
+  // Playerwechsel -> Standardwerte einsetzen
   useEffect(() => {
     if (!selectedPlayer) return
     setCardState(prev => {
@@ -217,7 +266,10 @@ export default function PlayercardClient({ projectId, initialPlayerId = '' }: Pr
     })
   }, [selectedPlayer])
 
-  const handleFieldChange = useCallback(<K extends keyof CardState>(key: K, value: CardState[K]) => {
+  const handleFieldChange = useCallback(<K extends keyof CardState>(
+    key: K,
+    value: CardState[K],
+  ) => {
     setCardState(prev => ({ ...prev, [key]: value }))
   }, [])
 
@@ -231,16 +283,19 @@ export default function PlayercardClient({ projectId, initialPlayerId = '' }: Pr
     }))
   }, [])
 
-  const handlePhotoUpload = useCallback((file: File, key: 'photo' | 'clubLogo') => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : null
-      if (result) {
-        setCardState(prev => ({ ...prev, [key]: result }))
+  const handlePhotoUpload = useCallback(
+    (file: File, key: 'photo' | 'clubLogo') => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : null
+        if (result) {
+          setCardState(prev => ({ ...prev, [key]: result }))
+        }
       }
-    }
-    reader.readAsDataURL(file)
-  }, [])
+      reader.readAsDataURL(file)
+    },
+    [],
+  )
 
   const handleDownload = useCallback(async () => {
     const node = cardRef.current
@@ -253,20 +308,26 @@ export default function PlayercardClient({ projectId, initialPlayerId = '' }: Pr
         scale: window.devicePixelRatio > 1 ? 2 : 1.5,
       })
       const link = document.createElement('a')
+      const fallbackName = cardState.name
+        ? cardState.name.replace(/\s+/g, '_')
+        : 'playercard'
       link.href = canvas.toDataURL('image/png')
-      const fallbackName = cardState.name ? cardState.name.replace(/\s+/g, '_') : 'playercard'
       link.download = `${fallbackName}.png`
       link.click()
     } catch (err) {
       console.error(err)
-      alert('Download fehlgeschlagen. Bitte stelle eine Internetverbindung sicher und versuche es erneut.')
+      alert(
+        'Download fehlgeschlagen. Bitte stelle eine Internetverbindung sicher und versuche es erneut.',
+      )
     } finally {
       setDownloading(false)
     }
   }, [cardState.name])
 
   const background = useMemo(
-    () => PLAYER_CARD_BACKGROUNDS.find(bg => bg.id === cardState.backgroundId) || PLAYER_CARD_BACKGROUNDS[0],
+    () =>
+      PLAYER_CARD_BACKGROUNDS.find(bg => bg.id === cardState.backgroundId) ||
+      PLAYER_CARD_BACKGROUNDS[0],
     [cardState.backgroundId],
   )
 
@@ -274,416 +335,567 @@ export default function PlayercardClient({ projectId, initialPlayerId = '' }: Pr
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 pb-16 pt-10 lg:flex-row">
-        <section className="flex flex-1 items-center justify-center">
-          <div className="relative flex w-full max-w-sm justify-center">
-            <div className="relative w-full max-w-sm transition-transform duration-300 hover:-translate-y-1">
-              <div className="relative aspect-[9/19.5] rounded-[3rem] border-[12px] border-slate-900 bg-slate-900/80 shadow-[0_30px_80px_rgba(15,23,42,0.8)] before:absolute before:inset-x-[20%] before:top-1 before:h-1.5 before:rounded-full before:bg-slate-600/60 after:absolute after:bottom-14 after:left-1/2 after:h-14 after:w-28 after:-translate-x-1/2 after:rounded-[999px] after:bg-slate-800/70">
-                <div className="absolute inset-[18px] rounded-[2.2rem] bg-slate-900/90 p-4">
-                  <div
-                    ref={cardRef}
-                    className={cn(
-                      'relative flex h-full w-full flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900/80 text-slate-100 shadow-[0_20px_60px_rgba(15,23,42,0.6)]',
-                      background?.gradientClass,
-                      background?.overlayClass,
-                    )}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-black/40" aria-hidden />
-                    <div className="relative z-10 flex flex-col gap-4 p-5">
-                      <header className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/10 ring-2 ring-white/20">
-                            {cardState.photo ? (
-                              <img
-                                src={cardState.photo}
-                                alt={cardState.name || 'Spielerfoto'}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-xs uppercase tracking-wide text-white/70">Foto</span>
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm uppercase tracking-widest text-white/70">Gesamtrating</p>
-                            <p className="text-4xl font-black text-white drop-shadow">{cardState.rating}</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-2 text-right">
-                          {cardState.clubLogo && (
-                            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-black/40 p-1">
-                              <img src={cardState.clubLogo} alt="Vereinslogo" className="h-full w-full object-contain" />
-                            </div>
-                          )}
-                          <p className="font-semibold uppercase tracking-widest text-white/80">
-                            {cardState.position || 'POS'}
-                          </p>
-                          <div className="flex items-center gap-1 rounded-full bg-black/30 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/80">
-                            {cardState.favouriteNumber ? `#${cardState.favouriteNumber}` : '—'}
-                            {nationalityOption && (
-                              <span className="text-base" aria-label={nationalityOption.name}>
-                                {nationalityOption.flag}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </header>
-                      <div className="flex flex-col gap-1">
-                        <h1 className="text-3xl font-black uppercase tracking-wide text-white drop-shadow">
-                          {cardState.name || 'Spielername'}
-                        </h1>
-                        {cardState.club && (
-                          <p className="text-sm font-medium uppercase tracking-wider text-white/80">
-                            {cardState.club}
-                          </p>
-                        )}
-                        {cardState.favouritePositions && (
-                          <p className="text-xs uppercase tracking-[0.35em] text-white/60">
-                            {cardState.favouritePositions}
-                          </p>
-                        )}
-                      </div>
-                      <div className="grid gap-3 rounded-2xl bg-black/35 p-4 backdrop-blur">
-                        {STAT_FIELDS.map(stat => {
-                          const value = cardState.stats[stat.key]
-                          return (
-                            <div key={stat.key} className="flex flex-col gap-1">
-                              <div className="flex items-center justify-between text-xs uppercase tracking-wide text-white/70">
-                                <span>{stat.label}</span>
-                                <span>{value}</span>
-                              </div>
-                              <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
-                                <div
-                                  className="h-full rounded-full bg-gradient-to-r from-white to-white/40"
-                                  style={{ width: `${value}%` }}
-                                />
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                      <div className="mt-auto flex items-center justify-between rounded-2xl bg-white/10 p-3 text-xs uppercase tracking-wide text-white/80">
-                        <span>Pro Edition</span>
-                        <span>Skillscore {Math.round(
-                          (Object.values(cardState.stats).reduce((sum, val) => sum + val, 0) /
-                            STAT_FIELDS.length +
-                            cardState.rating) /
-                            2,
-                        )}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+      <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-12 px-4 pb-16 pt-10 lg:flex-row">
+        <section className="flex flex-1 flex-col items-center gap-6">
+          <CardPreview
+            ref={cardRef}
+            state={cardState}
+            background={background}
+            nationality={nationalityOption?.flag ?? ''}
+          />
 
-        <aside className="w-full max-w-xl space-y-8">
-          <header className="space-y-3">
-            <Link href={`/projects/${projectId}`} className="text-xs uppercase tracking-widest text-slate-400 transition hover:text-white/90">
-              ← Zurück zur Projektübersicht
-            </Link>
-            <div>
-              <h2 className="text-3xl font-semibold text-white">Playercard konfigurieren</h2>
-              <p className="text-sm text-slate-400">
-                Passe Foto, Daten und Hintergrund an – alle Änderungen werden live in der Smartphone-Vorschau angezeigt.
-              </p>
-            </div>
-          </header>
-
-          <div className="grid gap-6 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <div className="grid gap-2">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-300">Spieler auswählen</label>
-              <select
-                value={selectedPlayerId}
-                onChange={event => setSelectedPlayerId(event.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/40"
-              >
-                <option value="">– Spieler wählen –</option>
-                {players.map(player => (
-                  <option key={player.id} value={player.id}>
-                    {player.display_name}
-                  </option>
-                ))}
-              </select>
-              {apiState === 'loading' && (
-                <p className="text-xs text-slate-400">Spieler werden geladen …</p>
-              )}
-              {apiState === 'error' && (
-                <p className="text-xs text-red-400">{errorMessage}</p>
-              )}
-              {apiState === 'idle' && players.length === 0 && (
-                <p className="text-xs text-slate-400">Noch keine Spieler im Projekt vorhanden.</p>
-              )}
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Name *">
-                <input
-                  className="input-modern"
-                  value={cardState.name}
-                  onChange={event => handleFieldChange('name', event.target.value)}
-                  placeholder="Vorname Nachname"
-                  required
-                />
-              </Field>
-              <Field label="Position *">
-                <select
-                  className="input-modern"
-                  value={cardState.position}
-                  onChange={event => handleFieldChange('position', event.target.value)}
-                >
-                  <option value="">– Position –</option>
-                  {PLAYER_POSITIONS.map(pos => (
-                    <option key={pos} value={pos}>
-                      {pos}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Verein">
-                <input
-                  className="input-modern"
-                  value={cardState.club}
-                  onChange={event => handleFieldChange('club', event.target.value)}
-                  placeholder="Vereinsname"
-                />
-              </Field>
-              <Field label="Lieblingsnummer">
-                <input
-                  className="input-modern"
-                  value={cardState.favouriteNumber}
-                  onChange={event => handleFieldChange('favouriteNumber', event.target.value.replace(/[^0-9]/g, ''))}
-                  inputMode="numeric"
-                  placeholder="7"
-                />
-              </Field>
-              <Field label="Nationalität">
-                <select
-                  className="input-modern"
-                  value={cardState.nationality}
-                  onChange={event => handleFieldChange('nationality', event.target.value)}
-                >
-                  <option value="">– Auswahl –</option>
-                  {NATIONALITIES.map(option => (
-                    <option key={option.code} value={option.code}>
-                      {option.flag} {option.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Lieblingspositionen">
-                <input
-                  className="input-modern"
-                  value={cardState.favouritePositions}
-                  onChange={event => handleFieldChange('favouritePositions', event.target.value)}
-                  placeholder="ST • ZOM"
-                />
-              </Field>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Rating">
-                <input
-                  type="range"
-                  min={40}
-                  max={99}
-                  step={1}
-                  value={cardState.rating}
-                  onChange={event => handleFieldChange('rating', Number(event.target.value))}
-                  className="w-full"
-                />
-                <div className="text-right text-xs text-slate-300">{cardState.rating}</div>
-              </Field>
-              <Field label="Hintergrund">
-                <select
-                  className="input-modern"
-                  value={cardState.backgroundId}
-                  onChange={event => handleFieldChange('backgroundId', event.target.value)}
-                >
-                  {PLAYER_CARD_BACKGROUNDS.map(bg => (
-                    <option key={bg.id} value={bg.id}>
-                      {bg.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Stats anpassen</p>
-              <div className="grid gap-4">
-                {STAT_FIELDS.map(stat => (
-                  <div key={stat.key} className="space-y-1 rounded-2xl border border-white/10 bg-black/40 p-4">
-                    <div className="flex items-center justify-between text-sm text-slate-200">
-                      <span>{stat.label}</span>
-                      <span className="font-semibold">{cardState.stats[stat.key]}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={40}
-                      max={99}
-                      step={1}
-                      value={cardState.stats[stat.key]}
-                      onChange={event => handleStatChange(stat.key, Number(event.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <UploadField
-                label="Spielerfoto"
-                description="Freigestelltes Bild hochladen"
-                preview={cardState.photo}
-                onUpload={file => handlePhotoUpload(file, 'photo')}
-              />
-              <UploadField
-                label="Vereinslogo"
-                description="Optionales Logo für die Karte"
-                preview={cardState.clubLogo}
-                onUpload={file => handlePhotoUpload(file, 'clubLogo')}
-              />
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Hintergründe</p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {PLAYER_CARD_BACKGROUNDS.map(bg => (
-                  <button
-                    key={bg.id}
-                    type="button"
-                    onClick={() => handleFieldChange('backgroundId', bg.id)}
-                    className={cn(
-                      'group relative overflow-hidden rounded-2xl border p-0.5 text-left transition focus:outline-none focus:ring-2 focus:ring-white/60',
-                      cardState.backgroundId === bg.id
-                        ? 'border-white/80 shadow-lg'
-                        : 'border-white/10 hover:border-white/40',
-                    )}
-                  >
-                    <div className={cn('h-24 w-full rounded-2xl', bg.gradientClass)} />
-                    <div className="p-2">
-                      <p className="text-xs font-semibold text-white">{bg.name}</p>
-                      <p className="text-[10px] text-slate-400">{bg.description}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
+          <div className="flex flex-wrap items-center justify-center gap-4">
             <button
               type="button"
               onClick={handleDownload}
-              className="w-full rounded-2xl bg-gradient-to-r from-pink-500 via-rose-500 to-orange-500 px-6 py-4 text-base font-semibold uppercase tracking-wide text-white shadow-lg transition hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-pink-500/50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={downloading || !cardState.name || !cardState.position}
+              disabled={downloading}
+              className="btn min-w-[220px] px-10 py-3 text-lg disabled:opacity-70"
             >
-              {downloading ? 'Wird erstellt …' : 'Playercard herunterladen'}
+              {downloading ? 'Wird vorbereitet…' : 'Playercard als PNG sichern'}
             </button>
+            <a
+              className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white/80 transition hover:border-white hover:text-white"
+              href="https://www.remove.bg/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Hintergrund entfernen (remove.bg)
+            </a>
           </div>
-        </aside>
+
+          {errorMessage && (
+            <p className="text-sm text-red-300">{errorMessage}</p>
+          )}
+        </section>
+
+        <Configurator
+          cardState={cardState}
+          onFieldChange={handleFieldChange}
+          onStatChange={handleStatChange}
+          onPhotoUpload={handlePhotoUpload}
+          nationalityOption={nationalityOption?.code ?? ''}
+          onPlayerPicker={() => setShowSelector(true)}
+        />
       </div>
 
       {showSelector && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4">
-          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-6 text-white shadow-2xl">
-            <h3 className="text-2xl font-semibold">Spieler auswählen</h3>
-            <p className="mt-2 text-sm text-slate-300">
-              Bitte wähle einen Spieler aus, um die Playercard zu gestalten. Du kannst auch zur Verwaltung zurückkehren.
-            </p>
-            <div className="mt-5 space-y-3">
-              <select
-                value={selectedPlayerId}
-                onChange={event => setSelectedPlayerId(event.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm"
-              >
-                <option value="">– Spieler wählen –</option>
-                {players.map(player => (
-                  <option key={player.id} value={player.id}>
-                    {player.display_name}
-                  </option>
-                ))}
-              </select>
-              <Link
-                href={`/projects/${projectId}`}
-                className="block w-full rounded-xl border border-white/20 bg-transparent px-4 py-3 text-center text-sm font-semibold uppercase tracking-wide text-white transition hover:border-white/40"
-              >
-                Zur Auswahlseite
-              </Link>
-              <button
-                type="button"
-                onClick={() => setShowSelector(false)}
-                className="w-full rounded-xl bg-white/10 px-4 py-3 text-sm text-white transition hover:bg-white/20"
-                disabled={!selectedPlayerId}
-              >
-                Weiter zur Karte
-              </button>
-            </div>
-          </div>
-        </div>
+        <PlayerSelectModal
+          players={players}
+          onClose={() => setShowSelector(false)}
+          onSelect={playerId => setSelectedPlayerId(playerId)}
+          loading={apiState === 'loading'}
+        />
       )}
     </div>
   )
 }
 
-type FieldProps = {
-  label: string
-  children: ReactNode
+// -----------------------------------------------------------------------------
+// Card Preview
+// -----------------------------------------------------------------------------
+type CardPreviewProps = {
+  state: CardState
+  background: PlayercardBackground
+  nationality: string
 }
 
-function Field({ label, children }: FieldProps) {
+const CardPreview = forwardRef<HTMLDivElement, CardPreviewProps>(
+  ({ state, background, nationality }, ref) => {
+    const statPairs = useMemo(() => {
+      const pairs: StatField[][] = []
+      for (let index = 0; index < STAT_FIELDS.length; index += 2) {
+        pairs.push(STAT_FIELDS.slice(index, index + 2))
+      }
+      return pairs
+    }, [])
+
+    return (
+      <div className="w-full max-w-[min(640px,90vw)]">
+        <div
+          ref={ref}
+          className={cn(
+            'relative mx-auto aspect-[9/16] w-full overflow-hidden rounded-[64px] border border-white/12 shadow-[0_40px_100px_rgba(15,23,42,0.9)]',
+            background.gradientClass,
+            background.overlayClass,
+          )}
+          style={{
+            maxWidth: '1080px',
+            backgroundSize: 'cover',
+            backgroundRepeat: 'no-repeat',
+          }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/60" />
+
+          <div className="relative flex h-full flex-col">
+            <div className="relative flex-[2] overflow-hidden px-[6%] pt-[7%]">
+              <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+
+              {state.photo ? (
+                <img
+                  src={state.photo}
+                  alt={state.name || 'Spielerportrait'}
+                  className="relative z-10 mx-auto h-full w-auto max-w-[92%] translate-y-[10%] object-contain"
+                  style={{
+                    filter: 'drop-shadow(0px 18px 36px rgba(8,9,16,0.55)) saturate(1.05)',
+                    WebkitMaskImage:
+                      'radial-gradient(circle at 50% 30%, black 55%, rgba(0,0,0,0.25) 72%, transparent 95%)',
+                    maskImage:
+                      'radial-gradient(circle at 50% 30%, black 55%, rgba(0,0,0,0.25) 72%, transparent 95%)',
+                  }}
+                />
+              ) : (
+                <div className="relative z-10 flex h-full w-full items-center justify-center rounded-[48px] border-2 border-dashed border-white/30 text-center text-white/60 backdrop-blur-sm">
+                  <p className="max-w-[80%] text-lg font-medium">
+                    Lade ein freigestelltes Portrait hoch, um die Card zu füllen.
+                  </p>
+                </div>
+              )}
+
+              {state.clubLogo && (
+                <div className="absolute left-[7%] top-[7%] flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl bg-black/40 p-2 shadow-lg shadow-black/50">
+                  <img
+                    src={state.clubLogo}
+                    alt="Vereinslogo"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              )}
+
+              <div className="absolute right-[7%] top-[7%] flex flex-col items-end gap-3 text-right">
+                <div className="rounded-full bg-black/35 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/80">
+                  {state.position || 'Position'}
+                </div>
+                <div className="flex items-center gap-3 rounded-[32px] bg-white/15 px-6 py-3 text-white/95 backdrop-blur-sm">
+                  <span className="text-5xl font-black leading-none">
+                    {state.rating}
+                  </span>
+                  {nationality ? (
+                    <span className="text-3xl leading-none">{nationality}</span>
+                  ) : null}
+                </div>
+                {state.favouriteNumber && (
+                  <div className="rounded-2xl bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70">
+                    Nr. {state.favouriteNumber}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="relative flex-[1] px-[8%] pb-[6%] pt-[4%]">
+              <div className="absolute inset-0 rounded-[48px] bg-white/12 backdrop-blur-md" />
+              <div className="relative z-10 flex h-full flex-col">
+                <p
+                  className="text-[56px] font-semibold italic text-white drop-shadow-[0_8px_24px_rgba(15,23,42,0.45)]"
+                  style={{ fontFamily: "'Great Vibes', 'Pacifico', cursive" }}
+                >
+                  {state.name || 'Dein Name'}
+                </p>
+
+                <div className="mt-4 grid flex-1 grid-cols-2 gap-x-10 gap-y-3 text-base font-semibold text-white/90">
+                  {statPairs.map((pair, index) => (
+                    <div key={index} className="flex flex-col gap-3">
+                      {pair.map(stat => (
+                        <div
+                          key={stat.key}
+                          className="flex items-center justify-between rounded-full bg-white/10 px-4 py-2 text-sm uppercase tracking-[0.2em]"
+                        >
+                          <span className="text-[0.75rem] text-white/70">
+                            {stat.label}
+                          </span>
+                          <span className="text-xl text-white">
+                            {state.stats[stat.key] ?? 0}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 flex items-center justify-between text-xs uppercase tracking-[0.45em] text-white/75">
+                  <span className="truncate">
+                    {state.club || 'Verein deiner Wahl'}
+                  </span>
+                  <span>{state.seasonLabel}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  },
+)
+CardPreview.displayName = 'CardPreview'
+
+// -----------------------------------------------------------------------------
+// Konfigurator
+// -----------------------------------------------------------------------------
+type ConfiguratorProps = {
+  cardState: CardState
+  onFieldChange: <K extends keyof CardState>(key: K, value: CardState[K]) => void
+  onStatChange: (key: StatKey, value: number) => void
+  onPhotoUpload: (file: File, key: 'photo' | 'clubLogo') => void
+  nationalityOption: string
+  onPlayerPicker: () => void
+}
+
+function Configurator({
+  cardState,
+  onFieldChange,
+  onStatChange,
+  onPhotoUpload,
+  nationalityOption,
+  onPlayerPicker,
+}: ConfiguratorProps) {
+  const handleInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const { name, value } = event.target
+      const key = name as keyof CardState
+      if (key === 'rating') {
+        onFieldChange(key, Number(value))
+        return
+      }
+      if (key === 'nationality') {
+        onFieldChange(key, value.toUpperCase() as CardState[typeof key])
+        return
+      }
+      onFieldChange(key, value as CardState[typeof key])
+    },
+    [onFieldChange],
+  )
+
+  const handleStatInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const { name, value } = event.target
+      onStatChange(name as StatKey, Number(value))
+    },
+    [onStatChange],
+  )
+
+  const handleFileInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const { files, dataset } = event.target
+      if (!files || !files[0] || !dataset.key) return
+      onPhotoUpload(files[0], dataset.key as 'photo' | 'clubLogo')
+    },
+    [onPhotoUpload],
+  )
+
+  const handleSubmit = useCallback((event: FormEvent) => {
+    event.preventDefault()
+  }, [])
+
   return (
-    <label className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-slate-300">
-      {label}
-      {children}
+    <aside className="w-full max-w-xl rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-[0_30px_80px_rgba(8,12,30,0.6)] backdrop-blur">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <p className="text-sm uppercase tracking-[0.4em] text-white/50">
+            Spieler auswählen
+          </p>
+          <button
+            type="button"
+            className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/80 transition hover:border-white hover:text-white"
+            onClick={onPlayerPicker}
+          >
+            Aktive Liste öffnen
+          </button>
+        </div>
+        <Link
+          href="/projects"
+          className="text-xs uppercase tracking-[0.3em] text-white/50 transition hover:text-white"
+        >
+          Zurück zu Projekten
+        </Link>
+      </div>
+
+      <form className="space-y-6" onSubmit={handleSubmit}>
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.3em] text-white/60">
+            Stammdaten
+          </h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2 text-xs uppercase tracking-[0.25em] text-white/60">
+              Spielername
+              <input
+                className="input"
+                name="name"
+                value={cardState.name}
+                onChange={handleInput}
+                placeholder="Pflichtfeld"
+                required
+              />
+            </label>
+            <label className="space-y-2 text-xs uppercase tracking-[0.25em] text-white/60">
+              Verein
+              <input
+                className="input"
+                name="club"
+                value={cardState.club}
+                onChange={handleInput}
+                placeholder="Optional"
+              />
+            </label>
+            <label className="space-y-2 text-xs uppercase tracking-[0.25em] text-white/60">
+              Lieblingsnummer
+              <input
+                className="input"
+                name="favouriteNumber"
+                value={cardState.favouriteNumber}
+                onChange={handleInput}
+                placeholder="Optional"
+              />
+            </label>
+            <label className="space-y-2 text-xs uppercase tracking-[0.25em] text-white/60">
+              Position
+              <select
+                className="input"
+                name="position"
+                value={cardState.position}
+                onChange={handleInput}
+              >
+                <option value="">Wählen…</option>
+                {PLAYER_POSITIONS.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-2 text-xs uppercase tracking-[0.25em] text-white/60">
+              Nationalität
+              <select
+                className="input"
+                name="nationality"
+                value={nationalityOption}
+                onChange={handleInput}
+              >
+                <option value="">Wählen…</option>
+                {NATIONALITIES.map(option => (
+                  <option key={option.code} value={option.code}>
+                    {option.flag} {option.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-2 text-xs uppercase tracking-[0.25em] text-white/60">
+              Gesamtrating
+              <input
+                type="number"
+                min={1}
+                max={99}
+                className="input"
+                name="rating"
+                value={cardState.rating}
+                onChange={handleInput}
+              />
+            </label>
+            <label className="space-y-2 text-xs uppercase tracking-[0.25em] text-white/60">
+              Saison/Datum
+              <input
+                className="input"
+                name="seasonLabel"
+                value={cardState.seasonLabel}
+                onChange={handleInput}
+                placeholder="z. B. April 2024"
+              />
+            </label>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.3em] text-white/60">
+            Portrait & Logo
+          </h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            <ImageUploadField
+              label="Playerportrait"
+              helper="Vor Upload Hintergrund entfernen"
+              dataKey="photo"
+              onChange={handleFileInput}
+            />
+            <ImageUploadField
+              label="Vereinslogo"
+              helper="PNG oder SVG"
+              dataKey="clubLogo"
+              onChange={handleFileInput}
+            />
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.3em] text-white/60">
+            Leistungswerte
+          </h2>
+          <div className="space-y-4">
+            {STAT_FIELDS.map(stat => (
+              <StatSlider
+                key={stat.key}
+                stat={stat}
+                value={cardState.stats[stat.key]}
+                onChange={handleStatInput}
+              />
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.3em] text-white/60">
+            Hintergrund
+          </h2>
+          <BackgroundPicker
+            selectedId={cardState.backgroundId}
+            onSelect={backgroundId => onFieldChange('backgroundId', backgroundId)}
+          />
+        </section>
+      </form>
+    </aside>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// Unterkomponenten
+// -----------------------------------------------------------------------------
+type StatSliderProps = {
+  stat: { key: StatKey; label: string }
+  value: number
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void
+}
+
+function StatSlider({ stat, value, onChange }: StatSliderProps) {
+  return (
+    <label className="block">
+      <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.3em] text-white/60">
+        <span>{stat.label}</span>
+        <span className="text-white/90">{value}</span>
+      </div>
+      <input
+        className="w-full accent-pink-500"
+        type="range"
+        name={stat.key}
+        min={10}
+        max={99}
+        step={1}
+        value={value}
+        onChange={onChange}
+      />
     </label>
   )
 }
 
-type UploadFieldProps = {
-  label: string
-  description: string
-  preview?: string | null
-  onUpload: (file: File) => void
+type BackgroundPickerProps = {
+  selectedId: string
+  onSelect: (backgroundId: string) => void
 }
 
-function UploadField({ label, description, preview, onUpload }: UploadFieldProps) {
-  const inputRef = useRef<HTMLInputElement | null>(null)
+function BackgroundPicker({ selectedId, onSelect }: BackgroundPickerProps) {
   return (
-    <div className="rounded-2xl border border-dashed border-white/20 bg-black/40 p-4">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold text-white">{label}</p>
-          <p className="text-xs text-slate-400">{description}</p>
-        </div>
-        {preview ? (
-          <img src={preview} alt="Preview" className="h-16 w-16 rounded-xl object-cover" />
-        ) : (
-          <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-white/10 text-xs text-slate-300">
-            Kein Bild
-          </div>
-        )}
-      </div>
-      <button
-        type="button"
-        className="mt-4 w-full rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/20"
-        onClick={() => inputRef.current?.click()}
-      >
-        Bild wählen
-      </button>
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      {PLAYER_CARD_BACKGROUNDS.map(background => (
+        <button
+          key={background.id}
+          type="button"
+          onClick={() => onSelect(background.id)}
+          className={cn(
+            'group relative flex aspect-[9/16] items-end overflow-hidden rounded-3xl border border-white/20 p-3 text-left transition-transform hover:-translate-y-1 hover:shadow-lg',
+            selectedId === background.id
+              ? 'ring-4 ring-offset-2 ring-offset-slate-900 ring-white/70'
+              : 'opacity-80',
+          )}
+        >
+          <span className="relative z-10 text-xs font-semibold uppercase tracking-[0.25em] text-white">
+            {background.name}
+          </span>
+          <span className="absolute inset-0 opacity-100 transition-opacity group-hover:opacity-80" />
+          <span
+            className={cn(
+              'absolute inset-0 opacity-90',
+              background.gradientClass,
+              background.overlayClass,
+            )}
+          />
+        </button>
+      ))}
+    </div>
+  )
+}
+
+type ImageUploadFieldProps = {
+  label: string
+  helper: string
+  dataKey: 'photo' | 'clubLogo'
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void
+}
+
+function ImageUploadField({ label, helper, dataKey, onChange }: ImageUploadFieldProps) {
+  return (
+    <label className="flex h-full flex-col rounded-2xl border border-dashed border-white/20 bg-white/5 p-4 text-xs uppercase tracking-[0.25em] text-white/60">
+      {label}
+      <span className="mt-2 flex-1 text-[0.65rem] text-white/40 normal-case">
+        {helper}
+      </span>
       <input
-        ref={inputRef}
         type="file"
         accept="image/*"
-        className="hidden"
-        onChange={event => {
-          const file = event.target.files?.[0]
-          if (file) {
-            onUpload(file)
-          }
-        }}
+        className="mt-4 text-xs"
+        data-key={dataKey}
+        onChange={onChange}
       />
+    </label>
+  )
+}
+
+type PlayerSelectModalProps = {
+  players: Player[]
+  onClose: () => void
+  onSelect: (playerId: string) => void
+  loading: boolean
+}
+
+function PlayerSelectModal({ players, onClose, onSelect, loading }: PlayerSelectModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
+      <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-slate-900 p-6 text-white shadow-[0_30px_80px_rgba(0,0,0,0.65)]">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Spieler auswählen</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm text-white/60 transition hover:text-white"
+          >
+            Schließen
+          </button>
+        </div>
+        {loading ? (
+          <p className="py-10 text-center text-white/60">Spieler werden geladen…</p>
+        ) : players.length === 0 ? (
+          <div className="space-y-4 py-10 text-center text-white/60">
+            <p>Für dieses Projekt sind noch keine Spieler hinterlegt.</p>
+            <Link
+              href="/projects"
+              className="text-sm font-semibold text-white underline decoration-dashed"
+            >
+              Zurück zur Übersicht
+            </Link>
+          </div>
+        ) : (
+          <ul className="max-h-80 space-y-2 overflow-y-auto pr-2">
+            {players.map(player => (
+              <li key={player.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(player.id)}
+                  className="flex w-full items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-left text-sm transition hover:bg-white/10"
+                >
+                  <span className="font-semibold">{player.display_name}</span>
+                  <span className="text-xs uppercase tracking-[0.3em] text-white/50">
+                    {player.fav_position || '–'}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   )
 }
