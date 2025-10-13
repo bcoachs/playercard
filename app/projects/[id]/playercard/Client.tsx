@@ -1,7 +1,7 @@
 "use client"
 
-import type { BackgroundRemovalConfig } from '@imgly/background-removal'
 import { getCountryCode, getCountryLabel } from '@/lib/countries'
+import { loadImageSegmenter, removeBackgroundWithMediapipe } from '@/lib/mediapipeSegmentation'
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import PlayerHeader from './PlayerHeader'
@@ -23,81 +23,33 @@ const STAT_INDEX: Record<string, number> = STAT_ORDER.reduce((acc, name, index) 
   return acc
 }, {} as Record<string, number>)
 
-type RemoveBackgroundFn = (file: Blob) => Promise<Blob>
+const backgroundImagePromises = new Map<string, Promise<HTMLImageElement>>()
 
-type BackgroundRemovalModule = {
-  removeBackground: (file: Blob | File | string, options?: BackgroundRemovalConfig) => Promise<Blob>
-  preload?: (config?: BackgroundRemovalConfig) => Promise<void>
+function loadBackgroundImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') {
+      reject(new Error('Hintergründe können nur im Browser geladen werden.'))
+      return
+    }
+    const image = new Image()
+    image.crossOrigin = 'anonymous'
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Hintergrund konnte nicht geladen werden.'))
+    image.src = url
+  })
 }
 
-let cachedRemoveBackground: RemoveBackgroundFn | null = null
-let cachedModule: BackgroundRemovalModule | null = null
-
-/* const IMG_LY_VERSION = process.env.NEXT_PUBLIC_IMG_LY_ASSET_VERSION || '1.7.0'
-const IMG_LY_PUBLIC_PATH =
-  process.env.NEXT_PUBLIC_IMG_LY_PUBLIC_PATH ||
-  `https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@${IMG_LY_VERSION}/dist/`
-
-function getBackgroundRemovalConfig(): BackgroundRemovalConfig {
-  return {
-    device: 'cpu',
-    publicPath: IMG_LY_PUBLIC_PATH,
+async function getBackgroundImage(url: string): Promise<HTMLImageElement> {
+  const cached = backgroundImagePromises.get(url)
+  if (cached) {
+    return cached
   }
-} */
-
-// Version of the imgly background‑removal data.  If nothing is configured
-// via NEXT_PUBLIC_IMG_LY_ASSET_VERSION, fall back to 1.7.0.
-const IMG_LY_VERSION = process.env.NEXT_PUBLIC_IMG_LY_ASSET_VERSION || '1';
-
-/**
- * Build the background removal configuration at runtime.  This helper
- * transforms a relative `NEXT_PUBLIC_IMG_LY_PUBLIC_PATH` into an
- * absolute URL using window.location.origin when executing on the
- * client.  If no publicPath is provided, it falls back to the
- * official CDN path on jsdelivr.  The transformation must happen
- * inside the function (not at module top level) so that `window` is
- * defined.
- */
-function getBackgroundRemovalConfig(): BackgroundRemovalConfig {
-  let publicPath = process.env.NEXT_PUBLIC_IMG_LY_PUBLIC_PATH;
-  // Prefix relative paths with the current origin on the client so the
-  // URL constructor receives a valid absolute base.  During server
-  // execution `window` is undefined and the prefixing is skipped.  The
-  // background removal runs only in the browser.
-  if (publicPath && publicPath.startsWith('/') && typeof window !== 'undefined') {
-    publicPath = `${window.location.origin}${publicPath}`;
-  }
-  // Fall back to the CDN if no override is defined.
-  if (!publicPath) {
-    publicPath = `https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@${IMG_LY_VERSION}/dist/`;
-  }
-  return {
-    device: 'cpu',
-    publicPath,
-  };
-}
-
-
-
-async function loadBackgroundRemovalModule(): Promise<BackgroundRemovalModule> {
-  if (cachedModule) return cachedModule
-  if (typeof window === 'undefined') {
-    throw new Error('removeBackground kann nur im Browser geladen werden')
-  }
-  const mod = (await import('@imgly/background-removal')) as BackgroundRemovalModule
-  if (typeof mod.removeBackground !== 'function') {
-    throw new Error('removeBackground konnte nicht geladen werden')
-  }
-  cachedModule = mod
-  return cachedModule
-}
-
-async function loadRemoveBackground(): Promise<RemoveBackgroundFn> {
-  if (cachedRemoveBackground) return cachedRemoveBackground
-  const mod = await loadBackgroundRemovalModule()
-  const config = getBackgroundRemovalConfig()
-  cachedRemoveBackground = (file: Blob) => mod.removeBackground(file, config)
-  return cachedRemoveBackground
+  const loader = loadBackgroundImage(url).catch(error => {
+    backgroundImagePromises.delete(url)
+    throw error
+  })
+  backgroundImagePromises.set(url, loader)
+  return loader
 }
 
 type Station = {
@@ -386,27 +338,23 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   useEffect(() => {
     let isMounted = true
     setIsPreloadingAssets(true)
+    setIsPreloaded(false)
     setPreloadError(null)
     ;(async () => {
       try {
-        const mod = await loadBackgroundRemovalModule()
-        if (typeof mod.preload === 'function') {
-          await mod.preload(getBackgroundRemovalConfig())
-        }
+        await loadImageSegmenter()
         if (isMounted) {
-          const config = getBackgroundRemovalConfig()
-          cachedRemoveBackground = (file: Blob) => mod.removeBackground(file, config)
           setIsPreloaded(true)
         }
       } catch (error) {
-        console.error('Fehler beim Preload:', error)
+        console.error('Fehler beim Laden des Mediapipe-Modells:', error)
         if (!isMounted) return
         const normalizedError =
           error instanceof Error
             ? error
-            : new Error('Unbekannter Fehler beim Vorladen der Freistellungs-Modelle.')
+            : new Error('Unbekannter Fehler beim Laden des Mediapipe-Modells.')
         setPreloadError(normalizedError)
-        setErrorMessage(prev => prev ?? normalizedError.message)
+        setErrorMessage(prev => prev ?? 'Freistellung nicht möglich. Originalfoto wird angezeigt.')
       } finally {
         if (isMounted) {
           setIsPreloadingAssets(false)
@@ -688,13 +636,24 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       setIsProcessingImage(true)
       try {
         originalFileRef.current = file
-        const remove = await loadRemoveBackground()
-        const blob = await remove(file)
+        let backgroundSource: HTMLImageElement | string | undefined
+        if (currentBackground) {
+          if (currentBackground.type === 'gradient') {
+            backgroundSource = currentBackground.value
+          } else if (currentBackground.type === 'image') {
+            try {
+              backgroundSource = await getBackgroundImage(currentBackground.value)
+            } catch (backgroundError) {
+              console.warn('Hintergrund konnte nicht geladen werden:', backgroundError)
+            }
+          }
+        }
+        const blob = await removeBackgroundWithMediapipe(file, backgroundSource)
         const url = URL.createObjectURL(blob)
         applyDisplayImage(url, { objectUrl: true })
         setErrorMessage(null)
       } catch (err) {
-        console.error('Freistellung fehlgeschlagen', err)
+        console.error('Freistellung mit Mediapipe fehlgeschlagen:', err)
         const fallback = options?.fallbackUrl
         if (fallback) {
           applyDisplayImage(fallback, { objectUrl: false })
@@ -707,14 +666,13 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
             applyDisplayImage(null)
           }
         }
-        const messageFromError = err instanceof Error && err.message ? err.message : null
-        const fallbackMessage = options?.errorMessage || 'Freistellung fehlgeschlagen. Bitte erneut versuchen.'
-        setErrorMessage(messageFromError ?? fallbackMessage)
+        const fallbackMessage = options?.errorMessage ?? 'Freistellung nicht möglich. Originalfoto wird angezeigt.'
+        setErrorMessage(fallbackMessage)
       } finally {
         setIsProcessingImage(false)
       }
     },
-    [applyDisplayImage]
+    [applyDisplayImage, currentBackground]
   )
 
   useEffect(() => {
@@ -755,10 +713,9 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
         })
       } catch (err) {
         if (cancelled) return
-        console.error('Automatische Freistellung fehlgeschlagen', err)
+        console.error('Automatische Freistellung fehlgeschlagen:', err)
         applyDisplayImage(ensuredUrl, { objectUrl: false })
-        const message = err instanceof Error && err.message ? err.message : null
-        setErrorMessage(message ?? 'Freistellung nicht möglich. Originalfoto wird angezeigt.')
+        setErrorMessage('Freistellung nicht möglich. Originalfoto wird angezeigt.')
       }
     }
 
@@ -786,7 +743,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       applyDisplayImage(manualUrl, { objectUrl: false })
       processFile(file, {
         fallbackUrl: manualUrl,
-        errorMessage: 'Freistellung fehlgeschlagen. Das hochgeladene Bild wird verwendet.',
+        errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
       })
     },
     [processFile]
