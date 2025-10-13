@@ -26,6 +26,23 @@ function getContext2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
   return context
 }
 
+function blobToImage(blob: Blob): Promise<HTMLImageElement> {
+  assertBrowser('Bilddaten können nur im Browser verarbeitet werden.')
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob)
+    const image = new Image()
+    image.onload = () => {
+      URL.revokeObjectURL(url)
+      resolve(image)
+    }
+    image.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Bild konnte nicht aus dem Blob erzeugt werden.'))
+    }
+    image.src = url
+  })
+}
+
 function applyStringBackground(
   context: CanvasRenderingContext2D,
   width: number,
@@ -148,47 +165,57 @@ export async function loadBodyPix(): Promise<bodyPix.BodyPix> {
 
 export async function removeBackground(imageBlob: Blob, background?: string): Promise<Blob> {
   const net = await loadBodyPix()
-  const bitmap = await createImageBitmap(imageBlob)
+  const imgElement = await blobToImage(imageBlob)
 
-  try {
-    const segmentation = await net.segmentPerson(bitmap, {
-      internalResolution: 'medium',
-      segmentationThreshold: 0.7,
-    })
+  const segmentation = await net.segmentPerson(imgElement, {
+    internalResolution: 'medium',
+    segmentationThreshold: 0.7,
+  })
 
-    const width = segmentation.width ?? bitmap.width
-    const height = segmentation.height ?? bitmap.height
+  const width =
+    segmentation.width ?? (imgElement.naturalWidth || imgElement.width)
+  const height =
+    segmentation.height ?? (imgElement.naturalHeight || imgElement.height)
 
-    const subjectCanvas = createCanvas(width, height)
-    const subjectContext = getContext2d(subjectCanvas)
-    subjectContext.drawImage(bitmap, 0, 0, width, height)
+  const subjectCanvas = createCanvas(width, height)
+  const subjectContext = getContext2d(subjectCanvas)
+  subjectContext.drawImage(imgElement, 0, 0, width, height)
 
-    const imageData = subjectContext.getImageData(0, 0, width, height)
-    const pixels = imageData.data
-    const mask = segmentation.data
-    const pixelLength = Math.min(pixels.length / 4, mask.length)
+  const imageData = subjectContext.getImageData(0, 0, width, height)
+  const pixels = imageData.data
+  const trimmedBackground = background?.trim()
+  const rgbMatch =
+    trimmedBackground && /^rgba?\(/i.test(trimmedBackground)
+      ? trimmedBackground.match(/\d+/g)
+      : null
+  const useDirectColor = Boolean(rgbMatch && rgbMatch.length >= 3)
+  const colorComponents = useDirectColor
+    ? rgbMatch!.slice(0, 3).map(Number)
+    : null
 
-    for (let i = 0; i < pixelLength; i++) {
-      if (!mask[i]) {
-        const offset = i * 4
+  segmentation.data.forEach((isPerson: number, idx: number) => {
+    const offset = idx * 4
+    if (!isPerson) {
+      if (useDirectColor && colorComponents) {
+        pixels[offset] = colorComponents[0]
+        pixels[offset + 1] = colorComponents[1]
+        pixels[offset + 2] = colorComponents[2]
+        pixels[offset + 3] = 255
+      } else {
         pixels[offset + 3] = 0
       }
     }
+  })
 
-    subjectContext.putImageData(imageData, 0, 0)
+  subjectContext.putImageData(imageData, 0, 0)
 
-    if (background && background.trim()) {
-      const finalCanvas = createCanvas(width, height)
-      const finalContext = getContext2d(finalCanvas)
-      await drawBackground(finalContext, width, height, background)
-      finalContext.drawImage(subjectCanvas, 0, 0, width, height)
-      return await canvasToBlob(finalCanvas)
-    }
-
-    return await canvasToBlob(subjectCanvas)
-  } finally {
-    if (typeof bitmap.close === 'function') {
-      bitmap.close()
-    }
+  if (trimmedBackground && !useDirectColor) {
+    const finalCanvas = createCanvas(width, height)
+    const finalContext = getContext2d(finalCanvas)
+    await drawBackground(finalContext, width, height, trimmedBackground)
+    finalContext.drawImage(subjectCanvas, 0, 0, width, height)
+    return await canvasToBlob(finalCanvas)
   }
+
+  return await canvasToBlob(subjectCanvas)
 }
