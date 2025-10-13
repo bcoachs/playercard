@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "mkdir -p public/imgly-assets && cp -r node_modules/@imgly/background-removal-data/dist/. public/imgly-assets"
+    "postinstall": "mkdir -p public/imgly-assets && cp -r node_modules/@imgly/background-removal-data/dist/. public/imgly-assets/"
   },
   "dependencies": {
     "next": "14.2.7",
@@ -18,8 +18,8 @@
     "qrcode": "1.5.4",
     "zod": "3.23.8",
     "react-hook-form": "7.53.0",
-    "@imgly/background-removal": "^1.7.0",
-    "@imgly/background-removal-data": "^1.7.0",
+    "@imgly/background-removal": "1.6.4",
+    "@imgly/background-removal-data": "1.6.4",
     "onnxruntime-web": "^1.21.0"
   },
   "devDependencies": {
