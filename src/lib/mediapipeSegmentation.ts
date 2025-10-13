@@ -30,7 +30,7 @@ export async function loadImageSegmenter(): Promise<ImageSegmenter> {
       baseOptions: {
         modelAssetPath: MODEL_URL,
       },
-      runningMode: 'image',
+      runningMode: 'IMAGE',
       outputConfidenceMasks: true,
     })
     cachedImageSegmenter = instance
