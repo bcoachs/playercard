@@ -1,0 +1,194 @@
+import * as bodyPix from '@tensorflow-models/body-pix'
+import '@tensorflow/tfjs'
+
+let cachedNet: bodyPix.BodyPix | null = null
+let loadingPromise: Promise<bodyPix.BodyPix> | null = null
+
+function assertBrowser(message: string): void {
+  if (typeof window === 'undefined') {
+    throw new Error(message)
+  }
+}
+
+function createCanvas(width: number, height: number): HTMLCanvasElement {
+  assertBrowser('Canvas können nur im Browser erzeugt werden.')
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  return canvas
+}
+
+function getContext2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) {
+    throw new Error('2D-Rendering-Kontext konnte nicht initialisiert werden.')
+  }
+  return context
+}
+
+function applyStringBackground(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  background: string,
+): void {
+  const trimmed = background.trim()
+  if (!trimmed) return
+
+  if (/gradient/i.test(trimmed)) {
+    const startIndex = trimmed.indexOf('(')
+    const endIndex = trimmed.lastIndexOf(')')
+    if (startIndex >= 0 && endIndex > startIndex) {
+      const inner = trimmed.slice(startIndex + 1, endIndex)
+      const parts = inner
+        .split(',')
+        .map(part => part.trim())
+        .filter(Boolean)
+      let colors = parts
+      if (parts.length > 1 && /(deg|rad|turn|to\s)/i.test(parts[0])) {
+        colors = parts.slice(1)
+      }
+      if (colors.length) {
+        if (colors.length === 1) {
+          context.fillStyle = colors[0]
+        } else {
+          const gradient = context.createLinearGradient(0, 0, width, height)
+          const step = colors.length > 1 ? 1 / (colors.length - 1) : 1
+          colors.forEach((color, index) => {
+            gradient.addColorStop(Math.min(1, index * step), color)
+          })
+          context.fillStyle = gradient
+        }
+        context.fillRect(0, 0, width, height)
+      }
+    }
+    return
+  }
+
+  context.fillStyle = trimmed
+  context.fillRect(0, 0, width, height)
+}
+
+async function loadImageElement(src: string): Promise<HTMLImageElement> {
+  assertBrowser('Hintergrundbilder können nur im Browser geladen werden.')
+  return await new Promise((resolve, reject) => {
+    const image = new Image()
+    image.crossOrigin = 'anonymous'
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Hintergrundbild konnte nicht geladen werden.'))
+    image.src = src
+  })
+}
+
+async function drawBackground(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  background: string,
+): Promise<void> {
+  const trimmed = background.trim()
+  if (!trimmed) return
+
+  if (
+    /^https?:\/\//i.test(trimmed) ||
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('./') ||
+    trimmed.startsWith('../') ||
+    trimmed.startsWith('data:')
+  ) {
+    const image = await loadImageElement(trimmed)
+    context.drawImage(image, 0, 0, width, height)
+    return
+  }
+
+  applyStringBackground(context, width, height, trimmed)
+}
+
+async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob) {
+        resolve(blob)
+      } else {
+        reject(new Error('Segmentiertes Bild konnte nicht erstellt werden.'))
+      }
+    }, 'image/png')
+  })
+}
+
+export async function loadBodyPix(): Promise<bodyPix.BodyPix> {
+  if (cachedNet) {
+    return cachedNet
+  }
+  if (loadingPromise) {
+    return loadingPromise
+  }
+
+  assertBrowser('BodyPix steht nur im Browser zur Verfügung.')
+
+  loadingPromise = bodyPix
+    .load({
+      architecture: 'MobileNetV1',
+      outputStride: 16,
+      multiplier: 0.75,
+      quantBytes: 2,
+    })
+    .then(instance => {
+      cachedNet = instance
+      return instance
+    })
+    .catch(error => {
+      loadingPromise = null
+      cachedNet = null
+      throw error
+    })
+
+  return await loadingPromise
+}
+
+export async function removeBackground(imageBlob: Blob, background?: string): Promise<Blob> {
+  const net = await loadBodyPix()
+  const bitmap = await createImageBitmap(imageBlob)
+
+  try {
+    const segmentation = await net.segmentPerson(bitmap, {
+      internalResolution: 'medium',
+      segmentationThreshold: 0.7,
+    })
+
+    const width = segmentation.width ?? bitmap.width
+    const height = segmentation.height ?? bitmap.height
+
+    const subjectCanvas = createCanvas(width, height)
+    const subjectContext = getContext2d(subjectCanvas)
+    subjectContext.drawImage(bitmap, 0, 0, width, height)
+
+    const imageData = subjectContext.getImageData(0, 0, width, height)
+    const pixels = imageData.data
+    const mask = segmentation.data
+    const pixelLength = Math.min(pixels.length / 4, mask.length)
+
+    for (let i = 0; i < pixelLength; i++) {
+      if (!mask[i]) {
+        const offset = i * 4
+        pixels[offset + 3] = 0
+      }
+    }
+
+    subjectContext.putImageData(imageData, 0, 0)
+
+    if (background && background.trim()) {
+      const finalCanvas = createCanvas(width, height)
+      const finalContext = getContext2d(finalCanvas)
+      await drawBackground(finalContext, width, height, background)
+      finalContext.drawImage(subjectCanvas, 0, 0, width, height)
+      return await canvasToBlob(finalCanvas)
+    }
+
+    return await canvasToBlob(subjectCanvas)
+  } finally {
+    if (typeof bitmap.close === 'function') {
+      bitmap.close()
+    }
+  }
+}

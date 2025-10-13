@@ -1,7 +1,7 @@
 "use client"
 
 import { getCountryCode, getCountryLabel } from '@/lib/countries'
-import { loadImageSegmenter, removeBackgroundWithMediapipe } from '@/lib/mediapipeSegmentation'
+import { loadBodyPix, removeBackground } from '@/lib/bodyPixSegmentation'
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import PlayerHeader from './PlayerHeader'
@@ -22,35 +22,6 @@ const STAT_INDEX: Record<string, number> = STAT_ORDER.reduce((acc, name, index) 
   acc[name] = index
   return acc
 }, {} as Record<string, number>)
-
-const backgroundImagePromises = new Map<string, Promise<HTMLImageElement>>()
-
-function loadBackgroundImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined') {
-      reject(new Error('Hintergründe können nur im Browser geladen werden.'))
-      return
-    }
-    const image = new Image()
-    image.crossOrigin = 'anonymous'
-    image.onload = () => resolve(image)
-    image.onerror = () => reject(new Error('Hintergrund konnte nicht geladen werden.'))
-    image.src = url
-  })
-}
-
-async function getBackgroundImage(url: string): Promise<HTMLImageElement> {
-  const cached = backgroundImagePromises.get(url)
-  if (cached) {
-    return cached
-  }
-  const loader = loadBackgroundImage(url).catch(error => {
-    backgroundImagePromises.delete(url)
-    throw error
-  })
-  backgroundImagePromises.set(url, loader)
-  return loader
-}
 
 type Station = {
   id: string
@@ -342,17 +313,17 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     setPreloadError(null)
     ;(async () => {
       try {
-        await loadImageSegmenter()
+        await loadBodyPix()
         if (isMounted) {
           setIsPreloaded(true)
         }
       } catch (error) {
-        console.error('Fehler beim Laden des Mediapipe-Modells:', error)
+        console.error('Fehler beim Laden des BodyPix-Modells:', error)
         if (!isMounted) return
         const normalizedError =
           error instanceof Error
             ? error
-            : new Error('Unbekannter Fehler beim Laden des Mediapipe-Modells.')
+            : new Error('Unbekannter Fehler beim Laden des BodyPix-Modells.')
         setPreloadError(normalizedError)
         setErrorMessage(prev => prev ?? 'Freistellung nicht möglich. Originalfoto wird angezeigt.')
       } finally {
@@ -636,24 +607,13 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       setIsProcessingImage(true)
       try {
         originalFileRef.current = file
-        let backgroundSource: HTMLImageElement | string | undefined
-        if (currentBackground) {
-          if (currentBackground.type === 'gradient') {
-            backgroundSource = currentBackground.value
-          } else if (currentBackground.type === 'image') {
-            try {
-              backgroundSource = await getBackgroundImage(currentBackground.value)
-            } catch (backgroundError) {
-              console.warn('Hintergrund konnte nicht geladen werden:', backgroundError)
-            }
-          }
-        }
-        const blob = await removeBackgroundWithMediapipe(file, backgroundSource)
+        const backgroundValue = currentBackground?.value
+        const blob = await removeBackground(file, backgroundValue)
         const url = URL.createObjectURL(blob)
         applyDisplayImage(url, { objectUrl: true })
         setErrorMessage(null)
       } catch (err) {
-        console.error('Freistellung mit Mediapipe fehlgeschlagen:', err)
+        console.error('Freistellung mit BodyPix fehlgeschlagen:', err)
         const fallback = options?.fallbackUrl
         if (fallback) {
           applyDisplayImage(fallback, { objectUrl: false })
