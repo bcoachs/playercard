@@ -1647,56 +1647,201 @@ a, .btn {
   align-items: center;
 }
 
+
 .playercard-photo-card {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: clamp(16px, 4vw, 24px);
   align-items: center;
 }
 
 .playercard-photo-frame {
-  position: relative;
   width: min(420px, 100%);
-  aspect-ratio: 9 / 16;
-  border-radius: 32px;
-  background: rgba(15, 23, 42, 0.6);
   display: flex;
-  align-items: center;
   justify-content: center;
-  overflow: hidden;
-  box-shadow: 0 24px 48px rgba(2, 6, 23, 0.45);
 }
 
-.playercard-photo-frame__image {
+.playercard {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: 32px;
+  border: 2px solid rgba(255, 255, 255, 0.65);
+  background: #051a36;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 28px 56px rgba(2, 6, 23, 0.55);
+  color: #f8fafc;
+  isolation: isolate;
+}
+
+.playercard__photo-area {
+  position: relative;
+  flex: 0 0 66%;
+  height: 66%;
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.9), rgba(15, 118, 210, 0.35));
+  overflow: hidden;
+}
+
+.playercard__photo {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center;
-  mix-blend-mode: lighten;
 }
 
-.playercard-photo-placeholder {
+.playercard__photo--empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: clamp(1rem, 2.4vw, 1.2rem);
+  color: rgba(226, 232, 240, 0.8);
+  background: radial-gradient(circle at 30% 30%, rgba(59, 130, 246, 0.35), transparent 60%);
+}
+
+.playercard__info-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 22%;
+  min-width: 72px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  z-index: 2;
+}
+
+.playercard-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  color: rgba(226, 232, 240, 0.75);
-  font-weight: 500;
+  justify-content: center;
+  padding: 10px 8px;
+  gap: 6px;
   text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-.playercard-photo-placeholder small {
-  font-size: 0.75rem;
-  color: rgba(148, 163, 184, 0.8);
+.playercard-info:last-child {
+  border-bottom: none;
 }
 
-.playercard-photo-frame__border {
+.playercard-info__label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.75);
+}
+
+.playercard-info__value {
+  font-weight: 700;
+  font-size: clamp(0.85rem, 1.8vw, 1rem);
+  letter-spacing: 0.08em;
+  color: #f8fafc;
+}
+
+.playercard-info--score .playercard-info__value {
+  font-size: clamp(2.6rem, 5.4vw, 3.8rem);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.playercard-info--flag .playercard-info__value {
+  font-size: clamp(0.9rem, 1.8vw, 1rem);
+}
+
+.playercard-info__emoji {
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  line-height: 1;
+}
+
+.playercard-info__logo {
+  max-width: 64%;
+  max-height: 56px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(15, 23, 42, 0.45));
+}
+
+.playercard-info__placeholder {
+  font-size: 1.4rem;
+  color: rgba(226, 232, 240, 0.25);
+  line-height: 1;
+}
+
+.playercard-info--number .playercard-info__value {
+  font-size: clamp(1.2rem, 2.8vw, 1.6rem);
+}
+
+.playercard__name-banner {
   position: absolute;
-  inset: 10px;
-  border-radius: 28px;
-  border: 2px solid rgba(148, 163, 184, 0.45);
-  box-shadow: 0 0 40px rgba(148, 163, 184, 0.35);
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  background: rgba(4, 22, 45, 0.82);
+  padding: 12px 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  font-size: clamp(1.05rem, 2.6vw, 1.35rem);
+  color: #e2e8f0;
+  min-width: 68%;
+  text-align: center;
+  z-index: 3;
+}
+
+.playercard__stations-panel {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(3, 1fr);
+  gap: 12px 18px;
+  padding: 20px 24px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.playercard-station {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: inset 0 0 12px rgba(15, 118, 210, 0.18);
+}
+
+.playercard-station__label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(226, 232, 240, 0.8);
+}
+
+.playercard-station__value {
+  font-size: clamp(1.35rem, 3vw, 1.8rem);
+  font-weight: 700;
+  text-align: right;
+  color: #f8fafc;
 }
 
 .playercard-photo-actions {
@@ -1741,6 +1886,37 @@ a, .btn {
 
   .playercard-grid {
     padding: 24px;
+  }
+
+  .playercard-photo-frame {
+    width: min(360px, 100%);
+  }
+
+  .playercard {
+    border-radius: 28px;
+  }
+
+  .playercard__info-rail {
+    width: 26%;
+    min-width: 64px;
+  }
+
+  .playercard__stations-panel {
+    padding: 16px;
+    gap: 10px 12px;
+  }
+
+  .playercard__name-banner {
+    padding: 10px 20px;
+    letter-spacing: 0.16em;
+  }
+
+  .playercard-station {
+    padding: 6px 8px;
+  }
+
+  .playercard-station__label {
+    font-size: 0.7rem;
   }
 
   .playercard-header__details {
