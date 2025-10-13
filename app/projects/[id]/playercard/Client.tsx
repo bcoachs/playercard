@@ -29,13 +29,25 @@ type BackgroundRemovalModule = {
   preload?: (config?: BackgroundRemovalConfig) => Promise<void>
 }
 
-const BACKGROUND_REMOVAL_CONFIG: BackgroundRemovalConfig = {
-  device: 'cpu',
-  publicPath: '/imgly-assets/',
-}
-
 let cachedRemoveBackground: RemoveBackgroundFn | null = null
 let cachedModule: BackgroundRemovalModule | null = null
+
+function getBackgroundRemovalConfig(): BackgroundRemovalConfig {
+  const baseConfig: BackgroundRemovalConfig = { device: 'cpu' }
+  if (typeof window === 'undefined') return baseConfig
+
+  try {
+    const origin = window.location.origin
+    if (!origin) return baseConfig
+    return {
+      ...baseConfig,
+      publicPath: `${origin.replace(/\/$/, '')}/imgly-assets/`,
+    }
+  } catch (error) {
+    console.warn('Konnte publicPath nicht bestimmen. Verwende Standardkonfiguration.', error)
+    return baseConfig
+  }
+}
 
 async function loadBackgroundRemovalModule(): Promise<BackgroundRemovalModule> {
   if (cachedModule) return cachedModule
@@ -53,7 +65,8 @@ async function loadBackgroundRemovalModule(): Promise<BackgroundRemovalModule> {
 async function loadRemoveBackground(): Promise<RemoveBackgroundFn> {
   if (cachedRemoveBackground) return cachedRemoveBackground
   const mod = await loadBackgroundRemovalModule()
-  cachedRemoveBackground = (file: Blob) => mod.removeBackground(file, BACKGROUND_REMOVAL_CONFIG)
+  const config = getBackgroundRemovalConfig()
+  cachedRemoveBackground = (file: Blob) => mod.removeBackground(file, config)
   return cachedRemoveBackground
 }
 
@@ -351,10 +364,11 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       try {
         const mod = await loadBackgroundRemovalModule()
         if (typeof mod.preload === 'function') {
-          await mod.preload(BACKGROUND_REMOVAL_CONFIG)
+          await mod.preload(getBackgroundRemovalConfig())
         }
         if (isMounted) {
-          cachedRemoveBackground = (file: Blob) => mod.removeBackground(file, BACKGROUND_REMOVAL_CONFIG)
+          const config = getBackgroundRemovalConfig()
+          cachedRemoveBackground = (file: Blob) => mod.removeBackground(file, config)
           setIsPreloaded(true)
         }
       } catch (error) {
