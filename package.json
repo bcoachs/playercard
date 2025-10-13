@@ -17,7 +17,7 @@
     "qrcode": "1.5.4",
     "zod": "3.23.8",
     "react-hook-form": "7.53.0",
-    "@mediapipe/selfie_segmentation": "0.1.1675469404"
+    "@mediapipe/tasks-vision": "^0.10.0"
   },
   "devDependencies": {
     "typescript": "5.5.4",

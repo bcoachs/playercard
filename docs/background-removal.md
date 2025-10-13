@@ -1,41 +1,31 @@
-# Hintergrundfreistellung mit MediaPipe Selfie Segmentation
+# Hintergrundfreistellung mit MediaPipe Tasks Vision
 
-Die Playercard-App nutzt jetzt [MediaPipe Selfie Segmentation](https://developers.google.com/mediapipe/solutions/vision/selfie_segmentation), um den Hintergrund von Spielerporträts direkt im Browser zu entfernen. Die bisherigen IMG.LY-Modelle und das lokale Asset-Mirroring wurden vollständig entfernt.
+Die Playercard-App nutzt [MediaPipe Tasks Vision](https://developers.google.com/mediapipe/solutions/vision/selfie_segmentation) für die Freistellung von Spielerporträts direkt im Browser. Damit entfallen zusätzliche IMG.LY-Abhängigkeiten oder ein eigenes Asset-Hosting.
 
-## Architektur
+## Architekturüberblick
 
-- **Laufzeit nur im Browser:** Die Segmentierung wird erst nach dem Mounten der Client-Komponente geladen. Während der Initialisierung blendet die UI einen Ladezustand ein.
-- **MediaPipe-CDN als Standard:** Ohne weitere Konfiguration lädt die App das Modell (`selfie_segmenter.tflite`) und die zugehörigen Assets von `cdn.jsdelivr.net`. Optional kann über eine Environment-Variable ein eigener Hosting-Pfad hinterlegt werden.
-- **Einmalige Initialisierung:** Das MediaPipe-Modul wird gecacht. Nach erfolgreicher Initialisierung werden alle weiteren Bilder über dieselbe Instanz segmentiert.
-- **Pixelgenaue Freistellung:** Die von MediaPipe erzeugte Maske wird auf den RGBA-Kanal des Originalbilds angewendet. Der Vordergrund bleibt erhalten, der Hintergrund wird transparent.
-
-## Konfiguration
-
-| Variable | Zweck | Standardwert |
-| --- | --- | --- |
-| `NEXT_PUBLIC_MEDIAPIPE_ASSET_BASE` | Optionaler Basis-Pfad für die MediaPipe Assets (z. B. eigenes CDN). | `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/` |
-
-> Wichtig: Der Pfad muss auf einen Ordner zeigen, der die originalen MediaPipe-Dateien (`selfie_segmentation_solution_packed_assets.data`, `selfie_segmentation_binary.graph` usw.) enthält. Die App hängt automatisch den Dateinamen an und sorgt für den abschließenden Slash.
+- **Hilfsmodul**: `src/lib/mediapipeSegmentation.ts` kapselt das Laden des Selfie-Segmentation-Modells und die Maskenverarbeitung.
+- **Lazy Loading**: `loadSelfieSegmentation()` wird beim Mount der Playercard-Komponente ausgeführt und cacht die Instanz für weitere Aufrufe.
+- **Bildaufbereitung**: `removeBackgroundWithMediapipe()` erzeugt aus der Mediapipe-Maske ein PNG mit transparentem Hintergrund. Optional kann ein Farbverlauf oder ein vorab geladenes Hintergrundbild eingeblendet werden.
+- **Client-only**: Die gesamte Verarbeitung findet im Browser statt. Auf dem Server werden keine Modelle initialisiert.
 
 ## Ablauf bei der Bildverarbeitung
 
-1. Nutzer lädt ein Bild oder ein bestehendes Spielerfoto wird automatisch abgeholt.
-2. Die Datei wird in ein `HTMLImageElement` geladen; temporäre Object-URLs werden nach der Verarbeitung wieder freigegeben.
-3. MediaPipe erzeugt eine Segmentierungsmaske.
-4. Die Maske wird in ein Canvas übertragen, in einen Alpha-Kanal umgerechnet und mit dem Originalbild kombiniert.
-5. Das Ergebnis wird als PNG-Blob exportiert und per Object-URL in der Oberfläche angezeigt.
-6. Bei Fehlern zeigt die App das Originalbild an und informiert den Nutzer mit einer deutschsprachigen Fehlermeldung.
+1. Nutzer:innen laden ein Bild hoch oder das vorhandene Spielerfoto wird von der App abgeholt.
+2. Beim ersten Aufruf lädt die App das MediaPipe-WASM-Paket sowie das Selfie-Segmentation-Modell (`selfie_segmentation_landscape.tflite`).
+3. `removeBackgroundWithMediapipe()` erstellt ein `ImageBitmap`, segmentiert das Motiv und kombiniert Maske, optionalen Hintergrund und Originalbild auf einem Canvas.
+4. Das Ergebnis wird als PNG-Blob exportiert und über eine Object-URL in der Oberfläche angezeigt.
+5. Nach der Verwendung werden temporäre Ressourcen (Object-URLs, ImageBitmaps) freigegeben.
 
-## Fehlerbehandlung & Fallbacks
+## Konfiguration & Abhängigkeiten
 
-- Schlägt die Initialisierung des MediaPipe-Moduls fehl, wird dies in der UI angezeigt und das Originalfoto bleibt sichtbar.
-- Kann die Segmentierung eines Bildes nicht durchgeführt werden, wird automatisch auf das Ausgangsbild zurückgefallen.
-- Jede Fehlermeldung nutzt denselben deutschen Wortlaut ("Hintergrundfreistellung …"), damit Nutzer:innen konsistente Rückmeldungen erhalten.
+- `@mediapipe/tasks-vision@^0.10.0` ist die einzige Laufzeitabhängigkeit für die Segmentierung.
+- Es sind keine Environment-Variablen oder Rewrites mehr notwendig. Die Assets werden über das offizielle CDN von jsDelivr geladen.
 
-## Entfernte Altlasten
+## Fehlerbehandlung
 
-- NPM-Abhängigkeiten `@imgly/background-removal` und `@imgly/background-removal-data`
-- OnnxRuntime-basiertes Webpack-Tuning und das `public/imgly-assets` Mirror-Verzeichnis
-- Eigene TypeScript-Deklarationen für die IMG.LY-API
+- Scheitert das Vorladen des Modells, protokolliert die App `Fehler beim Laden des Mediapipe-Modells` und zeigt den Hinweis „Freistellung nicht möglich. Originalfoto wird angezeigt.“ an.
+- Tritt während der Segmentierung ein Fehler auf, wird `Freistellung mit Mediapipe fehlgeschlagen` im Log ausgegeben. Die UI fällt auf das Originalbild zurück und blendet dieselbe Fehlermeldung ein.
+- Nutzer:innen können die Freistellung jederzeit erneut anstoßen; das Modell bleibt dabei im Cache und muss nicht erneut geladen werden.
 
-Mit diesem Umbau ist kein zusätzliches Asset-Hosting mehr nötig und die Hintergrundfreistellung funktioniert komplett clientseitig mit einem leichtgewichtigen Modell von Google.
+Mit diesem Ansatz bleibt die Hintergrundentfernung komplett clientseitig, performant und wartungsarm.

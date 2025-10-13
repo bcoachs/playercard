@@ -1,16 +1,13 @@
 "use client"
 
 import { getCountryCode, getCountryLabel } from '@/lib/countries'
+import { loadSelfieSegmentation, removeBackgroundWithMediapipe } from '@/lib/mediapipeSegmentation'
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import PlayerHeader from './PlayerHeader'
 import PlayerImage from './PlayerImage'
 import PlayerStats, { PlayerStat } from './PlayerStats'
 import BackgroundSelector, { BackgroundOption } from './BackgroundSelector'
-
-type SelfieSegmentationModule = typeof import('@mediapipe/selfie_segmentation')
-type SelfieSegmentationInstance = InstanceType<SelfieSegmentationModule['SelfieSegmentation']>
-type SelfieSegmentationResults = Parameters<SelfieSegmentationInstance['onResults']>[0]
 
 const STAT_ORDER = [
   'Beweglichkeit',
@@ -26,190 +23,33 @@ const STAT_INDEX: Record<string, number> = STAT_ORDER.reduce((acc, name, index) 
   return acc
 }, {} as Record<string, number>)
 
-const DEFAULT_MEDIAPIPE_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/'
+const backgroundImagePromises = new Map<string, Promise<HTMLImageElement>>()
 
-function withTrailingSlash(value: string): string {
-  return value.endsWith('/') ? value : `${value}/`
-}
-
-const MEDIAPIPE_ASSET_BASE = (() => {
-  const configured = process.env.NEXT_PUBLIC_MEDIAPIPE_ASSET_BASE?.trim()
-  if (configured && configured.length) {
-    return withTrailingSlash(configured)
-  }
-  return DEFAULT_MEDIAPIPE_BASE
-})()
-
-let selfieSegmentationPromise: Promise<SelfieSegmentationInstance> | null = null
-let selfieSegmentationInitPromise: Promise<void> | null = null
-
-function assertBrowser(message: string): void {
-  if (typeof window === 'undefined') {
-    throw new Error(message)
-  }
-}
-
-async function loadSelfieSegmentation(): Promise<SelfieSegmentationInstance> {
-  assertBrowser('Die Hintergrundentfernung steht nur im Browser zur Verfügung.')
-  if (!selfieSegmentationPromise) {
-    selfieSegmentationPromise = import('@mediapipe/selfie_segmentation').then(module => {
-      const instance = new module.SelfieSegmentation({
-        locateFile: (file: string) => `${MEDIAPIPE_ASSET_BASE}${file}`,
-      })
-      instance.setOptions({ modelSelection: 1, selfieMode: false })
-      return instance
-    })
-  }
-
-  const instance = await selfieSegmentationPromise
-
-  if (!selfieSegmentationInitPromise) {
-    selfieSegmentationInitPromise = instance
-      .initialize()
-      .catch(error => {
-        selfieSegmentationPromise = null
-        selfieSegmentationInitPromise = null
-        throw error
-      })
-  }
-
-  await selfieSegmentationInitPromise
-  return instance
-}
-
-async function runSelfieSegmentation(image: HTMLImageElement): Promise<SelfieSegmentationResults> {
-  const instance = await loadSelfieSegmentation()
-
+function loadBackgroundImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      instance.onResults(() => undefined)
+    if (typeof window === 'undefined') {
+      reject(new Error('Hintergründe können nur im Browser geladen werden.'))
+      return
     }
-
-    instance.onResults(results => {
-      cleanup()
-      resolve(results)
-    })
-
-    const handleError = (error: unknown) => {
-      cleanup()
-      reject(error instanceof Error ? error : new Error('Selfie Segmentation fehlgeschlagen.'))
-    }
-
-    try {
-      const maybePromise = instance.send({ image })
-      Promise.resolve(maybePromise).catch(handleError)
-    } catch (error) {
-      handleError(error)
-    }
+    const image = new Image()
+    image.crossOrigin = 'anonymous'
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Hintergrund konnte nicht geladen werden.'))
+    image.src = url
   })
 }
 
-function createCanvas(width: number, height: number): HTMLCanvasElement {
-  assertBrowser('Canvas können nur im Browser erzeugt werden.')
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  return canvas
-}
-
-function get2dContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
-  const context = canvas.getContext('2d', { willReadFrequently: true })
-  if (!context) {
-    throw new Error('2D-Rendering-Kontext konnte nicht initialisiert werden.')
+async function getBackgroundImage(url: string): Promise<HTMLImageElement> {
+  const cached = backgroundImagePromises.get(url)
+  if (cached) {
+    return cached
   }
-  return context
-}
-
-type MaskSource = CanvasImageSource | ImageData
-
-async function composeTransparentImage(
-  image: HTMLImageElement,
-  mask: MaskSource,
-): Promise<Blob> {
-  const width = image.naturalWidth || image.width
-  const height = image.naturalHeight || image.height
-
-  if (!width || !height) {
-    throw new Error('Bild konnte nicht verarbeitet werden.')
-  }
-
-  const maskCanvas = createCanvas(width, height)
-  const maskContext = get2dContext(maskCanvas)
-  if (mask instanceof ImageData) {
-    maskContext.putImageData(mask, 0, 0)
-  } else {
-    maskContext.drawImage(mask, 0, 0, width, height)
-  }
-  const maskData = maskContext.getImageData(0, 0, width, height)
-
-  const outputCanvas = createCanvas(width, height)
-  const outputContext = get2dContext(outputCanvas)
-  outputContext.drawImage(image, 0, 0, width, height)
-  const outputData = outputContext.getImageData(0, 0, width, height)
-
-  const maskPixels = maskData.data
-  const outputPixels = outputData.data
-  for (let index = 0; index < outputPixels.length; index += 4) {
-    outputPixels[index + 3] = maskPixels[index]
-  }
-
-  outputContext.putImageData(outputData, 0, 0)
-
-  return new Promise<Blob>((resolve, reject) => {
-    outputCanvas.toBlob(blob => {
-      if (blob) {
-        resolve(blob)
-      } else {
-        reject(new Error('Segmentiertes Bild konnte nicht erstellt werden.'))
-      }
-    }, 'image/png')
-  })
-}
-
-async function loadImageElementFromFile(
-  file: File,
-): Promise<{ image: HTMLImageElement; revoke: () => void }> {
-  assertBrowser('Dateien können nur im Browser verarbeitet werden.')
-  const objectUrl = URL.createObjectURL(file)
-  const image = new Image()
-  image.crossOrigin = 'anonymous'
-
-  try {
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve()
-      image.onerror = () => reject(new Error('Bild konnte nicht geladen werden.'))
-      image.src = objectUrl
-    })
-
-    if (typeof image.decode === 'function') {
-      try {
-        await image.decode()
-      } catch (error) {
-        console.warn('Bilddekodierung konnte nicht abgeschlossen werden, fortfahren mit gerendertem Bild.', error)
-      }
-    }
-
-    return {
-      image,
-      revoke: () => URL.revokeObjectURL(objectUrl),
-    }
-  } catch (error) {
-    URL.revokeObjectURL(objectUrl)
+  const loader = loadBackgroundImage(url).catch(error => {
+    backgroundImagePromises.delete(url)
     throw error
-  }
-}
-
-async function removeBackgroundWithSegmentation(file: File): Promise<Blob> {
-  const { image, revoke } = await loadImageElementFromFile(file)
-  try {
-    const results = await runSelfieSegmentation(image)
-    if (!results?.segmentationMask) {
-      throw new Error('Keine gültige Segmentierungsmaske erhalten.')
-    }
-    return await composeTransparentImage(image, results.segmentationMask as MaskSource)
-  } finally {
-    revoke()
-  }
+  })
+  backgroundImagePromises.set(url, loader)
+  return loader
 }
 
 type Station = {
@@ -507,14 +347,14 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
           setIsPreloaded(true)
         }
       } catch (error) {
-        console.error('Fehler beim Laden der Selfie-Segmentation:', error)
+        console.error('Fehler beim Laden des Mediapipe-Modells:', error)
         if (!isMounted) return
         const normalizedError =
           error instanceof Error
             ? error
-            : new Error('Unbekannter Fehler beim Laden der Selfie-Segmentation.')
+            : new Error('Unbekannter Fehler beim Laden des Mediapipe-Modells.')
         setPreloadError(normalizedError)
-        setErrorMessage(prev => prev ?? normalizedError.message)
+        setErrorMessage(prev => prev ?? 'Freistellung nicht möglich. Originalfoto wird angezeigt.')
       } finally {
         if (isMounted) {
           setIsPreloadingAssets(false)
@@ -796,12 +636,24 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       setIsProcessingImage(true)
       try {
         originalFileRef.current = file
-        const blob = await removeBackgroundWithSegmentation(file)
+        let backgroundSource: HTMLImageElement | string | undefined
+        if (currentBackground) {
+          if (currentBackground.type === 'gradient') {
+            backgroundSource = currentBackground.value
+          } else if (currentBackground.type === 'image') {
+            try {
+              backgroundSource = await getBackgroundImage(currentBackground.value)
+            } catch (backgroundError) {
+              console.warn('Hintergrund konnte nicht geladen werden:', backgroundError)
+            }
+          }
+        }
+        const blob = await removeBackgroundWithMediapipe(file, backgroundSource)
         const url = URL.createObjectURL(blob)
         applyDisplayImage(url, { objectUrl: true })
         setErrorMessage(null)
       } catch (err) {
-        console.error('Hintergrundfreistellung fehlgeschlagen', err)
+        console.error('Freistellung mit Mediapipe fehlgeschlagen:', err)
         const fallback = options?.fallbackUrl
         if (fallback) {
           applyDisplayImage(fallback, { objectUrl: false })
@@ -814,15 +666,13 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
             applyDisplayImage(null)
           }
         }
-        const messageFromError = err instanceof Error && err.message ? err.message : null
-        const fallbackMessage =
-          options?.errorMessage || 'Hintergrundfreistellung fehlgeschlagen. Bitte erneut versuchen.'
-        setErrorMessage(messageFromError ?? fallbackMessage)
+        const fallbackMessage = options?.errorMessage ?? 'Freistellung nicht möglich. Originalfoto wird angezeigt.'
+        setErrorMessage(fallbackMessage)
       } finally {
         setIsProcessingImage(false)
       }
     },
-    [applyDisplayImage]
+    [applyDisplayImage, currentBackground]
   )
 
   useEffect(() => {
@@ -859,14 +709,13 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
         const file = new File([blob], 'player-photo.png', { type: blob.type || 'image/png' })
         await processFile(file, {
           fallbackUrl: ensuredUrl,
-          errorMessage: 'Hintergrundfreistellung nicht möglich. Originalfoto wird angezeigt.',
+          errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
         })
       } catch (err) {
         if (cancelled) return
-        console.error('Automatische Hintergrundfreistellung fehlgeschlagen', err)
+        console.error('Automatische Freistellung fehlgeschlagen:', err)
         applyDisplayImage(ensuredUrl, { objectUrl: false })
-        const message = err instanceof Error && err.message ? err.message : null
-        setErrorMessage(message ?? 'Hintergrundfreistellung nicht möglich. Originalfoto wird angezeigt.')
+        setErrorMessage('Freistellung nicht möglich. Originalfoto wird angezeigt.')
       }
     }
 
@@ -894,7 +743,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       applyDisplayImage(manualUrl, { objectUrl: false })
       processFile(file, {
         fallbackUrl: manualUrl,
-        errorMessage: 'Hintergrundfreistellung fehlgeschlagen. Das hochgeladene Bild wird verwendet.',
+        errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
       })
     },
     [processFile]
@@ -906,7 +755,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     setErrorMessage(null)
     processFile(originalFile, {
       fallbackUrl: originalImage,
-      errorMessage: 'Hintergrundfreistellung nicht möglich. Originalfoto wird angezeigt.',
+      errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
     })
   }, [originalImage, processFile])
 
