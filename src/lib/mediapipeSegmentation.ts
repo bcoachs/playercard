@@ -4,8 +4,7 @@ let cachedImageSegmenter: ImageSegmenter | null = null
 let loadingPromise: Promise<ImageSegmenter> | null = null
 
 const WASM_BASE_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm'
-const MODEL_URL =
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/models/selfie_segmenter_landscape.tflite'
+const MODEL_URL = '/models/selfie_segmentation_landscape.tflite'
 
 function assertBrowser(message: string): void {
   if (typeof window === 'undefined') {

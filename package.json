@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "mkdir -p public/models && cp node_modules/@mediapipe/selfie_segmentation/selfie_segmentation_landscape.tflite public/models/"
   },
   "dependencies": {
+    "@mediapipe/selfie_segmentation": "0.1.1675465747",
     "next": "14.2.7",
     "react": "18.3.1",
     "react-dom": "18.3.1",
