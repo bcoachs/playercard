@@ -33,7 +33,7 @@ type BackgroundRemovalModule = {
 let cachedRemoveBackground: RemoveBackgroundFn | null = null
 let cachedModule: BackgroundRemovalModule | null = null
 
-const IMG_LY_VERSION = process.env.NEXT_PUBLIC_IMG_LY_ASSET_VERSION || '1.7.0'
+/* const IMG_LY_VERSION = process.env.NEXT_PUBLIC_IMG_LY_ASSET_VERSION || '1.7.0'
 const IMG_LY_PUBLIC_PATH =
   process.env.NEXT_PUBLIC_IMG_LY_PUBLIC_PATH ||
   `https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@${IMG_LY_VERSION}/dist/`
@@ -43,7 +43,27 @@ function getBackgroundRemovalConfig(): BackgroundRemovalConfig {
     device: 'cpu',
     publicPath: IMG_LY_PUBLIC_PATH,
   }
+} */
+
+const IMG_LY_VERSION = process.env.NEXT_PUBLIC_IMG_LY_ASSET_VERSION || '1.7.0';
+let IMG_LY_PUBLIC_PATH = process.env.NEXT_PUBLIC_IMG_LY_PUBLIC_PATH;
+if (IMG_LY_PUBLIC_PATH && IMG_LY_PUBLIC_PATH.startsWith('/')) {
+  if (typeof window !== 'undefined') {
+    IMG_LY_PUBLIC_PATH = `${window.location.origin}${IMG_LY_PUBLIC_PATH}`;
+  }
 }
+if (!IMG_LY_PUBLIC_PATH) {
+  IMG_LY_PUBLIC_PATH = `https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@${IMG_LY_VERSION}/dist/`;
+}
+
+function getBackgroundRemovalConfig(): BackgroundRemovalConfig {
+  return {
+    device: 'cpu',
+    publicPath: IMG_LY_PUBLIC_PATH,
+  };
+}
+
+
 
 async function loadBackgroundRemovalModule(): Promise<BackgroundRemovalModule> {
   if (cachedModule) return cachedModule
