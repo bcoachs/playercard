@@ -1,6 +1,4 @@
 /** @type {import('next').NextConfig} */
-const IMG_LY_ASSET_VERSION = process.env.IMG_LY_ASSET_VERSION ?? '1.7.0'
-
 const nextConfig = {
   webpack: (config, { isServer }) => {
     config.module.rules.push({
@@ -25,14 +23,6 @@ const nextConfig = {
     }
 
     return config;
-  },
-  async rewrites() {
-    return [
-      {
-        source: '/imgly-assets/:path*',
-        destination: `https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@${IMG_LY_ASSET_VERSION}/dist/:path*`,
-      },
-    ];
   },
 };
 

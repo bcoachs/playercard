@@ -33,48 +33,15 @@ type BackgroundRemovalModule = {
 let cachedRemoveBackground: RemoveBackgroundFn | null = null
 let cachedModule: BackgroundRemovalModule | null = null
 
-/* const IMG_LY_VERSION = process.env.NEXT_PUBLIC_IMG_LY_ASSET_VERSION || '1.7.0'
-const IMG_LY_PUBLIC_PATH =
-  process.env.NEXT_PUBLIC_IMG_LY_PUBLIC_PATH ||
-  `https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@${IMG_LY_VERSION}/dist/`
-
 function getBackgroundRemovalConfig(): BackgroundRemovalConfig {
+  const base =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/imgly-assets/`
+      : '/imgly-assets/'
   return {
     device: 'cpu',
-    publicPath: IMG_LY_PUBLIC_PATH,
+    publicPath: base,
   }
-} */
-
-// Version of the imgly background‑removal data.  If nothing is configured
-// via NEXT_PUBLIC_IMG_LY_ASSET_VERSION, fall back to 1.7.0.
-const IMG_LY_VERSION = process.env.NEXT_PUBLIC_IMG_LY_ASSET_VERSION || '1';
-
-/**
- * Build the background removal configuration at runtime.  This helper
- * transforms a relative `NEXT_PUBLIC_IMG_LY_PUBLIC_PATH` into an
- * absolute URL using window.location.origin when executing on the
- * client.  If no publicPath is provided, it falls back to the
- * official CDN path on jsdelivr.  The transformation must happen
- * inside the function (not at module top level) so that `window` is
- * defined.
- */
-function getBackgroundRemovalConfig(): BackgroundRemovalConfig {
-  let publicPath = process.env.NEXT_PUBLIC_IMG_LY_PUBLIC_PATH;
-  // Prefix relative paths with the current origin on the client so the
-  // URL constructor receives a valid absolute base.  During server
-  // execution `window` is undefined and the prefixing is skipped.  The
-  // background removal runs only in the browser.
-  if (publicPath && publicPath.startsWith('/') && typeof window !== 'undefined') {
-    publicPath = `${window.location.origin}${publicPath}`;
-  }
-  // Fall back to the CDN if no override is defined.
-  if (!publicPath) {
-    publicPath = `https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@${IMG_LY_VERSION}/dist/`;
-  }
-  return {
-    device: 'cpu',
-    publicPath,
-  };
 }
 
 
