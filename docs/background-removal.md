@@ -4,15 +4,15 @@ Die Playercard-App nutzt [MediaPipe Tasks Vision](https://developers.google.com/
 
 ## Architekturüberblick
 
-- **Hilfsmodul**: `src/lib/mediapipeSegmentation.ts` kapselt das Laden des Selfie-Segmentation-Modells und die Maskenverarbeitung.
-- **Lazy Loading**: `loadSelfieSegmentation()` wird beim Mount der Playercard-Komponente ausgeführt und cacht die Instanz für weitere Aufrufe.
+- **Hilfsmodul**: `src/lib/mediapipeSegmentation.ts` kapselt das Laden des MediaPipe-Image-Segmenters und die Maskenverarbeitung.
+- **Lazy Loading**: `loadImageSegmenter()` wird beim Mount der Playercard-Komponente ausgeführt und cacht die Instanz für weitere Aufrufe.
 - **Bildaufbereitung**: `removeBackgroundWithMediapipe()` erzeugt aus der Mediapipe-Maske ein PNG mit transparentem Hintergrund. Optional kann ein Farbverlauf oder ein vorab geladenes Hintergrundbild eingeblendet werden.
 - **Client-only**: Die gesamte Verarbeitung findet im Browser statt. Auf dem Server werden keine Modelle initialisiert.
 
 ## Ablauf bei der Bildverarbeitung
 
 1. Nutzer:innen laden ein Bild hoch oder das vorhandene Spielerfoto wird von der App abgeholt.
-2. Beim ersten Aufruf lädt die App das MediaPipe-WASM-Paket sowie das Selfie-Segmentation-Modell (`selfie_segmentation_landscape.tflite`).
+2. Beim ersten Aufruf lädt die App das MediaPipe-WASM-Paket sowie das Selfie-Segmenter-Modell (`selfie_segmenter_landscape.tflite`).
 3. `removeBackgroundWithMediapipe()` erstellt ein `ImageBitmap`, segmentiert das Motiv und kombiniert Maske, optionalen Hintergrund und Originalbild auf einem Canvas.
 4. Das Ergebnis wird als PNG-Blob exportiert und über eine Object-URL in der Oberfläche angezeigt.
 5. Nach der Verwendung werden temporäre Ressourcen (Object-URLs, ImageBitmaps) freigegeben.

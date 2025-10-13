@@ -1,7 +1,7 @@
 "use client"
 
 import { getCountryCode, getCountryLabel } from '@/lib/countries'
-import { loadSelfieSegmentation, removeBackgroundWithMediapipe } from '@/lib/mediapipeSegmentation'
+import { loadImageSegmenter, removeBackgroundWithMediapipe } from '@/lib/mediapipeSegmentation'
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import PlayerHeader from './PlayerHeader'
@@ -342,7 +342,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     setPreloadError(null)
     ;(async () => {
       try {
-        await loadSelfieSegmentation()
+        await loadImageSegmenter()
         if (isMounted) {
           setIsPreloaded(true)
         }

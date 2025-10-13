@@ -1,11 +1,11 @@
-import { FilesetResolver, SelfieSegmentation } from '@mediapipe/tasks-vision'
+import { FilesetResolver, ImageSegmenter } from '@mediapipe/tasks-vision'
 
-let cachedSelfieSegmentation: SelfieSegmentation | null = null
-let loadingPromise: Promise<SelfieSegmentation> | null = null
+let cachedImageSegmenter: ImageSegmenter | null = null
+let loadingPromise: Promise<ImageSegmenter> | null = null
 
 const WASM_BASE_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm'
 const MODEL_URL =
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/models/selfie_segmentation_landscape.tflite'
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/models/selfie_segmenter_landscape.tflite'
 
 function assertBrowser(message: string): void {
   if (typeof window === 'undefined') {
@@ -13,9 +13,9 @@ function assertBrowser(message: string): void {
   }
 }
 
-export async function loadSelfieSegmentation(): Promise<SelfieSegmentation> {
-  if (cachedSelfieSegmentation) {
-    return cachedSelfieSegmentation
+export async function loadImageSegmenter(): Promise<ImageSegmenter> {
+  if (cachedImageSegmenter) {
+    return cachedImageSegmenter
   }
 
   if (loadingPromise) {
@@ -26,14 +26,14 @@ export async function loadSelfieSegmentation(): Promise<SelfieSegmentation> {
 
   loadingPromise = (async () => {
     const resolver = await FilesetResolver.forVisionTasks(WASM_BASE_URL)
-    const instance = await SelfieSegmentation.createFromOptions(resolver, {
+    const instance = await ImageSegmenter.createFromOptions(resolver, {
       baseOptions: {
         modelAssetPath: MODEL_URL,
       },
       runningMode: 'image',
       outputConfidenceMasks: true,
     })
-    cachedSelfieSegmentation = instance
+    cachedImageSegmenter = instance
     return instance
   })()
 
@@ -41,7 +41,7 @@ export async function loadSelfieSegmentation(): Promise<SelfieSegmentation> {
     return await loadingPromise
   } catch (error) {
     loadingPromise = null
-    cachedSelfieSegmentation = null
+    cachedImageSegmenter = null
     throw error
   }
 }
@@ -118,18 +118,33 @@ async function canvasToBlob(canvas: OffscreenCanvas | HTMLCanvasElement): Promis
   })
 }
 
+type ConfidenceMaskCanvas = OffscreenCanvas | HTMLCanvasElement
+
+function isCanvasLike(value: unknown): value is ConfidenceMaskCanvas {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as ConfidenceMaskCanvas & { width?: unknown; height?: unknown }
+  return (
+    'getContext' in candidate &&
+    typeof candidate.getContext === 'function' &&
+    typeof candidate.width === 'number' &&
+    typeof candidate.height === 'number'
+  )
+}
+
 export async function removeBackgroundWithMediapipe(
   file: Blob,
   background?: HTMLImageElement | string,
 ): Promise<Blob> {
-  const segmentation = await loadSelfieSegmentation()
+  const segmenter = await loadImageSegmenter()
   const bitmap = await createImageBitmap(file)
-  let confidenceMask: ImageBitmap | undefined
 
   try {
-    const result = await segmentation.segment(bitmap)
-    confidenceMask = result?.confidenceMask as ImageBitmap | undefined
-    if (!confidenceMask) {
+    const { confidenceMasks } = (await segmenter.segment(bitmap)) as {
+      confidenceMasks?: ConfidenceMaskCanvas[]
+    }
+
+    const mask = confidenceMasks?.[0]
+    if (!mask || !isCanvasLike(mask)) {
       throw new Error('Keine Segmentierungsmaske erhalten.')
     }
 
@@ -139,27 +154,39 @@ export async function removeBackgroundWithMediapipe(
       throw new Error('Bild konnte nicht verarbeitet werden.')
     }
 
-    const canvas = createCanvas(width, height)
-    const context = getContext2d(canvas)
+    const subjectCanvas = createCanvas(width, height)
+    const subjectContext = getContext2d(subjectCanvas)
+    subjectContext.drawImage(bitmap, 0, 0, width, height)
+
+    const maskCanvas = createCanvas(width, height)
+    const maskContext = getContext2d(maskCanvas)
+    maskContext.drawImage(mask as CanvasImageSource, 0, 0, width, height)
+    const maskImageData = maskContext.getImageData(0, 0, width, height)
+    const subjectImageData = subjectContext.getImageData(0, 0, width, height)
+    const maskData = maskImageData.data
+    const subjectData = subjectImageData.data
+    const length = Math.min(subjectData.length, maskData.length)
+
+    for (let i = 0; i < length; i += 4) {
+      subjectData[i + 3] = maskData[i]
+    }
+
+    subjectContext.putImageData(subjectImageData, 0, 0)
 
     if (background) {
+      const finalCanvas = createCanvas(width, height)
+      const finalContext = getContext2d(finalCanvas)
       if (typeof background === 'string') {
-        applyStringBackground(context, width, height, background)
+        applyStringBackground(finalContext, width, height, background)
       } else {
-        context.drawImage(background, 0, 0, width, height)
+        finalContext.drawImage(background, 0, 0, width, height)
       }
+      finalContext.drawImage(subjectCanvas as CanvasImageSource, 0, 0, width, height)
+      return await canvasToBlob(finalCanvas)
     }
 
-    context.globalCompositeOperation = 'destination-out'
-    context.drawImage(confidenceMask, 0, 0, width, height)
-    context.globalCompositeOperation = 'destination-over'
-    context.drawImage(bitmap, 0, 0, width, height)
-
-    return await canvasToBlob(canvas)
+    return await canvasToBlob(subjectCanvas)
   } finally {
-    if (confidenceMask && typeof confidenceMask.close === 'function') {
-      confidenceMask.close()
-    }
     if (typeof bitmap.close === 'function') {
       bitmap.close()
     }
