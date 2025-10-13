@@ -9,6 +9,8 @@ import PlayerImage from './PlayerImage'
 import PlayerStats, { PlayerStat } from './PlayerStats'
 import BackgroundSelector, { BackgroundOption } from './BackgroundSelector'
 
+const IMG_LY_VERSION = process.env.NEXT_PUBLIC_IMG_LY_ASSET_VERSION || '1.7.0'
+
 const STAT_ORDER = [
   'Beweglichkeit',
   'Technik',
@@ -34,13 +36,19 @@ let cachedRemoveBackground: RemoveBackgroundFn | null = null
 let cachedModule: BackgroundRemovalModule | null = null
 
 function getBackgroundRemovalConfig(): BackgroundRemovalConfig {
-  const base =
-    typeof window !== 'undefined'
-      ? `${window.location.origin}/imgly-assets/`
-      : '/imgly-assets/'
+  let publicPath = process.env.NEXT_PUBLIC_IMG_LY_PUBLIC_PATH
+
+  if (publicPath && publicPath.startsWith('/') && typeof window !== 'undefined') {
+    publicPath = `${window.location.origin}${publicPath}`
+  }
+
+  if (!publicPath) {
+    publicPath = `https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@${IMG_LY_VERSION}/dist/`
+  }
+
   return {
     device: 'cpu',
-    publicPath: base,
+    publicPath,
   }
 }
 
