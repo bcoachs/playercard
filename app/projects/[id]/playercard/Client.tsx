@@ -5,7 +5,8 @@ import { loadBodyPix, removeBackground } from '@/lib/bodyPixSegmentation'
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import PlayerHeader from './PlayerHeader'
-import PlayerImage from './PlayerImage'
+import PlayerCardPreview from './PlayerCardPreview'
+import { renderCardToCanvas } from './renderCardToCanvas'
 import PlayerStats, { PlayerStat } from './PlayerStats'
 import BackgroundSelector, { BackgroundOption } from './BackgroundSelector'
 
@@ -42,6 +43,10 @@ type Player = {
   nationality: string | null
   gender?: 'male' | 'female' | null
   photo_url?: string | null
+  club_logo_url?: string | null
+  club_logo?: string | null
+  clubLogoUrl?: string | null
+  number?: number | null
 }
 
 type Project = { id: string; name: string; date: string | null }
@@ -264,6 +269,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const [preloadError, setPreloadError] = useState<Error | null>(null)
 
   const [isProcessingImage, setIsProcessingImage] = useState(false)
+  const [isDownloadingCard, setIsDownloadingCard] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [originalImage, setOriginalImage] = useState<string | null>(null)
   const [displayImage, setDisplayImage] = useState<string | null>(null)
@@ -272,6 +278,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const originalFileRef = useRef<File | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const playercardRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (typeof initialPlayerId === 'string' && initialPlayerId) {
@@ -558,6 +565,15 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     return Math.round(sum / values.length)
   }, [stats])
 
+  const stationValues = useMemo(
+    () =>
+      STAT_ORDER.map(label => {
+        const stat = stats.find(entry => entry.label === label)
+        return { label, value: typeof stat?.score === 'number' ? stat.score : null }
+      }),
+    [stats],
+  )
+
   const derivedAge = useMemo(() => formatBirthYearToAge(selectedPlayer?.birth_year ?? null, eventYear), [selectedPlayer, eventYear])
   const nationalityCode = useMemo(
     () => getCountryCode(selectedPlayer?.nationality),
@@ -571,6 +587,18 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     const raw = selectedPlayer?.nationality?.trim()
     return raw && raw.length ? raw : null
   }, [nationalityCode, selectedPlayer?.nationality])
+
+  const clubLogoUrl = useMemo(() => {
+    if (!selectedPlayer) return null
+    return selectedPlayer.club_logo_url ?? selectedPlayer.club_logo ?? selectedPlayer.clubLogoUrl ?? null
+  }, [selectedPlayer])
+
+  const kitNumber = useMemo(() => {
+    if (!selectedPlayer) return null
+    if (typeof selectedPlayer.fav_number === 'number') return selectedPlayer.fav_number
+    if (typeof selectedPlayer.number === 'number') return selectedPlayer.number
+    return null
+  }, [selectedPlayer])
 
   const currentBackground = useMemo(() => {
     return backgroundOptions.find(option => option.id === selectedBackgroundId) || backgroundOptions[0]
@@ -597,6 +625,29 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       fileInputRef.current.click()
     }
   }, [])
+
+  const handleDownloadCard = useCallback(async () => {
+    const element = playercardRef.current
+    if (!element) return
+    setIsDownloadingCard(true)
+    try {
+      const canvas = await renderCardToCanvas(element, 2)
+      const link = document.createElement('a')
+      const normalizedName = selectedPlayer?.display_name
+        ?.trim()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-zA-Z0-9_\-]/g, '')
+        .toLowerCase()
+      link.href = canvas.toDataURL('image/png')
+      link.download = normalizedName && normalizedName.length ? `${normalizedName}_playercard.png` : 'playercard.png'
+      link.click()
+    } catch (error) {
+      console.error('Karte konnte nicht exportiert werden:', error)
+      alert('Die Karte konnte nicht exportiert werden. Bitte versuche es erneut.')
+    } finally {
+      setIsDownloadingCard(false)
+    }
+  }, [selectedPlayer])
 
   const processFile = useCallback(
     async (file: File, options?: ProcessFileOptions) => {
@@ -766,13 +817,13 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
                 <Link href={`/projects/${projectId}`} className="btn-secondary">
                   Zur Spielermatrix
                 </Link>
-                <button type="button" className="btn" onClick={() => alert('Download-Funktion folgt in Kürze!')}>
-                  Karte herunterladen
+                <button type="button" className="btn" onClick={handleDownloadCard} disabled={isDownloadingCard}>
+                  {isDownloadingCard ? 'Exportiere …' : 'Karte herunterladen'}
                 </button>
               </div>
             </section>
             <section className="playercard-column playercard-column--photo">
-              <PlayerImage
+              <PlayerCardPreview
                 imageSrc={displayImage}
                 isProcessing={isImageBusy}
                 onTriggerUpload={triggerFileDialog}
@@ -780,6 +831,17 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
                 onReapply={canReapply ? reapplyBackgroundRemoval : undefined}
                 errorMessage={errorMessage ?? preloadError?.message ?? null}
                 hasImage={Boolean(displayImage)}
+                cardRef={playercardRef}
+                onDownloadCard={handleDownloadCard}
+                isDownloading={isDownloadingCard}
+                playerName={selectedPlayer?.display_name ?? null}
+                position={selectedPlayer?.fav_position ?? null}
+                totalScore={totalScore}
+                nationalityCode={nationalityCode}
+                nationalityLabel={nationalityLabel}
+                clubLogoUrl={clubLogoUrl}
+                kitNumber={kitNumber}
+                stationValues={stationValues}
               />
               <input
                 ref={fileInputRef}
