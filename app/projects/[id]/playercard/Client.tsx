@@ -47,7 +47,7 @@ function getBackgroundRemovalConfig(): BackgroundRemovalConfig {
 
 // Version of the imgly background‑removal data.  If nothing is configured
 // via NEXT_PUBLIC_IMG_LY_ASSET_VERSION, fall back to 1.7.0.
-const IMG_LY_VERSION = process.env.NEXT_PUBLIC_IMG_LY_ASSET_VERSION || '1.7.0';
+const IMG_LY_VERSION = process.env.NEXT_PUBLIC_IMG_LY_ASSET_VERSION || '1';
 
 /**
  * Build the background removal configuration at runtime.  This helper
