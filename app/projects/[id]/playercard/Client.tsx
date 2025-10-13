@@ -29,19 +29,9 @@ type BackgroundRemovalModule = {
   preload?: (config?: BackgroundRemovalConfig) => Promise<void>
 }
 
-function resolveBackgroundAssetPath(): string {
-  if (typeof window === 'undefined') return '/imgly-assets/'
-  try {
-    return new URL('/imgly-assets/', window.location.href).toString()
-  } catch (error) {
-    console.warn('Konnte Asset-Pfad für IMG.LY nicht bestimmen:', error)
-    return '/imgly-assets/'
-  }
-}
-
 const BACKGROUND_REMOVAL_CONFIG: BackgroundRemovalConfig = {
   device: 'cpu',
-  publicPath: resolveBackgroundAssetPath(),
+  publicPath: '/imgly-assets/',
 }
 
 let cachedRemoveBackground: RemoveBackgroundFn | null = null
