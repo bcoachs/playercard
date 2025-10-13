@@ -514,7 +514,7 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
   useEffect(() => {
     const photo = selectedPlayer?.photo_url ?? null
     setOriginalImage(photo)
-    setProcessingError(null)
+    setErrorMessage(null)
     applyDisplayImage(photo, { objectUrl: false })
   }, [selectedPlayer, applyDisplayImage])
 
