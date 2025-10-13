@@ -273,15 +273,21 @@ function formatBirthYearToAge(birthYear: number | null, eventYear: number): numb
 
 type PlayercardClientProps = {
   projectId: string
+  initialPlayerId?: string | null
 }
 
-export default function PlayercardClient({ projectId }: PlayercardClientProps) {
+export default function PlayercardClient({ projectId, initialPlayerId }: PlayercardClientProps) {
   const [project, setProject] = useState<Project | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [stations, setStations] = useState<Station[]>([])
   const [measurements, setMeasurements] = useState<Measurement[]>([])
 
-  const [selectedPlayerId, setSelectedPlayerId] = useState('')
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string>(() => {
+    if (typeof initialPlayerId === 'string' && initialPlayerId) {
+      return initialPlayerId
+    }
+    return ''
+  })
 
   const [backgroundOptions, setBackgroundOptions] = useState<BackgroundOption[]>(DEFAULT_BACKGROUNDS)
   const [selectedBackgroundId, setSelectedBackgroundId] = useState(DEFAULT_BACKGROUNDS[0].id)
@@ -311,6 +317,12 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
   const originalFileRef = useRef<File | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (typeof initialPlayerId === 'string' && initialPlayerId) {
+      setSelectedPlayerId(initialPlayerId)
+    }
+  }, [initialPlayerId])
 
   const applyDisplayImage = useCallback((url: string | null, options?: { objectUrl?: boolean }) => {
     setDisplayImage(url)
