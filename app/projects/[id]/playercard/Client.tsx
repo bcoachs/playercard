@@ -494,7 +494,8 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   }, [objectUrl])
 
   useEffect(() => {
-    const photo = selectedPlayer?.photo_url ?? null
+    const rawPhoto = typeof selectedPlayer?.photo_url === 'string' ? selectedPlayer.photo_url.trim() : ''
+    const photo = rawPhoto.length ? rawPhoto : null
     if (manualOriginalUrlRef.current) {
       URL.revokeObjectURL(manualOriginalUrlRef.current)
       manualOriginalUrlRef.current = null
@@ -685,7 +686,8 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
 
   useEffect(() => {
     let cancelled = false
-    const photoUrl = selectedPlayer?.photo_url ?? null
+    const rawPhotoUrl = typeof selectedPlayer?.photo_url === 'string' ? selectedPlayer.photo_url.trim() : ''
+    const photoUrl = rawPhotoUrl.length ? rawPhotoUrl : null
 
     if (manualOriginalUrlRef.current) {
       URL.revokeObjectURL(manualOriginalUrlRef.current)

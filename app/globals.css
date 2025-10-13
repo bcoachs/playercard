@@ -1457,10 +1457,20 @@ a, .btn {
   height: 24px;
   border-radius: 4px;
   box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.45);
-  object-fit: cover;
   overflow: hidden;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.playercard-detail__flag svg,
+.playercard-detail__flag img {
+  width: 100%;
+  height: 100%;
   display: block;
+  object-fit: cover;
 }
 
 .playercard-header__badge {
@@ -1675,6 +1685,19 @@ a, .btn {
   box-shadow: 0 28px 56px rgba(2, 6, 23, 0.55);
   color: #f8fafc;
   isolation: isolate;
+  padding-left: 16px;
+}
+
+.playercard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  background: linear-gradient(to bottom, #00f260, #0575e6);
+  border-radius: 4px;
+  pointer-events: none;
 }
 
 .playercard__photo-area {
@@ -1692,6 +1715,8 @@ a, .btn {
   height: 100%;
   object-fit: cover;
   object-position: center;
+  touch-action: none;
+  will-change: transform;
 }
 
 .playercard__photo--empty {
@@ -1706,6 +1731,11 @@ a, .btn {
   font-size: clamp(1rem, 2.4vw, 1.2rem);
   color: rgba(226, 232, 240, 0.8);
   background: radial-gradient(circle at 30% 30%, rgba(59, 130, 246, 0.35), transparent 60%);
+}
+
+.playercard__photo--placeholder {
+  filter: saturate(0.85);
+  opacity: 0.95;
 }
 
 .playercard__info-rail {
@@ -1782,6 +1812,25 @@ a, .btn {
   line-height: 1;
 }
 
+.playercard-info__flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(1.4rem, 3vw, 1.8rem);
+  height: clamp(1.4rem, 3vw, 1.8rem);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.35);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.playercard-info__flag img,
+.playercard-info__flag svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .playercard-info--number .playercard-info__value {
   font-size: clamp(1.2rem, 2.8vw, 1.6rem);
 }
@@ -1821,12 +1870,19 @@ a, .btn {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 4px;
-  padding: 6px 10px;
+  gap: 8px;
+  padding: 8px 10px;
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.35);
   border: 1px solid rgba(148, 163, 184, 0.25);
   box-shadow: inset 0 0 12px rgba(15, 118, 210, 0.18);
+}
+
+.playercard-station__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
 }
 
 .playercard-station__label {
@@ -1842,6 +1898,21 @@ a, .btn {
   font-weight: 700;
   text-align: right;
   color: #f8fafc;
+}
+
+.playercard-station__bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+}
+
+.playercard-station__bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #00f260, #0575e6);
+  transition: width 0.3s ease;
 }
 
 .playercard-photo-actions {
