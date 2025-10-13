@@ -1,6 +1,7 @@
 "use client"
 
 import type { BackgroundRemovalConfig } from '@imgly/background-removal'
+import { getCountryCode, getCountryLabel } from '@/lib/countries'
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import PlayerHeader from './PlayerHeader'
@@ -29,13 +30,20 @@ type BackgroundRemovalModule = {
   preload?: (config?: BackgroundRemovalConfig) => Promise<void>
 }
 
-const BACKGROUND_REMOVAL_CONFIG: BackgroundRemovalConfig = {
-  device: 'cpu',
-  publicPath: '/imgly-assets/',
-}
-
 let cachedRemoveBackground: RemoveBackgroundFn | null = null
 let cachedModule: BackgroundRemovalModule | null = null
+
+const IMG_LY_VERSION = process.env.NEXT_PUBLIC_IMG_LY_ASSET_VERSION || '1.7.0'
+const IMG_LY_PUBLIC_PATH =
+  process.env.NEXT_PUBLIC_IMG_LY_PUBLIC_PATH ||
+  `https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@${IMG_LY_VERSION}/dist/`
+
+function getBackgroundRemovalConfig(): BackgroundRemovalConfig {
+  return {
+    device: 'cpu',
+    publicPath: IMG_LY_PUBLIC_PATH,
+  }
+}
 
 async function loadBackgroundRemovalModule(): Promise<BackgroundRemovalModule> {
   if (cachedModule) return cachedModule
@@ -53,7 +61,8 @@ async function loadBackgroundRemovalModule(): Promise<BackgroundRemovalModule> {
 async function loadRemoveBackground(): Promise<RemoveBackgroundFn> {
   if (cachedRemoveBackground) return cachedRemoveBackground
   const mod = await loadBackgroundRemovalModule()
-  cachedRemoveBackground = (file: Blob) => mod.removeBackground(file, BACKGROUND_REMOVAL_CONFIG)
+  const config = getBackgroundRemovalConfig()
+  cachedRemoveBackground = (file: Blob) => mod.removeBackground(file, config)
   return cachedRemoveBackground
 }
 
@@ -256,14 +265,11 @@ async function loadS4Map(): Promise<ScoreMap | null> {
 }
 
 function toFlagEmoji(value: string | null | undefined) {
-  if (!value) return null
-  const trimmed = value.trim()
-  if (trimmed.length === 2) {
-    const base = 127397
-    const chars = trimmed.toUpperCase().split('').map(char => char.charCodeAt(0) + base)
-    return String.fromCodePoint(...chars)
-  }
-  return null
+  const code = getCountryCode(value)
+  if (!code) return null
+  const base = 127397
+  const chars = code.split('').map(char => char.charCodeAt(0) + base)
+  return String.fromCodePoint(...chars)
 }
 
 function formatBirthYearToAge(birthYear: number | null, eventYear: number): number | null {
@@ -273,15 +279,21 @@ function formatBirthYearToAge(birthYear: number | null, eventYear: number): numb
 
 type PlayercardClientProps = {
   projectId: string
+  initialPlayerId?: string | null
 }
 
-export default function PlayercardClient({ projectId }: PlayercardClientProps) {
+export default function PlayercardClient({ projectId, initialPlayerId }: PlayercardClientProps) {
   const [project, setProject] = useState<Project | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [stations, setStations] = useState<Station[]>([])
   const [measurements, setMeasurements] = useState<Measurement[]>([])
 
-  const [selectedPlayerId, setSelectedPlayerId] = useState('')
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string>(() => {
+    if (typeof initialPlayerId === 'string' && initialPlayerId) {
+      return initialPlayerId
+    }
+    return ''
+  })
 
   const [backgroundOptions, setBackgroundOptions] = useState<BackgroundOption[]>(DEFAULT_BACKGROUNDS)
   const [selectedBackgroundId, setSelectedBackgroundId] = useState(DEFAULT_BACKGROUNDS[0].id)
@@ -312,6 +324,12 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
+  useEffect(() => {
+    if (typeof initialPlayerId === 'string' && initialPlayerId) {
+      setSelectedPlayerId(initialPlayerId)
+    }
+  }, [initialPlayerId])
+
   const applyDisplayImage = useCallback((url: string | null, options?: { objectUrl?: boolean }) => {
     setDisplayImage(url)
     setObjectUrl(prev => {
@@ -339,10 +357,11 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
       try {
         const mod = await loadBackgroundRemovalModule()
         if (typeof mod.preload === 'function') {
-          await mod.preload(BACKGROUND_REMOVAL_CONFIG)
+          await mod.preload(getBackgroundRemovalConfig())
         }
         if (isMounted) {
-          cachedRemoveBackground = (file: Blob) => mod.removeBackground(file, BACKGROUND_REMOVAL_CONFIG)
+          const config = getBackgroundRemovalConfig()
+          cachedRemoveBackground = (file: Blob) => mod.removeBackground(file, config)
           setIsPreloaded(true)
         }
       } catch (error) {
@@ -596,6 +615,12 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
 
   const derivedAge = useMemo(() => formatBirthYearToAge(selectedPlayer?.birth_year ?? null, eventYear), [selectedPlayer, eventYear])
   const nationalityFlag = useMemo(() => toFlagEmoji(selectedPlayer?.nationality), [selectedPlayer?.nationality])
+  const nationalityLabel = useMemo(() => {
+    const label = getCountryLabel(selectedPlayer?.nationality)
+    if (label) return label
+    const raw = selectedPlayer?.nationality?.trim()
+    return raw && raw.length ? raw : null
+  }, [selectedPlayer?.nationality])
 
   const currentBackground = useMemo(() => {
     return backgroundOptions.find(option => option.id === selectedBackgroundId) || backgroundOptions[0]
@@ -661,13 +686,27 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
   useEffect(() => {
     let cancelled = false
     const photoUrl = selectedPlayer?.photo_url ?? null
+
+    if (manualOriginalUrlRef.current) {
+      URL.revokeObjectURL(manualOriginalUrlRef.current)
+      manualOriginalUrlRef.current = null
+    }
+
     if (!photoUrl) {
+      applyDisplayImage(null)
+      setOriginalImage(null)
+      originalFileRef.current = null
+      setErrorMessage(null)
       return () => {
         cancelled = true
       }
     }
 
     const ensuredUrl = photoUrl as string
+    setOriginalImage(ensuredUrl)
+    setErrorMessage(null)
+    originalFileRef.current = null
+    applyDisplayImage(ensuredUrl, { objectUrl: false })
 
     async function autoRemove() {
       try {
@@ -710,6 +749,7 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
       const manualUrl = URL.createObjectURL(file)
       manualOriginalUrlRef.current = manualUrl
       setOriginalImage(manualUrl)
+      applyDisplayImage(manualUrl, { objectUrl: false })
       processFile(file, {
         fallbackUrl: manualUrl,
         errorMessage: 'Freistellung fehlgeschlagen. Das hochgeladene Bild wird verwendet.',
@@ -764,6 +804,7 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
                 onSelectPlayer={setSelectedPlayerId}
                 age={derivedAge}
                 nationalityFlag={nationalityFlag}
+                nationalityLabel={nationalityLabel}
                 totalScore={totalScore}
               />
               <PlayerStats stats={stats} totalScore={totalScore} isLoading={isLoading} loadError={loadError} />

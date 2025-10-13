@@ -14,6 +14,7 @@ type PlayerHeaderProps = {
   onSelectPlayer: (id: string) => void
   age: number | null
   nationalityFlag: string | null
+  nationalityLabel: string | null
   totalScore: number | null
 }
 
@@ -31,8 +32,11 @@ export default function PlayerHeader({
   onSelectPlayer,
   age,
   nationalityFlag,
+  nationalityLabel,
   totalScore,
 }: PlayerHeaderProps) {
+  const nationalityDisplay = formatValue(nationalityLabel ?? player?.nationality)
+
   return (
     <header className="playercard-header">
       <div className="playercard-header__title-group">
@@ -76,11 +80,16 @@ export default function PlayerHeader({
           <div className="playercard-detail">
             <span className="playercard-detail__label">Nationalität</span>
             <span className="playercard-detail__value">
-              {nationalityFlag ? `${nationalityFlag} ${formatValue(player?.nationality)}` : formatValue(player?.nationality)}
+              {nationalityFlag && (
+                <span className="playercard-detail__flag" aria-hidden="true">
+                  {nationalityFlag}
+                </span>
+              )}
+              <span>{nationalityDisplay}</span>
             </span>
           </div>
           <div className="playercard-detail">
-            <span className="playercard-detail__label">Lieblingsnummer</span>
+            <span className="playercard-detail__label">Nummer</span>
             <span className="playercard-detail__value">
               {player?.fav_number ? `#${player.fav_number}` : '–'}
             </span>
