@@ -1,5 +1,6 @@
 "use client"
 
+import type { BackgroundRemovalConfig } from '@imgly/background-removal'
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import PlayerHeader from './PlayerHeader'
@@ -23,18 +24,36 @@ const STAT_INDEX: Record<string, number> = STAT_ORDER.reduce((acc, name, index) 
 
 type RemoveBackgroundFn = (file: Blob) => Promise<Blob>
 
-let cachedRemoveBackground: RemoveBackgroundFn | null = null
+type BackgroundRemovalModule = {
+  removeBackground: (file: Blob | File | string, options?: BackgroundRemovalConfig) => Promise<Blob>
+  preload?: (config?: BackgroundRemovalConfig) => Promise<void>
+}
 
-async function loadRemoveBackground(): Promise<RemoveBackgroundFn> {
-  if (cachedRemoveBackground) return cachedRemoveBackground
+const BACKGROUND_REMOVAL_CONFIG: BackgroundRemovalConfig = {
+  device: 'cpu',
+  publicPath: '/imgly-assets/',
+}
+
+let cachedRemoveBackground: RemoveBackgroundFn | null = null
+let cachedModule: BackgroundRemovalModule | null = null
+
+async function loadBackgroundRemovalModule(): Promise<BackgroundRemovalModule> {
+  if (cachedModule) return cachedModule
   if (typeof window === 'undefined') {
     throw new Error('removeBackground kann nur im Browser geladen werden')
   }
-  const mod = await import('@imgly/background-removal')
+  const mod = (await import('@imgly/background-removal')) as BackgroundRemovalModule
   if (typeof mod.removeBackground !== 'function') {
     throw new Error('removeBackground konnte nicht geladen werden')
   }
-  cachedRemoveBackground = mod.removeBackground
+  cachedModule = mod
+  return cachedModule
+}
+
+async function loadRemoveBackground(): Promise<RemoveBackgroundFn> {
+  if (cachedRemoveBackground) return cachedRemoveBackground
+  const mod = await loadBackgroundRemovalModule()
+  cachedRemoveBackground = (file: Blob) => mod.removeBackground(file, BACKGROUND_REMOVAL_CONFIG)
   return cachedRemoveBackground
 }
 
@@ -279,8 +298,12 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
+  const [isPreloadingAssets, setIsPreloadingAssets] = useState(true)
+  const [isPreloaded, setIsPreloaded] = useState(false)
+  const [preloadError, setPreloadError] = useState<Error | null>(null)
+
   const [isProcessingImage, setIsProcessingImage] = useState(false)
-  const [processingError, setProcessingError] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [originalImage, setOriginalImage] = useState<string | null>(null)
   const [displayImage, setDisplayImage] = useState<string | null>(null)
   const [objectUrl, setObjectUrl] = useState<string | null>(null)
@@ -295,6 +318,41 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
       }
       return options?.objectUrl ? url : null
     })
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    setIsPreloadingAssets(true)
+    setPreloadError(null)
+    ;(async () => {
+      try {
+        const mod = await loadBackgroundRemovalModule()
+        if (typeof mod.preload === 'function') {
+          await mod.preload(BACKGROUND_REMOVAL_CONFIG)
+        }
+        if (isMounted) {
+          cachedRemoveBackground = (file: Blob) => mod.removeBackground(file, BACKGROUND_REMOVAL_CONFIG)
+          setIsPreloaded(true)
+        }
+      } catch (error) {
+        console.error('Fehler beim Preload:', error)
+        if (!isMounted) return
+        const normalizedError =
+          error instanceof Error
+            ? error
+            : new Error('Unbekannter Fehler beim Vorladen der Freistellungs-Modelle.')
+        setPreloadError(normalizedError)
+        setErrorMessage(prev => prev ?? normalizedError.message)
+      } finally {
+        if (isMounted) {
+          setIsPreloadingAssets(false)
+        }
+      }
+    })()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   useEffect(() => {
@@ -542,7 +600,7 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
   }, [])
 
   const triggerFileDialog = useCallback(() => {
-    setProcessingError(null)
+    setErrorMessage(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
       fileInputRef.current.click()
@@ -551,13 +609,14 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
 
   const processFile = useCallback(
     async (file: File, options?: ProcessFileOptions) => {
-      setProcessingError(null)
+      setErrorMessage(null)
       setIsProcessingImage(true)
       try {
         const remove = await loadRemoveBackground()
         const blob = await remove(file)
         const url = URL.createObjectURL(blob)
         applyDisplayImage(url, { objectUrl: true })
+        setErrorMessage(null)
       } catch (err) {
         console.error('Freistellung fehlgeschlagen', err)
         const fallback = options?.fallbackUrl
@@ -572,7 +631,9 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
             applyDisplayImage(null)
           }
         }
-        setProcessingError(options?.errorMessage || 'Freistellung fehlgeschlagen. Bitte erneut versuchen.')
+        const messageFromError = err instanceof Error && err.message ? err.message : null
+        const fallbackMessage = options?.errorMessage || 'Freistellung fehlgeschlagen. Bitte erneut versuchen.'
+        setErrorMessage(messageFromError ?? fallbackMessage)
       } finally {
         setIsProcessingImage(false)
       }
@@ -606,7 +667,8 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
         if (cancelled) return
         console.error('Automatische Freistellung fehlgeschlagen', err)
         applyDisplayImage(ensuredUrl, { objectUrl: false })
-        setProcessingError('Freistellung nicht möglich. Originalfoto wird angezeigt.')
+        const message = err instanceof Error && err.message ? err.message : null
+        setErrorMessage(message ?? 'Freistellung nicht möglich. Originalfoto wird angezeigt.')
       }
     }
 
@@ -622,7 +684,7 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
       const file = event.target.files?.[0]
       if (!file) return
       if (!file.type.startsWith('image/')) {
-        setProcessingError('Bitte eine Bilddatei auswählen.')
+        setErrorMessage('Bitte eine Bilddatei auswählen.')
         return
       }
       processFile(file, {
@@ -634,7 +696,7 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
 
   const reapplyBackgroundRemoval = useCallback(() => {
     if (!originalImage) return
-    setProcessingError(null)
+    setErrorMessage(null)
     fetch(originalImage)
       .then(res => res.blob())
       .then(blob =>
@@ -643,16 +705,23 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
           errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
         })
       )
-      .catch(() => setProcessingError('Originalbild konnte nicht geladen werden.'))
+      .catch(error =>
+        setErrorMessage(
+          error instanceof Error && error.message
+            ? error.message
+            : 'Originalbild konnte nicht geladen werden.'
+        )
+      )
   }, [originalImage, processFile])
 
   const resetToOriginal = useCallback(() => {
-    setProcessingError(null)
+    setErrorMessage(null)
     applyDisplayImage(originalImage, { objectUrl: false })
   }, [originalImage, applyDisplayImage])
 
   const canReapply = Boolean(originalImage)
   const canReset = Boolean(originalImage) && displayImage !== originalImage
+  const isImageBusy = isProcessingImage || (isPreloadingAssets && !isPreloaded)
 
   const infoText = useMemo(() => {
     return (
@@ -702,11 +771,11 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
             <section className="playercard-column playercard-column--photo">
               <PlayerImage
                 imageSrc={displayImage}
-                isProcessing={isProcessingImage}
+                isProcessing={isImageBusy}
                 onTriggerUpload={triggerFileDialog}
                 onReset={canReset ? resetToOriginal : undefined}
                 onReapply={canReapply ? reapplyBackgroundRemoval : undefined}
-                processingError={processingError}
+                errorMessage={errorMessage ?? preloadError?.message ?? null}
                 hasImage={Boolean(displayImage)}
               />
               <input

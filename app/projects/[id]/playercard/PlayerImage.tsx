@@ -6,7 +6,7 @@ type PlayerImageProps = {
   onTriggerUpload: () => void
   onReset?: () => void
   onReapply?: () => void
-  processingError: string | null
+  errorMessage: string | null
   hasImage: boolean
 }
 
@@ -16,7 +16,7 @@ export default function PlayerImage({
   onTriggerUpload,
   onReset,
   onReapply,
-  processingError,
+  errorMessage,
   hasImage,
 }: PlayerImageProps) {
   return (
@@ -49,8 +49,12 @@ export default function PlayerImage({
       </div>
       <div className="playercard-photo-status">
         {isProcessing && <span className="playercard-photo-status__loading">Modell lädt – bitte warten …</span>}
-        {processingError && <span className="playercard-photo-status__error">{processingError}</span>}
-        {!isProcessing && !processingError && (
+        {errorMessage && (
+          <p className="playercard-photo-status__error">
+            Hintergrundfreistellung fehlgeschlagen: {errorMessage}
+          </p>
+        )}
+        {!isProcessing && !errorMessage && (
           <span className="playercard-photo-status__hint">1080 × 1920 px • Transparentes PNG empfohlen</span>
         )}
       </div>
