@@ -1,6 +1,7 @@
 "use client"
 
 import type { BackgroundRemovalConfig } from '@imgly/background-removal'
+import { getCountryCode, getCountryLabel } from '@/lib/countries'
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import PlayerHeader from './PlayerHeader'
@@ -32,20 +33,15 @@ type BackgroundRemovalModule = {
 let cachedRemoveBackground: RemoveBackgroundFn | null = null
 let cachedModule: BackgroundRemovalModule | null = null
 
-function getBackgroundRemovalConfig(): BackgroundRemovalConfig {
-  const baseConfig: BackgroundRemovalConfig = { device: 'cpu' }
-  if (typeof window === 'undefined') return baseConfig
+const IMG_LY_VERSION = process.env.NEXT_PUBLIC_IMG_LY_ASSET_VERSION || '1.7.0'
+const IMG_LY_PUBLIC_PATH =
+  process.env.NEXT_PUBLIC_IMG_LY_PUBLIC_PATH ||
+  `https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@${IMG_LY_VERSION}/dist/`
 
-  try {
-    const origin = window.location.origin
-    if (!origin) return baseConfig
-    return {
-      ...baseConfig,
-      publicPath: `${origin.replace(/\/$/, '')}/imgly-assets/`,
-    }
-  } catch (error) {
-    console.warn('Konnte publicPath nicht bestimmen. Verwende Standardkonfiguration.', error)
-    return baseConfig
+function getBackgroundRemovalConfig(): BackgroundRemovalConfig {
+  return {
+    device: 'cpu',
+    publicPath: IMG_LY_PUBLIC_PATH,
   }
 }
 
@@ -269,14 +265,11 @@ async function loadS4Map(): Promise<ScoreMap | null> {
 }
 
 function toFlagEmoji(value: string | null | undefined) {
-  if (!value) return null
-  const trimmed = value.trim()
-  if (trimmed.length === 2) {
-    const base = 127397
-    const chars = trimmed.toUpperCase().split('').map(char => char.charCodeAt(0) + base)
-    return String.fromCodePoint(...chars)
-  }
-  return null
+  const code = getCountryCode(value)
+  if (!code) return null
+  const base = 127397
+  const chars = code.split('').map(char => char.charCodeAt(0) + base)
+  return String.fromCodePoint(...chars)
 }
 
 function formatBirthYearToAge(birthYear: number | null, eventYear: number): number | null {
@@ -622,6 +615,12 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
 
   const derivedAge = useMemo(() => formatBirthYearToAge(selectedPlayer?.birth_year ?? null, eventYear), [selectedPlayer, eventYear])
   const nationalityFlag = useMemo(() => toFlagEmoji(selectedPlayer?.nationality), [selectedPlayer?.nationality])
+  const nationalityLabel = useMemo(() => {
+    const label = getCountryLabel(selectedPlayer?.nationality)
+    if (label) return label
+    const raw = selectedPlayer?.nationality?.trim()
+    return raw && raw.length ? raw : null
+  }, [selectedPlayer?.nationality])
 
   const currentBackground = useMemo(() => {
     return backgroundOptions.find(option => option.id === selectedBackgroundId) || backgroundOptions[0]
@@ -687,13 +686,27 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   useEffect(() => {
     let cancelled = false
     const photoUrl = selectedPlayer?.photo_url ?? null
+
+    if (manualOriginalUrlRef.current) {
+      URL.revokeObjectURL(manualOriginalUrlRef.current)
+      manualOriginalUrlRef.current = null
+    }
+
     if (!photoUrl) {
+      applyDisplayImage(null)
+      setOriginalImage(null)
+      originalFileRef.current = null
+      setErrorMessage(null)
       return () => {
         cancelled = true
       }
     }
 
     const ensuredUrl = photoUrl as string
+    setOriginalImage(ensuredUrl)
+    setErrorMessage(null)
+    originalFileRef.current = null
+    applyDisplayImage(ensuredUrl, { objectUrl: false })
 
     async function autoRemove() {
       try {
@@ -736,6 +749,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       const manualUrl = URL.createObjectURL(file)
       manualOriginalUrlRef.current = manualUrl
       setOriginalImage(manualUrl)
+      applyDisplayImage(manualUrl, { objectUrl: false })
       processFile(file, {
         fallbackUrl: manualUrl,
         errorMessage: 'Freistellung fehlgeschlagen. Das hochgeladene Bild wird verwendet.',
@@ -790,6 +804,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
                 onSelectPlayer={setSelectedPlayerId}
                 age={derivedAge}
                 nationalityFlag={nationalityFlag}
+                nationalityLabel={nationalityLabel}
                 totalScore={totalScore}
               />
               <PlayerStats stats={stats} totalScore={totalScore} isLoading={isLoading} loadError={loadError} />

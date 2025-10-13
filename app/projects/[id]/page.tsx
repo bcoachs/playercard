@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import BackFab from '../../components/BackFab'
 import PhotoCaptureModal from './PhotoCaptureModal'
+import { COUNTRY_OPTIONS, getCountryCode } from '@/lib/countries'
 
 type Station = {
   id: string
@@ -589,7 +590,7 @@ export default function ProjectDashboard() {
     setPClub(p.club || '')
     setPNum(typeof p.fav_number === 'number' ? p.fav_number : '')
     setPPos(p.fav_position || '')
-    setPNat(p.nationality || '')
+    setPNat(getCountryCode(p.nationality) || '')
     setPGender((p.gender as any) || '')
     const existingPhoto = p.photo_url ?? null
     if (typeof existingPhoto === 'string' && existingPhoto) {
@@ -814,12 +815,14 @@ export default function ProjectDashboard() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-1">Nationalität</label>
-                    <input
-                      className="input"
-                      value={pNat}
-                      onChange={e => setPNat(e.target.value)}
-                      placeholder="DE, FR, ..."
-                    />
+                    <select className="input" value={pNat} onChange={e => setPNat(e.target.value)}>
+                      <option value="">–</option>
+                      {COUNTRY_OPTIONS.map(option => (
+                        <option key={option.code} value={option.code}>
+                          {option.label} ({option.code})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-1">Geschlecht</label>
