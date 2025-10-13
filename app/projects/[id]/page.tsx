@@ -665,7 +665,12 @@ export default function ProjectDashboard() {
   const photoButtonLabel = photoPreview ? 'Foto neu aufnehmen' : 'Foto aufnehmen'
   const canRemovePhoto = Boolean(photoPreview)
   const canDeletePlayers = players.length > 0
-  const playercardHref = `/projects/${projectId}/playercard`
+  const playercardHref = useMemo(() => {
+    const base = `/projects/${projectId}/playercard`
+    if (!editId) return base
+    const params = new URLSearchParams({ player: editId })
+    return `${base}?${params.toString()}`
+  }, [projectId, editId])
   const projectName = project?.name?.trim() ?? ''
   const matrixHeading = projectName || 'Spielermatrix'
 

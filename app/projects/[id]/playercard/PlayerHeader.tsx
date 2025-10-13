@@ -80,7 +80,7 @@ export default function PlayerHeader({
             </span>
           </div>
           <div className="playercard-detail">
-            <span className="playercard-detail__label">Lieblingsnummer</span>
+            <span className="playercard-detail__label">Nummer</span>
             <span className="playercard-detail__value">
               {player?.fav_number ? `#${player.fav_number}` : '–'}
             </span>
