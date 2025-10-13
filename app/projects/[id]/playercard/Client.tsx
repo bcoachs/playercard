@@ -221,14 +221,6 @@ async function loadS4Map(): Promise<ScoreMap | null> {
   }
 }
 
-function toFlagEmoji(value: string | null | undefined) {
-  const code = getCountryCode(value)
-  if (!code) return null
-  const base = 127397
-  const chars = code.split('').map(char => char.charCodeAt(0) + base)
-  return String.fromCodePoint(...chars)
-}
-
 function formatBirthYearToAge(birthYear: number | null, eventYear: number): number | null {
   if (!birthYear) return null
   return Math.max(6, Math.min(49, eventYear - birthYear))
@@ -567,13 +559,18 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   }, [stats])
 
   const derivedAge = useMemo(() => formatBirthYearToAge(selectedPlayer?.birth_year ?? null, eventYear), [selectedPlayer, eventYear])
-  const nationalityFlag = useMemo(() => toFlagEmoji(selectedPlayer?.nationality), [selectedPlayer?.nationality])
+  const nationalityCode = useMemo(
+    () => getCountryCode(selectedPlayer?.nationality),
+    [selectedPlayer?.nationality],
+  )
   const nationalityLabel = useMemo(() => {
-    const label = getCountryLabel(selectedPlayer?.nationality)
-    if (label) return label
+    if (nationalityCode) {
+      const fromCode = getCountryLabel(nationalityCode)
+      if (fromCode) return fromCode
+    }
     const raw = selectedPlayer?.nationality?.trim()
     return raw && raw.length ? raw : null
-  }, [selectedPlayer?.nationality])
+  }, [nationalityCode, selectedPlayer?.nationality])
 
   const currentBackground = useMemo(() => {
     return backgroundOptions.find(option => option.id === selectedBackgroundId) || backgroundOptions[0]
@@ -754,7 +751,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
                 selectedPlayerId={selectedPlayerId}
                 onSelectPlayer={setSelectedPlayerId}
                 age={derivedAge}
-                nationalityFlag={nationalityFlag}
+                nationalityCode={nationalityCode}
                 nationalityLabel={nationalityLabel}
                 totalScore={totalScore}
               />

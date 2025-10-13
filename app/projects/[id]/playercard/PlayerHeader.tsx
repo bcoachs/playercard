@@ -13,7 +13,7 @@ type PlayerHeaderProps = {
   selectedPlayerId: string
   onSelectPlayer: (id: string) => void
   age: number | null
-  nationalityFlag: string | null
+  nationalityCode: string | null
   nationalityLabel: string | null
   totalScore: number | null
 }
@@ -31,11 +31,18 @@ export default function PlayerHeader({
   selectedPlayerId,
   onSelectPlayer,
   age,
-  nationalityFlag,
+  nationalityCode,
   nationalityLabel,
   totalScore,
 }: PlayerHeaderProps) {
-  const nationalityDisplay = formatValue(nationalityLabel ?? player?.nationality)
+  const rawNationality = nationalityLabel ?? player?.nationality ?? null
+  const nationalityText =
+    typeof rawNationality === 'string' ? (rawNationality.trim().length ? rawNationality.trim() : null) : rawNationality
+  const nationalityCodeLower = nationalityCode ? nationalityCode.toLowerCase() : null
+  const nationalityFlagUrl = nationalityCodeLower ? `https://flagcdn.com/h40/${nationalityCodeLower}.png` : null
+  const nationalityFlagSrcSet = nationalityCodeLower
+    ? `https://flagcdn.com/h40/${nationalityCodeLower}.png 1x, https://flagcdn.com/h80/${nationalityCodeLower}.png 2x`
+    : null
 
   return (
     <header className="playercard-header">
@@ -80,12 +87,24 @@ export default function PlayerHeader({
           <div className="playercard-detail">
             <span className="playercard-detail__label">Nationalität</span>
             <span className="playercard-detail__value">
-              {nationalityFlag && (
-                <span className="playercard-detail__flag" aria-hidden="true">
-                  {nationalityFlag}
-                </span>
+              {nationalityFlagUrl && (
+                <img
+                  src={nationalityFlagUrl}
+                  srcSet={nationalityFlagSrcSet ?? undefined}
+                  alt=""
+                  width={36}
+                  height={24}
+                  className="playercard-detail__flag"
+                  loading="lazy"
+                  decoding="async"
+                  aria-hidden="true"
+                />
               )}
-              <span>{nationalityDisplay}</span>
+              {nationalityText ? (
+                <span>{nationalityText}</span>
+              ) : !nationalityFlagUrl ? (
+                <span>–</span>
+              ) : null}
             </span>
           </div>
           <div className="playercard-detail">

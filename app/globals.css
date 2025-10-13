@@ -1453,9 +1453,14 @@ a, .btn {
 }
 
 .playercard-detail__flag {
-  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
-  font-size: 1.25em;
-  line-height: 1;
+  width: 36px;
+  height: 24px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.45);
+  object-fit: cover;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: block;
 }
 
 .playercard-header__badge {
