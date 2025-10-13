@@ -3,7 +3,7 @@ const nextConfig = {
   webpack: (config, { isServer }) => {
     config.module.rules.push({
       test: /\.mjs$/,
-      include: /node_modules[\\/](onnxruntime-web|@imgly[\\/])/,
+      include: /node_modules[\\/](?:@mediapipe[\\/])/,
       type: 'javascript/esm',
     });
 
