@@ -1,8 +1,11 @@
 import * as bodyPix from '@tensorflow-models/body-pix'
 import '@tensorflow/tfjs'
+import '@tensorflow/tfjs-backend-webgl'
+import * as tf from '@tensorflow/tfjs'
 
 let cachedNet: bodyPix.BodyPix | null = null
 let loadingPromise: Promise<bodyPix.BodyPix> | null = null
+let tfReadyPromise: Promise<void> | null = null
 
 function assertBrowser(message: string): void {
   if (typeof window === 'undefined') {
@@ -35,12 +38,28 @@ function blobToImage(blob: Blob): Promise<HTMLImageElement> {
       URL.revokeObjectURL(url)
       resolve(image)
     }
-    image.onerror = () => {
+    image.onerror = error => {
       URL.revokeObjectURL(url)
-      reject(new Error('Bild konnte nicht aus dem Blob erzeugt werden.'))
+      reject(error)
     }
     image.src = url
   })
+}
+
+async function ensureTfReady(): Promise<void> {
+  assertBrowser('TensorFlow.js Backend steht nur im Browser zur Verfügung.')
+  if (!tfReadyPromise) {
+    tfReadyPromise = (async () => {
+      if (tf.getBackend() !== 'webgl') {
+        await tf.setBackend('webgl')
+      }
+      await tf.ready()
+    })().catch(error => {
+      tfReadyPromise = null
+      throw error
+    })
+  }
+  await tfReadyPromise
 }
 
 function applyStringBackground(
@@ -142,6 +161,8 @@ export async function loadBodyPix(): Promise<bodyPix.BodyPix> {
   }
 
   assertBrowser('BodyPix steht nur im Browser zur Verfügung.')
+
+  await ensureTfReady()
 
   loadingPromise = bodyPix
     .load({
