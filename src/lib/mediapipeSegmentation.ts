@@ -46,12 +46,9 @@ export async function loadImageSegmenter(): Promise<ImageSegmenter> {
   }
 }
 
-type Canvas2DContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+type Canvas2DContext = CanvasRenderingContext2D
 
-function createCanvas(width: number, height: number): OffscreenCanvas | HTMLCanvasElement {
-  if (typeof OffscreenCanvas !== 'undefined') {
-    return new OffscreenCanvas(width, height)
-  }
+function createCanvas(width: number, height: number): HTMLCanvasElement {
   assertBrowser('Canvas können nur im Browser erzeugt werden.')
   const canvas = document.createElement('canvas')
   canvas.width = width
@@ -59,7 +56,7 @@ function createCanvas(width: number, height: number): OffscreenCanvas | HTMLCanv
   return canvas
 }
 
-function getContext2d(canvas: OffscreenCanvas | HTMLCanvasElement): Canvas2DContext {
+function getContext2d(canvas: HTMLCanvasElement): Canvas2DContext {
   const context = canvas.getContext('2d', { willReadFrequently: true })
   if (!context) {
     throw new Error('2D-Rendering-Kontext konnte nicht initialisiert werden.')
@@ -102,13 +99,9 @@ function applyStringBackground(context: Canvas2DContext, width: number, height: 
   context.fillRect(0, 0, width, height)
 }
 
-async function canvasToBlob(canvas: OffscreenCanvas | HTMLCanvasElement): Promise<Blob> {
-  if ('convertToBlob' in canvas) {
-    return canvas.convertToBlob({ type: 'image/png' })
-  }
-
+async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return await new Promise<Blob>((resolve, reject) => {
-    ;(canvas as HTMLCanvasElement).toBlob(blob => {
+    canvas.toBlob(blob => {
       if (blob) {
         resolve(blob)
       } else {
