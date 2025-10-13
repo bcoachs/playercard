@@ -29,9 +29,19 @@ type BackgroundRemovalModule = {
   preload?: (config?: BackgroundRemovalConfig) => Promise<void>
 }
 
+function resolveBackgroundAssetPath(): string {
+  if (typeof window === 'undefined') return '/imgly-assets/'
+  try {
+    return new URL('/imgly-assets/', window.location.href).toString()
+  } catch (error) {
+    console.warn('Konnte Asset-Pfad für IMG.LY nicht bestimmen:', error)
+    return '/imgly-assets/'
+  }
+}
+
 const BACKGROUND_REMOVAL_CONFIG: BackgroundRemovalConfig = {
   device: 'cpu',
-  publicPath: '/imgly-assets/',
+  publicPath: resolveBackgroundAssetPath(),
 }
 
 let cachedRemoveBackground: RemoveBackgroundFn | null = null
@@ -307,6 +317,8 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
   const [originalImage, setOriginalImage] = useState<string | null>(null)
   const [displayImage, setDisplayImage] = useState<string | null>(null)
   const [objectUrl, setObjectUrl] = useState<string | null>(null)
+  const manualOriginalUrlRef = useRef<string | null>(null)
+  const originalFileRef = useRef<File | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -318,6 +330,15 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
       }
       return options?.objectUrl ? url : null
     })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (manualOriginalUrlRef.current) {
+        URL.revokeObjectURL(manualOriginalUrlRef.current)
+        manualOriginalUrlRef.current = null
+      }
+    }
   }, [])
 
   useEffect(() => {
@@ -513,6 +534,11 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
 
   useEffect(() => {
     const photo = selectedPlayer?.photo_url ?? null
+    if (manualOriginalUrlRef.current) {
+      URL.revokeObjectURL(manualOriginalUrlRef.current)
+      manualOriginalUrlRef.current = null
+    }
+    originalFileRef.current = null
     setOriginalImage(photo)
     setErrorMessage(null)
     applyDisplayImage(photo, { objectUrl: false })
@@ -612,6 +638,7 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
       setErrorMessage(null)
       setIsProcessingImage(true)
       try {
+        originalFileRef.current = file
         const remove = await loadRemoveBackground()
         const blob = await remove(file)
         const url = URL.createObjectURL(blob)
@@ -687,7 +714,14 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
         setErrorMessage('Bitte eine Bilddatei auswählen.')
         return
       }
+      if (manualOriginalUrlRef.current) {
+        URL.revokeObjectURL(manualOriginalUrlRef.current)
+      }
+      const manualUrl = URL.createObjectURL(file)
+      manualOriginalUrlRef.current = manualUrl
+      setOriginalImage(manualUrl)
       processFile(file, {
+        fallbackUrl: manualUrl,
         errorMessage: 'Freistellung fehlgeschlagen. Das hochgeladene Bild wird verwendet.',
       })
     },
@@ -695,23 +729,13 @@ export default function PlayercardClient({ projectId }: PlayercardClientProps) {
   )
 
   const reapplyBackgroundRemoval = useCallback(() => {
-    if (!originalImage) return
+    const originalFile = originalFileRef.current
+    if (!originalFile) return
     setErrorMessage(null)
-    fetch(originalImage)
-      .then(res => res.blob())
-      .then(blob =>
-        processFile(new File([blob], 'player-photo.png', { type: blob.type || 'image/png' }), {
-          fallbackUrl: originalImage,
-          errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
-        })
-      )
-      .catch(error =>
-        setErrorMessage(
-          error instanceof Error && error.message
-            ? error.message
-            : 'Originalbild konnte nicht geladen werden.'
-        )
-      )
+    processFile(originalFile, {
+      fallbackUrl: originalImage,
+      errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
+    })
   }, [originalImage, processFile])
 
   const resetToOriginal = useCallback(() => {

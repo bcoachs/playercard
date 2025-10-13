@@ -37,8 +37,8 @@ export default function PlayerImage({
           {hasImage ? 'Neues Bild hochladen' : 'Bild hochladen'}
         </button>
         {onReapply && (
-          <button type="button" className="btn-secondary" onClick={onReapply} disabled={isProcessing}>
-            Freistellung erneut anwenden
+          <button type="button" className="btn" onClick={onReapply} disabled={isProcessing}>
+            Hintergrund freistellen
           </button>
         )}
         {onReset && (
