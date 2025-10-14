@@ -19,6 +19,8 @@ export type PlayerCardStationValue = {
   value: number | null
 }
 
+type PhotoOffset = { x: number; y: number }
+
 type PlayerCardPreviewProps = {
   imageSrc: string | null
   isProcessing: boolean
@@ -39,6 +41,8 @@ type PlayerCardPreviewProps = {
   kitNumber: number | null
   stationValues: PlayerCardStationValue[]
   cardBackgroundStyle?: CSSProperties
+  photoOffset: PhotoOffset
+  onPhotoOffsetChange?: (offset: PhotoOffset) => void
 }
 
 type TransformState = {
@@ -91,6 +95,8 @@ export default function PlayerCardPreview({
   kitNumber,
   stationValues,
   cardBackgroundStyle,
+  photoOffset,
+  onPhotoOffsetChange,
 }: PlayerCardPreviewProps) {
   const [activeImageSrc, setActiveImageSrc] = useState<string>(imageSrc ?? PLACEHOLDER_IMAGE)
   const [imageError, setImageError] = useState(false)
@@ -111,10 +117,16 @@ export default function PlayerCardPreview({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const naturalSizeRef = useRef<Size>({ width: 0, height: 0 })
   const containerSizeRef = useRef<Size>({ width: 0, height: 0 })
+  const onPhotoOffsetChangeRef = useRef<PlayerCardPreviewProps['onPhotoOffsetChange']>(onPhotoOffsetChange)
+  const lastEmittedOffsetRef = useRef<PhotoOffset>({ x: photoOffset.x, y: photoOffset.y })
 
   useEffect(() => {
     transformRef.current = transform
   }, [transform])
+
+  useEffect(() => {
+    onPhotoOffsetChangeRef.current = onPhotoOffsetChange
+  }, [onPhotoOffsetChange])
 
   useEffect(() => {
     const nextSrc = imageSrc ?? PLACEHOLDER_IMAGE
@@ -180,11 +192,31 @@ export default function PlayerCardPreview({
           return prev
         }
         transformRef.current = next
+        const callback = onPhotoOffsetChangeRef.current
+        if (callback) {
+          const deltaEmitX = Math.abs(next.offsetX - lastEmittedOffsetRef.current.x)
+          const deltaEmitY = Math.abs(next.offsetY - lastEmittedOffsetRef.current.y)
+          if (deltaEmitX > 0.1 || deltaEmitY > 0.1) {
+            lastEmittedOffsetRef.current = { x: next.offsetX, y: next.offsetY }
+            callback({ x: next.offsetX, y: next.offsetY })
+          }
+        }
         return next
       })
     },
     [],
   )
+
+  useEffect(() => {
+    lastEmittedOffsetRef.current = { x: photoOffset.x, y: photoOffset.y }
+    updateTransform(prev => {
+      const clamped = clampOffset(prev.scale, photoOffset.x, photoOffset.y)
+      if (Math.abs(clamped.x - prev.offsetX) < 0.1 && Math.abs(clamped.y - prev.offsetY) < 0.1) {
+        return prev
+      }
+      return { ...prev, offsetX: clamped.x, offsetY: clamped.y }
+    })
+  }, [photoOffset.x, photoOffset.y, clampOffset, updateTransform])
 
   const recalcTransform = useCallback(
     (options?: { resetOffset?: boolean }) => {

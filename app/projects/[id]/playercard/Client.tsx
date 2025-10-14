@@ -331,6 +331,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [originalImage, setOriginalImage] = useState<string | null>(null)
   const [displayImage, setDisplayImage] = useState<string | null>(null)
+  const [photoOffset, setPhotoOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [objectUrl, setObjectUrl] = useState<string | null>(null)
   const manualOriginalUrlRef = useRef<string | null>(null)
   const originalFileRef = useRef<File | null>(null)
@@ -349,11 +350,21 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
 
   const applyDisplayImage = useCallback((url: string | null, options?: { objectUrl?: boolean }) => {
     setDisplayImage(url)
+    setPhotoOffset(prev => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }))
     setObjectUrl(prev => {
       if (prev && prev !== url) {
         URL.revokeObjectURL(prev)
       }
       return options?.objectUrl ? url : null
+    })
+  }, [])
+
+  const handlePhotoOffsetChange = useCallback((offset: { x: number; y: number }) => {
+    setPhotoOffset(prev => {
+      if (Math.abs(prev.x - offset.x) < 0.1 && Math.abs(prev.y - offset.y) < 0.1) {
+        return prev
+      }
+      return { x: offset.x, y: offset.y }
     })
   }, [])
 
@@ -944,6 +955,8 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
                 kitNumber={kitNumber}
                 stationValues={stationValues}
                 cardBackgroundStyle={cardBackgroundStyle}
+                photoOffset={photoOffset}
+                onPhotoOffsetChange={handlePhotoOffsetChange}
               />
               <input
                 ref={fileInputRef}
