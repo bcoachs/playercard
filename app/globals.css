@@ -1740,11 +1740,13 @@ a, .btn {
 
 .playercard__info-rail {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 22%;
+  top: 8%;
+  bottom: auto;
+  height:75
+  left: 12%;
+  width: 20%;
   min-width: 72px;
+  border-radius: 14px
   background: rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(6px);
   display: flex;
