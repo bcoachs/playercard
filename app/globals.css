@@ -1736,8 +1736,9 @@ a, .btn {
 
 .playercard__photo-area {
   position: relative;
-  flex: 0 0 66%;
-  height: 66%;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
   background: linear-gradient(160deg, rgba(15, 23, 42, 0.9), rgba(15, 118, 210, 0.35));
   overflow: hidden;
   touch-action: none;
@@ -1763,7 +1764,6 @@ a, .btn {
   z-index: 3;
 }
 
-.playercard__pan-button,
 .playercard__zoom-button {
   pointer-events: auto;
   background: rgba(15, 23, 42, 0.6);
@@ -1783,42 +1783,16 @@ a, .btn {
   cursor: pointer;
 }
 
-.playercard__pan-button:hover,
 .playercard__zoom-button:hover {
   background: rgba(59, 130, 246, 0.75);
   border-color: rgba(59, 130, 246, 0.6);
 }
 
-.playercard__pan-button:disabled,
 .playercard__zoom-button:disabled {
   opacity: 0.35;
   cursor: not-allowed;
   background: rgba(15, 23, 42, 0.45);
   border-color: rgba(148, 163, 184, 0.2);
-}
-
-.playercard__pan-button--up {
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.playercard__pan-button--down {
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.playercard__pan-button--left {
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-.playercard__pan-button--right {
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
 }
 
 .playercard__zoom-controls {
