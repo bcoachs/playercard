@@ -524,7 +524,7 @@ export default function PlayerCardPreview({
   return (
     <div className="playercard-photo-card">
       <div className="playercard-photo-frame">
-        <div className="playercard" ref={cardRef} style={combinedBackgroundStyle}>
+        <div className="playercard" id="playerCardRoot" ref={cardRef} style={combinedBackgroundStyle}>
           <div className="playercard__photo-area" ref={containerRef} onWheel={handleWheel}>
             <img
               src={activeImageSrc}
@@ -536,7 +536,6 @@ export default function PlayerCardPreview({
                 userSelect: 'none',
               }}
               draggable={false}
-              crossOrigin="anonymous"
               referrerPolicy="no-referrer"
               onMouseDown={onMouseDown}
               onTouchStart={onTouchStart}
