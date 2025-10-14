@@ -680,9 +680,11 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       link.click()
     } catch (err) {
       console.error('Export fehlgeschlagen:', err)
-      alert(
-        'Die Playercard konnte nicht exportiert werden. Stellen Sie sicher, dass keine externen Ressourcen ohne CORS-Header eingebunden sind.',
-      )
+      if (err instanceof Error) {
+        alert(`Export fehlgeschlagen: ${err.message}`)
+      } else {
+        alert('Export fehlgeschlagen. Prüfen Sie die Konsole auf Details.')
+      }
     }
   }, [selectedPlayer])
 

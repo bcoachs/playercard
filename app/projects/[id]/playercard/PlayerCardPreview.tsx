@@ -585,7 +585,7 @@ export default function PlayerCardPreview({
               <div className="playercard-info playercard-info--flag">
                 {nationalityCode ? (
                   <span className="playercard-info__flag" title={resolvedNationalityLabel ?? undefined}>
-                    <ReactCountryFlag countryCode={nationalityCode} svg style={{ width: '100%', height: '100%' }} />
+                    <ReactCountryFlag countryCode={nationalityCode} style={{ fontSize: '1.6rem' }} />
                   </span>
                 ) : resolvedNationalityLabel ? (
                   <span className="playercard-info__value">{resolvedNationalityLabel}</span>
