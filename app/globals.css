@@ -1753,6 +1753,7 @@ a, .btn {
   max-height: none;
   touch-action: none;
   will-change: transform;
+  transform-origin: center center;
 }
 
 .playercard__photo-controls {

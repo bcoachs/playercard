@@ -66,6 +66,41 @@ type ProcessFileOptions = {
   errorMessage?: string
 }
 
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, data] = dataUrl.split(',')
+  const mimeMatch = header.match(/data:(.*?);/)
+  const mime = mimeMatch ? mimeMatch[1] : 'image/png'
+  if (typeof atob !== 'function') {
+    throw new Error('Base64-Decoding wird nicht unterstützt.')
+  }
+  const binary = atob(data)
+  const array = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) {
+    array[i] = binary.charCodeAt(i)
+  }
+  return new Blob([array], { type: mime })
+}
+
+async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  if (typeof canvas.toBlob === 'function') {
+    const blob = await new Promise<Blob | null>((resolve, reject) => {
+      try {
+        canvas.toBlob(
+          file => {
+            resolve(file ?? null)
+          },
+          'image/png',
+        )
+      } catch (error) {
+        reject(error)
+      }
+    })
+    if (blob) return blob
+  }
+  const dataUrl = canvas.toDataURL('image/png')
+  return dataUrlToBlob(dataUrl)
+}
+
 const DEFAULT_BACKGROUNDS: BackgroundOption[] = [
   {
     id: 'gradient-dark',
@@ -334,6 +369,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const [objectUrl, setObjectUrl] = useState<string | null>(null)
   const manualOriginalUrlRef = useRef<string | null>(null)
   const originalFileRef = useRef<File | null>(null)
+  const backgroundValueRef = useRef<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const playercardRef = useRef<HTMLDivElement | null>(null)
@@ -582,19 +618,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     return () => undefined
   }, [objectUrl])
 
-  useEffect(() => {
-    const rawPhoto = typeof selectedPlayer?.photo_url === 'string' ? selectedPlayer.photo_url.trim() : ''
-    const photo = rawPhoto.length ? rawPhoto : null
-    if (manualOriginalUrlRef.current) {
-      URL.revokeObjectURL(manualOriginalUrlRef.current)
-      manualOriginalUrlRef.current = null
-    }
-    originalFileRef.current = null
-    setOriginalImage(photo)
-    setErrorMessage(null)
-    applyDisplayImage(photo, { objectUrl: false })
-  }, [selectedPlayer, applyDisplayImage])
-
   const eventYear = useMemo(() => {
     if (!project?.date) return new Date().getFullYear()
     const parsed = Number(String(project.date).slice(0, 4))
@@ -706,6 +729,10 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     }
   }, [currentBackground])
 
+  useEffect(() => {
+    backgroundValueRef.current = currentBackground?.value ?? null
+  }, [currentBackground])
+
   const handleBackgroundSelect = useCallback((id: string) => {
     setSelectedBackgroundId(id)
   }, [])
@@ -730,17 +757,14 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     while (attempt < 2 && !success) {
       try {
         const canvas = await renderCardToCanvas(element, { minWidth: 1080, minHeight: 1920 })
-        const blob = await new Promise<Blob>((resolve, reject) => {
-          canvas.toBlob(file => {
-            if (file) resolve(file)
-            else reject(new Error('Canvas konnte nicht in ein Bild umgewandelt werden.'))
-          }, 'image/png')
-        })
+        const blob = await canvasToBlob(canvas)
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.href = url
         link.download = `playercard_${identifier || 'player'}.png`
+        document.body.appendChild(link)
         link.click()
+        document.body.removeChild(link)
         window.setTimeout(() => {
           URL.revokeObjectURL(url)
         }, 0)
@@ -762,8 +786,8 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       setIsProcessingImage(true)
       try {
         originalFileRef.current = file
-        const backgroundValue = currentBackground?.value
-        const blob = await removeBackground(file, backgroundValue)
+        const backgroundValue = backgroundValueRef.current ?? null
+        const blob = await removeBackground(file, backgroundValue ?? undefined)
         const url = URL.createObjectURL(blob)
         applyDisplayImage(url, { objectUrl: true })
         setErrorMessage(null)
@@ -787,7 +811,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
         setIsProcessingImage(false)
       }
     },
-    [applyDisplayImage, currentBackground]
+    [applyDisplayImage],
   )
 
   useEffect(() => {
@@ -811,8 +835,8 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     }
 
     setErrorMessage(null)
-    setOriginalImage(null)
-    applyDisplayImage(null)
+    setOriginalImage(rawPhotoUrl)
+    applyDisplayImage(rawPhotoUrl, { objectUrl: false })
 
     ;(async () => {
       const result = await fetchFirstAvailablePhoto(rawPhotoUrl)
@@ -821,25 +845,30 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
         console.warn('Kein gültiges Spielerfoto gefunden. Platzhalter wird angezeigt.', {
           url: rawPhotoUrl,
         })
-        setOriginalImage(null)
-        applyDisplayImage(null)
-        originalFileRef.current = null
         return
       }
       const { url, blob } = result
       if (cancelled) return
-      setOriginalImage(url)
-      applyDisplayImage(url, { objectUrl: false })
       const extension = url.split('.').pop()?.split('?')[0] ?? 'png'
       const file = new File([blob], `player-photo.${extension}`, { type: blob.type || 'image/png' })
+      originalFileRef.current = file
+      let processed = false
       try {
         await processFile(file, {
           fallbackUrl: url,
           errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
         })
+        processed = true
       } catch (err) {
         if (!cancelled) {
           console.error('Automatische Freistellung fehlgeschlagen:', err)
+          applyDisplayImage(url, { objectUrl: false })
+        }
+      }
+      if (!cancelled) {
+        setOriginalImage(url)
+        if (!processed) {
+          applyDisplayImage(url, { objectUrl: false })
         }
       }
     })()
