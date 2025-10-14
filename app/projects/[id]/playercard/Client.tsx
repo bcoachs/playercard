@@ -335,6 +335,15 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     })
   }, [])
 
+  const handlePhotoOffsetChange = useCallback((offset: { x: number; y: number }) => {
+    setPhotoOffset(prev => {
+      if (Math.abs(prev.x - offset.x) < 0.1 && Math.abs(prev.y - offset.y) < 0.1) {
+        return prev
+      }
+      return { x: offset.x, y: offset.y }
+    })
+  }, [])
+
   useEffect(() => {
     return () => {
       if (manualOriginalUrlRef.current) {
