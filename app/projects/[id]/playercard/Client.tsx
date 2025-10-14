@@ -673,6 +673,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       const dataUrl = await toPng(cardEl, {
         cacheBust: true,
         backgroundColor: '#0a1e38',
+        useCORS: true,
       })
       const link = document.createElement('a')
       link.download = `${selectedPlayer?.display_name ?? 'player'}_card.png`
@@ -680,9 +681,11 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       link.click()
     } catch (err) {
       console.error('Export fehlgeschlagen:', err)
-      alert(
-        'Die Playercard konnte nicht exportiert werden. Stellen Sie sicher, dass keine externen Ressourcen ohne CORS-Header eingebunden sind.',
-      )
+      if (err instanceof Error) {
+        alert(`Export fehlgeschlagen: ${err.message}`)
+      } else {
+        alert('Export fehlgeschlagen. Prüfen Sie die Konsole auf Details.')
+      }
     }
   }, [selectedPlayer])
 

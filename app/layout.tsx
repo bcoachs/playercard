@@ -5,11 +5,6 @@
 
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
-import { Inter, League_Gothic, Oswald } from 'next/font/google'
-
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
-const leagueGothic = League_Gothic({ subsets: ['latin'], variable: '--font-league-gothic', weight: '400' })
-const oswald = Oswald({ subsets: ['latin'], variable: '--font-oswald', weight: ['400', '500', '600'] })
 
 export const metadata: Metadata = {
   title: 'Soccer Club Playercard',
@@ -31,7 +26,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="de">
-      <body className={`${inter.variable} ${leagueGothic.variable} ${oswald.variable}`}>{children}</body>
+      <body>{children}</body>
     </html>
   )
 }
