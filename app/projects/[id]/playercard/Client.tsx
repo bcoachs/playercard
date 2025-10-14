@@ -1,12 +1,10 @@
 "use client"
 
 import { getCountryCode, getCountryLabel } from '@/lib/countries'
-import { loadBodyPix, removeBackground } from '@/lib/bodyPixSegmentation'
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import PlayerHeader from './PlayerHeader'
 import PlayerCardPreview from './PlayerCardPreview'
-import { exportPlayerCard } from './exportPlayerCard'
 import PlayerStats, { PlayerStat } from './PlayerStats'
 import BackgroundSelector, { BackgroundOption } from './BackgroundSelector'
 
@@ -60,11 +58,6 @@ type Measurement = {
 type ScoreMap = Record<string, number[]>
 
 type CsvStatus = 'idle' | 'loading' | 'ready' | 'error'
-
-type ProcessFileOptions = {
-  fallbackUrl?: string | null
-  errorMessage?: string
-}
 
 const DEFAULT_BACKGROUNDS: BackgroundOption[] = [
   {
@@ -163,7 +156,7 @@ function buildPhotoCandidates(rawUrl: string): string[] {
   return Array.from(candidates)
 }
 
-async function fetchFirstAvailablePhoto(url: string): Promise<{ url: string; blob: Blob } | null> {
+async function fetchFirstAvailablePhoto(url: string): Promise<string | null> {
   const candidates = buildPhotoCandidates(url)
   for (const candidate of candidates) {
     try {
@@ -177,20 +170,12 @@ async function fetchFirstAvailablePhoto(url: string): Promise<{ url: string; blo
       }
       const blob = await response.blob()
       if (!blob.size) continue
-      return { url: candidate, blob }
+      return candidate
     } catch (error) {
       console.warn('Fehler beim Laden des Spielerfotos:', { url: candidate, error })
     }
   }
   return null
-}
-
-function sanitizeFileComponent(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9_\-]/g, '')
 }
 
 async function loadS1Map(gender: 'male' | 'female'): Promise<ScoreMap | null> {
@@ -322,40 +307,31 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const [isPreloadingAssets, setIsPreloadingAssets] = useState(true)
-  const [isPreloaded, setIsPreloaded] = useState(false)
-  const [preloadError, setPreloadError] = useState<Error | null>(null)
-
-  const [isProcessingImage, setIsProcessingImage] = useState(false)
-  const [isDownloadingCard, setIsDownloadingCard] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [originalImage, setOriginalImage] = useState<string | null>(null)
   const [displayImage, setDisplayImage] = useState<string | null>(null)
   const [photoOffset, setPhotoOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
-  const [objectUrl, setObjectUrl] = useState<string | null>(null)
   const manualOriginalUrlRef = useRef<string | null>(null)
-  const originalFileRef = useRef<File | null>(null)
-  const backgroundValueRef = useRef<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const playercardRef = useRef<HTMLDivElement | null>(null)
-  const toastTimeoutRef = useRef<number | null>(null)
-  const [toast, setToast] = useState<{ id: number; message: string; tone: 'info' | 'success' | 'error' } | null>(null)
-
   useEffect(() => {
     if (typeof initialPlayerId === 'string' && initialPlayerId) {
       setSelectedPlayerId(initialPlayerId)
     }
   }, [initialPlayerId])
 
-  const applyDisplayImage = useCallback((url: string | null, options?: { objectUrl?: boolean }) => {
+  const applyDisplayImage = useCallback((url: string | null) => {
     setDisplayImage(url)
     setPhotoOffset(prev => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }))
-    setObjectUrl(prev => {
-      if (prev && prev !== url) {
-        URL.revokeObjectURL(prev)
+  }, [])
+
+  const handlePhotoOffsetChange = useCallback((offset: { x: number; y: number }) => {
+    setPhotoOffset(prev => {
+      if (Math.abs(prev.x - offset.x) < 0.1 && Math.abs(prev.y - offset.y) < 0.1) {
+        return prev
       }
-      return options?.objectUrl ? url : null
+      return { x: offset.x, y: offset.y }
     })
   }, [])
 
@@ -374,67 +350,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
         URL.revokeObjectURL(manualOriginalUrlRef.current)
         manualOriginalUrlRef.current = null
       }
-    }
-  }, [])
-
-  const showToast = useCallback((message: string, tone: 'info' | 'success' | 'error' = 'info') => {
-    setToast({ id: Date.now(), message, tone })
-  }, [])
-
-  useEffect(() => {
-    if (!toast) return
-    if (toastTimeoutRef.current) {
-      window.clearTimeout(toastTimeoutRef.current)
-    }
-    toastTimeoutRef.current = window.setTimeout(() => {
-      setToast(null)
-      toastTimeoutRef.current = null
-    }, 3000)
-    return () => {
-      if (toastTimeoutRef.current) {
-        window.clearTimeout(toastTimeoutRef.current)
-        toastTimeoutRef.current = null
-      }
-    }
-  }, [toast])
-
-  useEffect(() => {
-    return () => {
-      if (toastTimeoutRef.current) {
-        window.clearTimeout(toastTimeoutRef.current)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    let isMounted = true
-    setIsPreloadingAssets(true)
-    setIsPreloaded(false)
-    setPreloadError(null)
-    ;(async () => {
-      try {
-        await loadBodyPix()
-        if (isMounted) {
-          setIsPreloaded(true)
-        }
-      } catch (error) {
-        console.error('Fehler beim Laden des BodyPix-Modells:', error)
-        if (!isMounted) return
-        const normalizedError =
-          error instanceof Error
-            ? error
-            : new Error('Unbekannter Fehler beim Laden des BodyPix-Modells.')
-        setPreloadError(normalizedError)
-        setErrorMessage(prev => prev ?? 'Freistellung nicht möglich. Originalfoto wird angezeigt.')
-      } finally {
-        if (isMounted) {
-          setIsPreloadingAssets(false)
-        }
-      }
-    })()
-
-    return () => {
-      isMounted = false
     }
   }, [])
 
@@ -585,15 +500,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     return players.find(player => player.id === selectedPlayerId) || null
   }, [players, selectedPlayerId])
 
-  useEffect(() => {
-    if (objectUrl) {
-      return () => {
-        URL.revokeObjectURL(objectUrl)
-      }
-    }
-    return () => undefined
-  }, [objectUrl])
-
   const eventYear = useMemo(() => {
     if (!project?.date) return new Date().getFullYear()
     const parsed = Number(String(project.date).slice(0, 4))
@@ -705,10 +611,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     }
   }, [currentBackground])
 
-  useEffect(() => {
-    backgroundValueRef.current = currentBackground?.value ?? null
-  }, [currentBackground])
-
   const handleBackgroundSelect = useCallback((id: string) => {
     setSelectedBackgroundId(id)
   }, [])
@@ -721,67 +623,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     }
   }, [])
 
-  const handleDownloadCard = useCallback(
-    async (asJpeg = false) => {
-      const element = playercardRef.current
-      if (!element) return
-      setIsDownloadingCard(true)
-      setErrorMessage(prev => (prev && prev.startsWith('Export fehlgeschlagen') ? null : prev))
-      const identifier = sanitizeFileComponent(
-        selectedPlayer?.id || selectedPlayerId || selectedPlayer?.display_name || 'player',
-      )
-      try {
-        const dataUrl = await exportPlayerCard(element, { asJpeg })
-        const link = document.createElement('a')
-        link.download = `${identifier || 'player'}_card.${asJpeg ? 'jpg' : 'png'}`
-        link.href = dataUrl
-        link.click()
-      } catch (error) {
-        const normalizedError = error instanceof Error ? error : new Error('Unbekannter Exportfehler.')
-        console.error('Karte konnte nicht exportiert werden:', normalizedError)
-        setErrorMessage(`Export fehlgeschlagen: ${normalizedError.message}`)
-        showToast('Export fehlgeschlagen. Bitte erneut versuchen oder später noch einmal.', 'error')
-      } finally {
-        setIsDownloadingCard(false)
-      }
-    },
-    [playercardRef, selectedPlayer?.id, selectedPlayer?.display_name, selectedPlayerId, showToast],
-  )
-
-  const processFile = useCallback(
-    async (file: File, options?: ProcessFileOptions) => {
-      setErrorMessage(null)
-      setIsProcessingImage(true)
-      try {
-        originalFileRef.current = file
-        const backgroundValue = backgroundValueRef.current ?? null
-        const blob = await removeBackground(file, backgroundValue ?? undefined)
-        const url = URL.createObjectURL(blob)
-        applyDisplayImage(url, { objectUrl: true })
-        setErrorMessage(null)
-      } catch (err) {
-        console.error('Freistellung mit BodyPix fehlgeschlagen:', err)
-        const fallback = options?.fallbackUrl
-        if (fallback) {
-          applyDisplayImage(fallback, { objectUrl: false })
-        } else {
-          try {
-            const fallbackUrl = URL.createObjectURL(file)
-            applyDisplayImage(fallbackUrl, { objectUrl: true })
-          } catch (fallbackErr) {
-            console.error('Fallback-Bild konnte nicht erzeugt werden', fallbackErr)
-            applyDisplayImage(null)
-          }
-        }
-        const fallbackMessage = options?.errorMessage ?? 'Freistellung nicht möglich. Originalfoto wird angezeigt.'
-        setErrorMessage(fallbackMessage)
-      } finally {
-        setIsProcessingImage(false)
-      }
-    },
-    [applyDisplayImage],
-  )
-
   useEffect(() => {
     let cancelled = false
     const rawPhotoUrl = typeof selectedPlayer?.photo_url === 'string' ? selectedPlayer.photo_url.trim() : ''
@@ -790,8 +631,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       URL.revokeObjectURL(manualOriginalUrlRef.current)
       manualOriginalUrlRef.current = null
     }
-
-    originalFileRef.current = null
 
     if (!rawPhotoUrl.length) {
       applyDisplayImage(null)
@@ -805,49 +644,34 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     const ensuredUrl = rawPhotoUrl as string
     setErrorMessage(null)
     setOriginalImage(ensuredUrl)
-    applyDisplayImage(ensuredUrl, { objectUrl: false })
+    applyDisplayImage(ensuredUrl)
 
-    const autoRemove = async () => {
-      const result = await fetchFirstAvailablePhoto(ensuredUrl)
+    const ensureAccessiblePhoto = async () => {
+      const resultUrl = await fetchFirstAvailablePhoto(ensuredUrl)
       if (cancelled) return
-      if (!result) {
+      if (!resultUrl) {
         console.warn('Kein gültiges Spielerfoto gefunden. Platzhalter wird angezeigt.', {
           url: ensuredUrl,
         })
         setOriginalImage(null)
-        originalFileRef.current = null
+        setErrorMessage('Spielerfoto konnte nicht geladen werden. Platzhalter wird angezeigt.')
+        applyDisplayImage(null)
         return
       }
 
-      const { url, blob } = result
-      if (cancelled) return
-      const extension = url.split('.').pop()?.split('?')[0] ?? 'png'
-      const file = new File([blob], `player-photo.${extension}`, { type: blob.type || 'image/png' })
-      originalFileRef.current = file
-
-      try {
-        await processFile(file, {
-          fallbackUrl: url,
-          errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
-        })
-        if (!cancelled) {
-          setOriginalImage(url)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error('Automatische Freistellung fehlgeschlagen:', err)
-          setOriginalImage(url)
-          applyDisplayImage(url, { objectUrl: false })
-        }
+      if (!cancelled) {
+        setErrorMessage(null)
+        setOriginalImage(resultUrl)
+        applyDisplayImage(resultUrl)
       }
     }
 
-    autoRemove()
+    ensureAccessiblePhoto()
 
     return () => {
       cancelled = true
     }
-  }, [selectedPlayer?.photo_url, processFile, applyDisplayImage])
+  }, [selectedPlayer?.photo_url, applyDisplayImage])
 
   const handleFileChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -862,34 +686,18 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       }
       const manualUrl = URL.createObjectURL(file)
       manualOriginalUrlRef.current = manualUrl
-      setOriginalImage(manualUrl)
-      applyDisplayImage(manualUrl, { objectUrl: false })
-      processFile(file, {
-        fallbackUrl: manualUrl,
-        errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
-      })
+      setErrorMessage(null)
+      applyDisplayImage(manualUrl)
     },
-    [processFile]
+    [applyDisplayImage]
   )
-
-  const reapplyBackgroundRemoval = useCallback(() => {
-    const originalFile = originalFileRef.current
-    if (!originalFile) return
-    setErrorMessage(null)
-    processFile(originalFile, {
-      fallbackUrl: originalImage,
-      errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
-    })
-  }, [originalImage, processFile])
 
   const resetToOriginal = useCallback(() => {
     setErrorMessage(null)
-    applyDisplayImage(originalImage, { objectUrl: false })
+    applyDisplayImage(originalImage)
   }, [originalImage, applyDisplayImage])
 
-  const canReapply = Boolean(originalImage)
   const canReset = Boolean(originalImage) && displayImage !== originalImage
-  const isImageBusy = isProcessingImage || (isPreloadingAssets && !isPreloaded)
 
   const infoText = useMemo(() => {
     return (
@@ -937,15 +745,11 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
             <section className="playercard-column playercard-column--photo">
               <PlayerCardPreview
                 imageSrc={displayImage}
-                isProcessing={isImageBusy}
                 onTriggerUpload={triggerFileDialog}
                 onReset={canReset ? resetToOriginal : undefined}
-                onReapply={canReapply ? reapplyBackgroundRemoval : undefined}
-                errorMessage={errorMessage ?? preloadError?.message ?? null}
+                errorMessage={errorMessage}
                 hasImage={Boolean(displayImage)}
                 cardRef={playercardRef}
-                onDownloadCard={handleDownloadCard}
-                isDownloading={isDownloadingCard}
                 playerName={selectedPlayer?.display_name ?? null}
                 position={selectedPlayer?.fav_position ?? null}
                 totalScore={totalScore}
@@ -967,16 +771,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
               />
             </section>
           </div>
-          {toast && (
-            <div
-              key={toast.id}
-              className={`playercard-toast playercard-toast--${toast.tone}`}
-              role="status"
-              aria-live="polite"
-            >
-              {toast.message}
-            </div>
-          )}
         </div>
       </div>
     </main>
