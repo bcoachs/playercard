@@ -673,7 +673,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       const dataUrl = await toPng(cardEl, {
         cacheBust: true,
         backgroundColor: '#0a1e38',
-        useCORS: true,
       })
       const link = document.createElement('a')
       link.download = `${selectedPlayer?.display_name ?? 'player'}_card.png`
