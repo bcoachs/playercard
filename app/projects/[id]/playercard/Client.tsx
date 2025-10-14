@@ -3,6 +3,7 @@
 import { getCountryCode, getCountryLabel } from '@/lib/countries'
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { toPng } from 'html-to-image'
 import PlayerHeader from './PlayerHeader'
 import PlayerCardPreview from './PlayerCardPreview'
 import PlayerStats, { PlayerStat } from './PlayerStats'
@@ -310,12 +311,22 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [originalImage, setOriginalImage] = useState<string | null>(null)
   const [displayImage, setDisplayImage] = useState<string | null>(null)
+  const [localPhoto, setLocalPhoto] = useState<string | null>(null)
   const [photoOffset, setPhotoOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [objectUrl, setObjectUrl] = useState<string | null>(null)
   const manualOriginalUrlRef = useRef<string | null>(null)
+  const lastLocalPhotoRef = useRef<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const playercardRef = useRef<HTMLDivElement | null>(null)
+  const loadPlayerImage = useCallback(async (url: string): Promise<string> => {
+    const res = await fetch(url)
+    if (!res.ok) {
+      throw new Error(`Failed to fetch image: ${res.status}`)
+    }
+    const blob = await res.blob()
+    return URL.createObjectURL(blob)
+  }, [])
 
   useEffect(() => {
     if (typeof initialPlayerId === 'string' && initialPlayerId) {
@@ -323,16 +334,24 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     }
   }, [initialPlayerId])
 
-  const applyDisplayImage = useCallback((url: string | null, options?: { objectUrl?: boolean }) => {
-    setDisplayImage(url)
-    setPhotoOffset(prev => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }))
-    setObjectUrl(prev => {
-      if (prev && prev !== url) {
-        URL.revokeObjectURL(prev)
+  const applyDisplayImage = useCallback(
+    (url: string | null, options?: { objectUrl?: boolean }) => {
+      setDisplayImage(url)
+      setPhotoOffset(prev => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }))
+      if (!url) {
+        setLocalPhoto(null)
+      } else if (options?.objectUrl || url.startsWith('data:') || url.startsWith('blob:')) {
+        setLocalPhoto(url)
       }
-      return options?.objectUrl ? url : null
-    })
-  }, [])
+      setObjectUrl(prev => {
+        if (prev && prev !== url) {
+          URL.revokeObjectURL(prev)
+        }
+        return options?.objectUrl ? url : null
+      })
+    },
+    [setLocalPhoto],
+  )
 
   const handlePhotoOffsetChange = useCallback((offset: { x: number; y: number }) => {
     setPhotoOffset(prev => {
@@ -352,8 +371,22 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     }
   }, [])
 
-  
 
+
+  useEffect(() => {
+    const previous = lastLocalPhotoRef.current
+    if (previous && previous !== localPhoto && previous.startsWith('blob:')) {
+      URL.revokeObjectURL(previous)
+    }
+    lastLocalPhotoRef.current = localPhoto
+    return () => {
+      if (localPhoto && localPhoto.startsWith('blob:')) {
+        URL.revokeObjectURL(localPhoto)
+      }
+    }
+  }, [localPhoto])
+
+ 
   useEffect(() => {
     let isMounted = true
     async function load() {
@@ -633,6 +666,26 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     }
   }, [])
 
+  const handleDownload = useCallback(async () => {
+    const cardEl = document.getElementById('playerCardRoot')
+    if (!cardEl) return
+    try {
+      const dataUrl = await toPng(cardEl, {
+        cacheBust: true,
+        backgroundColor: '#0a1e38',
+      })
+      const link = document.createElement('a')
+      link.download = `${selectedPlayer?.display_name ?? 'player'}_card.png`
+      link.href = dataUrl
+      link.click()
+    } catch (err) {
+      console.error('Export fehlgeschlagen:', err)
+      alert(
+        'Die Playercard konnte nicht exportiert werden. Stellen Sie sicher, dass keine externen Ressourcen ohne CORS-Header eingebunden sind.',
+      )
+    }
+  }, [selectedPlayer])
+
   useEffect(() => {
     let cancelled = false
     const rawPhotoUrl = typeof selectedPlayer?.photo_url === 'string' ? selectedPlayer.photo_url.trim() : ''
@@ -646,6 +699,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       applyDisplayImage(null)
       setOriginalImage(null)
       setErrorMessage(null)
+      setLocalPhoto(null)
       return () => {
         cancelled = true
       }
@@ -655,6 +709,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     setErrorMessage(null)
     setOriginalImage(ensuredUrl)
     applyDisplayImage(ensuredUrl, { objectUrl: false })
+    setLocalPhoto(null)
 
     const loadPreferredPhoto = async () => {
       const result = await fetchFirstAvailablePhoto(ensuredUrl)
@@ -665,6 +720,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
         })
         setOriginalImage(null)
         setErrorMessage('Spielerfoto konnte nicht geladen werden. Platzhalter wird angezeigt.')
+        setLocalPhoto(ensuredUrl)
         return
       }
 
@@ -672,6 +728,16 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       if (cancelled) return
       setOriginalImage(url)
       applyDisplayImage(url, { objectUrl: false })
+      try {
+        const dataUrl = await loadPlayerImage(url)
+        if (!cancelled) {
+          setLocalPhoto(dataUrl)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLocalPhoto(url)
+        }
+      }
     }
 
     loadPreferredPhoto()
@@ -679,7 +745,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     return () => {
       cancelled = true
     }
-  }, [selectedPlayer?.photo_url, applyDisplayImage])
+  }, [selectedPlayer?.photo_url, applyDisplayImage, loadPlayerImage])
 
   const handleFileChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -704,9 +770,15 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const resetToOriginal = useCallback(() => {
     if (!originalImage) return
     setErrorMessage(null)
-    const shouldTreatAsObjectUrl = manualOriginalUrlRef.current === originalImage
+    const shouldTreatAsObjectUrl =
+      manualOriginalUrlRef.current === originalImage || originalImage.startsWith('blob:')
     applyDisplayImage(originalImage, { objectUrl: shouldTreatAsObjectUrl })
-  }, [originalImage, applyDisplayImage])
+    if (!shouldTreatAsObjectUrl) {
+      loadPlayerImage(originalImage)
+        .then(setLocalPhoto)
+        .catch(() => setLocalPhoto(originalImage))
+    }
+  }, [originalImage, applyDisplayImage, loadPlayerImage])
 
   const canReset = Boolean(originalImage) && displayImage !== originalImage
 
@@ -748,6 +820,9 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
                 manifestError={manifestStatus === 'error'}
               />
               <div className="playercard-cta">
+                <button className="btn" type="button" onClick={handleDownload}>
+                  Playercard als PNG herunterladen
+                </button>
                 <Link href={`/projects/${projectId}`} className="btn-secondary">
                   Zur Spielermatrix
                 </Link>
@@ -755,11 +830,11 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
             </section>
             <section className="playercard-column playercard-column--photo">
               <PlayerCardPreview
-                imageSrc={displayImage}
+                imageSrc={localPhoto ?? displayImage}
                 onTriggerUpload={triggerFileDialog}
                 onReset={canReset ? resetToOriginal : undefined}
                 errorMessage={errorMessage}
-                hasImage={Boolean(displayImage)}
+                hasImage={Boolean(localPhoto ?? displayImage)}
                 cardRef={playercardRef}
                 playerName={selectedPlayer?.display_name ?? null}
                 position={selectedPlayer?.fav_position ?? null}
