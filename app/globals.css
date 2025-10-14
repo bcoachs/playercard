@@ -1657,6 +1657,40 @@ a, .btn {
   align-items: center;
 }
 
+.playercard-toast {
+  position: fixed;
+  bottom: 32px;
+  right: clamp(16px, 6vw, 48px);
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #e2e8f0;
+  border-radius: 16px;
+  padding: 14px 20px;
+  box-shadow: 0 24px 48px rgba(2, 6, 23, 0.45);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  max-width: min(320px, 90vw);
+  pointer-events: none;
+  z-index: 120;
+}
+
+.playercard-toast--error {
+  background: rgba(220, 38, 38, 0.92);
+  border-color: rgba(248, 113, 113, 0.6);
+  color: #fff7ed;
+}
+
+.playercard-toast--success {
+  background: rgba(16, 185, 129, 0.92);
+  border-color: rgba(74, 222, 128, 0.65);
+  color: #022c22;
+}
+
+.playercard-toast--info {
+  background: rgba(59, 130, 246, 0.9);
+  border-color: rgba(96, 165, 250, 0.65);
+}
+
 
 .playercard-photo-card {
   width: 100%;
@@ -1706,17 +1740,94 @@ a, .btn {
   height: 66%;
   background: linear-gradient(160deg, rgba(15, 23, 42, 0.9), rgba(15, 118, 210, 0.35));
   overflow: hidden;
+  touch-action: none;
 }
 
 .playercard__photo {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
+  top: 50%;
+  left: 50%;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
   touch-action: none;
   will-change: transform;
+  transform-origin: center center;
+}
+
+.playercard__photo-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.playercard__pan-button,
+.playercard__zoom-button {
+  pointer-events: auto;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #e2e8f0;
+  border-radius: 9999px;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.35);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+
+.playercard__pan-button:hover,
+.playercard__zoom-button:hover {
+  background: rgba(59, 130, 246, 0.75);
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+.playercard__pan-button:disabled,
+.playercard__zoom-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  background: rgba(15, 23, 42, 0.45);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.playercard__pan-button--up {
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.playercard__pan-button--down {
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.playercard__pan-button--left {
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.playercard__pan-button--right {
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.playercard__zoom-controls {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
 }
 
 .playercard__photo--empty {

@@ -66,6 +66,41 @@ type ProcessFileOptions = {
   errorMessage?: string
 }
 
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, data] = dataUrl.split(',')
+  const mimeMatch = header.match(/data:(.*?);/)
+  const mime = mimeMatch ? mimeMatch[1] : 'image/png'
+  if (typeof atob !== 'function') {
+    throw new Error('Base64-Decoding wird nicht unterstützt.')
+  }
+  const binary = atob(data)
+  const array = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) {
+    array[i] = binary.charCodeAt(i)
+  }
+  return new Blob([array], { type: mime })
+}
+
+async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  if (typeof canvas.toBlob === 'function') {
+    const blob = await new Promise<Blob | null>((resolve, reject) => {
+      try {
+        canvas.toBlob(
+          file => {
+            resolve(file ?? null)
+          },
+          'image/png',
+        )
+      } catch (error) {
+        reject(error)
+      }
+    })
+    if (blob) return blob
+  }
+  const dataUrl = canvas.toDataURL('image/png')
+  return dataUrlToBlob(dataUrl)
+}
+
 const DEFAULT_BACKGROUNDS: BackgroundOption[] = [
   {
     id: 'gradient-dark',
@@ -133,6 +168,64 @@ function scoreFromSpeedStep(speed: number, rows: number[]): number {
     if (speed >= rows[i]) return Math.max(0, Math.min(100, 100 - i))
   }
   return 0
+}
+
+function buildPhotoCandidates(rawUrl: string): string[] {
+  const trimmed = rawUrl.trim()
+  if (!trimmed.length) return []
+  const [pathPart, queryPart] = trimmed.split('?')
+  const query = queryPart ? `?${queryPart}` : ''
+  const fileMatch = pathPart.match(/\.([a-zA-Z0-9]+)$/)
+  const extension = fileMatch ? fileMatch[1].toLowerCase() : null
+  const basePath = fileMatch ? pathPart.slice(0, -fileMatch[0].length) : pathPart
+  const candidates = new Set<string>()
+  candidates.add(trimmed)
+  const appendWithExt = (ext: string) => {
+    if (!ext) return
+    candidates.add(`${basePath}.${ext}${query}`)
+  }
+  if (extension === 'png') {
+    appendWithExt('jpg')
+    appendWithExt('jpeg')
+  } else if (extension === 'jpg' || extension === 'jpeg') {
+    appendWithExt('png')
+    appendWithExt(extension === 'jpg' ? 'jpeg' : 'jpg')
+  } else {
+    appendWithExt('png')
+    appendWithExt('jpg')
+    appendWithExt('jpeg')
+  }
+  return Array.from(candidates)
+}
+
+async function fetchFirstAvailablePhoto(url: string): Promise<{ url: string; blob: Blob } | null> {
+  const candidates = buildPhotoCandidates(url)
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(candidate, { cache: 'no-store' })
+      if (!response.ok) {
+        console.warn('Spielerfoto konnte nicht geladen werden:', {
+          url: candidate,
+          status: response.status,
+        })
+        continue
+      }
+      const blob = await response.blob()
+      if (!blob.size) continue
+      return { url: candidate, blob }
+    } catch (error) {
+      console.warn('Fehler beim Laden des Spielerfotos:', { url: candidate, error })
+    }
+  }
+  return null
+}
+
+function sanitizeFileComponent(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_\-]/g, '')
 }
 
 async function loadS1Map(gender: 'male' | 'female'): Promise<ScoreMap | null> {
@@ -276,9 +369,12 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const [objectUrl, setObjectUrl] = useState<string | null>(null)
   const manualOriginalUrlRef = useRef<string | null>(null)
   const originalFileRef = useRef<File | null>(null)
+  const backgroundValueRef = useRef<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const playercardRef = useRef<HTMLDivElement | null>(null)
+  const toastTimeoutRef = useRef<number | null>(null)
+  const [toast, setToast] = useState<{ id: number; message: string; tone: 'info' | 'success' | 'error' } | null>(null)
 
   useEffect(() => {
     if (typeof initialPlayerId === 'string' && initialPlayerId) {
@@ -301,6 +397,35 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       if (manualOriginalUrlRef.current) {
         URL.revokeObjectURL(manualOriginalUrlRef.current)
         manualOriginalUrlRef.current = null
+      }
+    }
+  }, [])
+
+  const showToast = useCallback((message: string, tone: 'info' | 'success' | 'error' = 'info') => {
+    setToast({ id: Date.now(), message, tone })
+  }, [])
+
+  useEffect(() => {
+    if (!toast) return
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current)
+    }
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToast(null)
+      toastTimeoutRef.current = null
+    }, 3000)
+    return () => {
+      if (toastTimeoutRef.current) {
+        window.clearTimeout(toastTimeoutRef.current)
+        toastTimeoutRef.current = null
+      }
+    }
+  }, [toast])
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        window.clearTimeout(toastTimeoutRef.current)
       }
     }
   }, [])
@@ -493,19 +618,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     return () => undefined
   }, [objectUrl])
 
-  useEffect(() => {
-    const rawPhoto = typeof selectedPlayer?.photo_url === 'string' ? selectedPlayer.photo_url.trim() : ''
-    const photo = rawPhoto.length ? rawPhoto : null
-    if (manualOriginalUrlRef.current) {
-      URL.revokeObjectURL(manualOriginalUrlRef.current)
-      manualOriginalUrlRef.current = null
-    }
-    originalFileRef.current = null
-    setOriginalImage(photo)
-    setErrorMessage(null)
-    applyDisplayImage(photo, { objectUrl: false })
-  }, [selectedPlayer, applyDisplayImage])
-
   const eventYear = useMemo(() => {
     if (!project?.date) return new Date().getFullYear()
     const parsed = Number(String(project.date).slice(0, 4))
@@ -605,14 +717,20 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     return backgroundOptions.find(option => option.id === selectedBackgroundId) || backgroundOptions[0]
   }, [backgroundOptions, selectedBackgroundId])
 
-  const profileBackgroundStyle = useMemo(() => {
+  const cardBackgroundStyle = useMemo(() => {
     if (!currentBackground) return undefined
     if (currentBackground.type === 'gradient') {
       return { backgroundImage: currentBackground.value }
     }
     return {
       backgroundImage: `url(${currentBackground.value})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
     }
+  }, [currentBackground])
+
+  useEffect(() => {
+    backgroundValueRef.current = currentBackground?.value ?? null
   }, [currentBackground])
 
   const handleBackgroundSelect = useCallback((id: string) => {
@@ -631,24 +749,36 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     const element = playercardRef.current
     if (!element) return
     setIsDownloadingCard(true)
-    try {
-      const canvas = await renderCardToCanvas(element, 2)
-      const link = document.createElement('a')
-      const normalizedName = selectedPlayer?.display_name
-        ?.trim()
-        .replace(/\s+/g, '_')
-        .replace(/[^a-zA-Z0-9_\-]/g, '')
-        .toLowerCase()
-      link.href = canvas.toDataURL('image/png')
-      link.download = normalizedName && normalizedName.length ? `${normalizedName}_playercard.png` : 'playercard.png'
-      link.click()
-    } catch (error) {
-      console.error('Karte konnte nicht exportiert werden:', error)
-      alert('Die Karte konnte nicht exportiert werden. Bitte versuche es erneut.')
-    } finally {
-      setIsDownloadingCard(false)
+    const identifier = sanitizeFileComponent(
+      selectedPlayer?.id || selectedPlayerId || selectedPlayer?.display_name || 'player',
+    )
+    let attempt = 0
+    let success = false
+    while (attempt < 2 && !success) {
+      try {
+        const canvas = await renderCardToCanvas(element, { minWidth: 1080, minHeight: 1920 })
+        const blob = await canvasToBlob(canvas)
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `playercard_${identifier || 'player'}.png`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.setTimeout(() => {
+          URL.revokeObjectURL(url)
+        }, 0)
+        success = true
+      } catch (error) {
+        console.error('Karte konnte nicht exportiert werden:', error)
+        attempt += 1
+        if (attempt >= 2) {
+          showToast('Export fehlgeschlagen. Bitte erneut versuchen oder später noch einmal.', 'error')
+        }
+      }
     }
-  }, [selectedPlayer])
+    setIsDownloadingCard(false)
+  }, [playercardRef, selectedPlayer?.id, selectedPlayer?.display_name, selectedPlayerId, showToast])
 
   const processFile = useCallback(
     async (file: File, options?: ProcessFileOptions) => {
@@ -656,8 +786,8 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       setIsProcessingImage(true)
       try {
         originalFileRef.current = file
-        const backgroundValue = currentBackground?.value
-        const blob = await removeBackground(file, backgroundValue)
+        const backgroundValue = backgroundValueRef.current ?? null
+        const blob = await removeBackground(file, backgroundValue ?? undefined)
         const url = URL.createObjectURL(blob)
         applyDisplayImage(url, { objectUrl: true })
         setErrorMessage(null)
@@ -681,55 +811,67 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
         setIsProcessingImage(false)
       }
     },
-    [applyDisplayImage, currentBackground]
+    [applyDisplayImage],
   )
 
   useEffect(() => {
     let cancelled = false
     const rawPhotoUrl = typeof selectedPlayer?.photo_url === 'string' ? selectedPlayer.photo_url.trim() : ''
-    const photoUrl = rawPhotoUrl.length ? rawPhotoUrl : null
 
     if (manualOriginalUrlRef.current) {
       URL.revokeObjectURL(manualOriginalUrlRef.current)
       manualOriginalUrlRef.current = null
     }
 
-    if (!photoUrl) {
+    originalFileRef.current = null
+
+    if (!rawPhotoUrl.length) {
       applyDisplayImage(null)
       setOriginalImage(null)
-      originalFileRef.current = null
       setErrorMessage(null)
       return () => {
         cancelled = true
       }
     }
 
-    const ensuredUrl = photoUrl as string
-    setOriginalImage(ensuredUrl)
     setErrorMessage(null)
-    originalFileRef.current = null
-    applyDisplayImage(ensuredUrl, { objectUrl: false })
+    setOriginalImage(rawPhotoUrl)
+    applyDisplayImage(rawPhotoUrl, { objectUrl: false })
 
-    async function autoRemove() {
+    ;(async () => {
+      const result = await fetchFirstAvailablePhoto(rawPhotoUrl)
+      if (cancelled) return
+      if (!result) {
+        console.warn('Kein gültiges Spielerfoto gefunden. Platzhalter wird angezeigt.', {
+          url: rawPhotoUrl,
+        })
+        return
+      }
+      const { url, blob } = result
+      if (cancelled) return
+      const extension = url.split('.').pop()?.split('?')[0] ?? 'png'
+      const file = new File([blob], `player-photo.${extension}`, { type: blob.type || 'image/png' })
+      originalFileRef.current = file
+      let processed = false
       try {
-        const response = await fetch(ensuredUrl, { cache: 'no-store' })
-        if (!response.ok) throw new Error('Originalbild konnte nicht geladen werden.')
-        const blob = await response.blob()
-        if (cancelled) return
-        const file = new File([blob], 'player-photo.png', { type: blob.type || 'image/png' })
         await processFile(file, {
-          fallbackUrl: ensuredUrl,
+          fallbackUrl: url,
           errorMessage: 'Freistellung nicht möglich. Originalfoto wird angezeigt.',
         })
+        processed = true
       } catch (err) {
-        if (cancelled) return
-        console.error('Automatische Freistellung fehlgeschlagen:', err)
-        applyDisplayImage(ensuredUrl, { objectUrl: false })
-        setErrorMessage('Freistellung nicht möglich. Originalfoto wird angezeigt.')
+        if (!cancelled) {
+          console.error('Automatische Freistellung fehlgeschlagen:', err)
+          applyDisplayImage(url, { objectUrl: false })
+        }
       }
-    }
-
-    autoRemove()
+      if (!cancelled) {
+        setOriginalImage(url)
+        if (!processed) {
+          applyDisplayImage(url, { objectUrl: false })
+        }
+      }
+    })()
 
     return () => {
       cancelled = true
@@ -794,7 +936,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
         <div className="playercard-shell">
           {infoText}
           {loadError && <div className="playercard-alert">{loadError}</div>}
-          <div className="playercard-grid" style={profileBackgroundStyle}>
+          <div className="playercard-grid">
             <div className="playercard-overlay" />
             <section className="playercard-column playercard-column--info">
               <PlayerHeader
@@ -819,9 +961,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
                 <Link href={`/projects/${projectId}`} className="btn-secondary">
                   Zur Spielermatrix
                 </Link>
-                <button type="button" className="btn" onClick={handleDownloadCard} disabled={isDownloadingCard}>
-                  {isDownloadingCard ? 'Exportiere …' : 'Karte herunterladen'}
-                </button>
               </div>
             </section>
             <section className="playercard-column playercard-column--photo">
@@ -844,6 +983,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
                 clubLogoUrl={clubLogoUrl}
                 kitNumber={kitNumber}
                 stationValues={stationValues}
+                cardBackgroundStyle={cardBackgroundStyle}
               />
               <input
                 ref={fileInputRef}
@@ -854,6 +994,16 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
               />
             </section>
           </div>
+          {toast && (
+            <div
+              key={toast.id}
+              className={`playercard-toast playercard-toast--${toast.tone}`}
+              role="status"
+              aria-live="polite"
+            >
+              {toast.message}
+            </div>
+          )}
         </div>
       </div>
     </main>
