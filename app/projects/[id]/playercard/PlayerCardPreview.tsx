@@ -168,8 +168,8 @@ export default function PlayerCardPreview({
       }
       const scaledWidth = imageWidth * scale
       const scaledHeight = imageHeight * scale
-      const maxX = Math.max(0, (scaledWidth - containerWidth) / 2)
-      const maxY = Math.max(0, (scaledHeight - containerHeight) / 2)
+      const maxX = Math.abs(containerWidth - scaledWidth) / 2
+      const maxY = Math.abs(containerHeight - scaledHeight) / 2
       return {
         x: clamp(offsetX, -maxX, maxX),
         y: clamp(offsetY, -maxY, maxY),
@@ -403,8 +403,10 @@ export default function PlayerCardPreview({
     [imageMetrics.height, transform.scale],
   )
 
-  const canPanX = scaledWidth > containerSize.width + 0.5
-  const canPanY = scaledHeight > containerSize.height + 0.5
+  const maxPanX = Math.abs(containerSize.width - scaledWidth) / 2
+  const maxPanY = Math.abs(containerSize.height - scaledHeight) / 2
+  const canPanX = maxPanX > 0.5
+  const canPanY = maxPanY > 0.5
   const canPan = canPanX || canPanY
 
   const cursorStyle = isDragging ? 'grabbing' : canPan ? 'grab' : 'default'
