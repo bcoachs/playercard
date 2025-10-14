@@ -75,6 +75,8 @@ const DEFAULT_BACKGROUNDS: BackgroundOption[] = [
   },
 ]
 
+const PLACEHOLDER_IMAGE = '/public/placeholder.png'
+
 const USE_S1_CSV = (() => {
   const v = process.env.NEXT_PUBLIC_USE_S1_CSV
   if (v === '0' || v === 'false') return false
@@ -325,7 +327,12 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       throw new Error(`Failed to fetch image: ${res.status}`)
     }
     const blob = await res.blob()
-    return URL.createObjectURL(blob)
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.onerror = () => reject(reader.error ?? new Error('Failed to read image blob'))
+      reader.readAsDataURL(blob)
+    })
   }, [])
 
   useEffect(() => {
@@ -701,7 +708,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       applyDisplayImage(null)
       setOriginalImage(null)
       setErrorMessage(null)
-      setLocalPhoto(null)
+      setLocalPhoto(PLACEHOLDER_IMAGE)
       return () => {
         cancelled = true
       }
@@ -722,7 +729,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
         })
         setOriginalImage(null)
         setErrorMessage('Spielerfoto konnte nicht geladen werden. Platzhalter wird angezeigt.')
-        setLocalPhoto(ensuredUrl)
+        setLocalPhoto(PLACEHOLDER_IMAGE)
         return
       }
 
@@ -736,8 +743,9 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
           setLocalPhoto(dataUrl)
         }
       } catch (error) {
+        console.warn('Spielerfoto konnte nicht geladen werden. Platzhalter wird genutzt.', error)
         if (!cancelled) {
-          setLocalPhoto(url)
+          setLocalPhoto(PLACEHOLDER_IMAGE)
         }
       }
     }
@@ -778,7 +786,10 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     if (!shouldTreatAsObjectUrl) {
       loadPlayerImage(originalImage)
         .then(setLocalPhoto)
-        .catch(() => setLocalPhoto(originalImage))
+        .catch(error => {
+          console.warn('Spielerfoto konnte nicht geladen werden. Platzhalter wird genutzt.', error)
+          setLocalPhoto(PLACEHOLDER_IMAGE)
+        })
     }
   }, [originalImage, applyDisplayImage, loadPlayerImage])
 
@@ -832,11 +843,11 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
             </section>
             <section className="playercard-column playercard-column--photo">
               <PlayerCardPreview
-                imageSrc={localPhoto ?? displayImage}
+                imageSrc={localPhoto}
                 onTriggerUpload={triggerFileDialog}
                 onReset={canReset ? resetToOriginal : undefined}
                 errorMessage={errorMessage}
-                hasImage={Boolean(localPhoto ?? displayImage)}
+                hasImage={Boolean(localPhoto && localPhoto !== PLACEHOLDER_IMAGE)}
                 cardRef={playercardRef}
                 playerName={selectedPlayer?.display_name ?? null}
                 position={selectedPlayer?.fav_position ?? null}
