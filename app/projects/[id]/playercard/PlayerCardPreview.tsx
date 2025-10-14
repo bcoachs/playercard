@@ -11,7 +11,6 @@ import ReactCountryFlag from 'react-country-flag'
 
 const PLACEHOLDER_IMAGE = '/public/placeholder.png'
 const MAX_ZOOM_MULTIPLIER = 4
-const PAN_STEP = 48
 const WHEEL_ZOOM_SENSITIVITY = 0.0022
 const ZOOM_STEP_FACTOR = 1.18
 
@@ -29,7 +28,7 @@ type PlayerCardPreviewProps = {
   errorMessage: string | null
   hasImage: boolean
   cardRef: RefObject<HTMLDivElement>
-  onDownloadCard: () => void
+  onDownloadCard: (asJpeg?: boolean) => void
   isDownloading: boolean
   playerName: string | null
   position: string | null
@@ -458,19 +457,6 @@ export default function PlayerCardPreview({
     }
   }, [imageError, imageSrc])
 
-  const nudgePan = useCallback(
-    (direction: 'left' | 'right' | 'up' | 'down') => {
-      if (!canPan) return
-      updateTransform(prev => {
-        const deltaX = direction === 'left' ? -PAN_STEP : direction === 'right' ? PAN_STEP : 0
-        const deltaY = direction === 'up' ? -PAN_STEP : direction === 'down' ? PAN_STEP : 0
-        const clamped = clampOffset(prev.scale, prev.offsetX + deltaX, prev.offsetY + deltaY)
-        return { ...prev, offsetX: clamped.x, offsetY: clamped.y }
-      })
-    },
-    [canPan, clampOffset, updateTransform],
-  )
-
   const zoomByStep = useCallback(
     (direction: 'in' | 'out') => {
       const factor = direction === 'in' ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR
@@ -520,6 +506,8 @@ export default function PlayerCardPreview({
                 userSelect: 'none',
               }}
               draggable={false}
+              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
               onMouseDown={onMouseDown}
               onTouchStart={onTouchStart}
               onDragStart={event => event.preventDefault()}
@@ -527,58 +515,6 @@ export default function PlayerCardPreview({
               onError={handleImageError}
             />
             <div className="playercard__photo-controls">
-              <button
-                type="button"
-                className="playercard__pan-button playercard__pan-button--up"
-                onClick={event => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  nudgePan('up')
-                }}
-                disabled={!canPanY}
-                aria-label="Bild nach oben verschieben"
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                className="playercard__pan-button playercard__pan-button--down"
-                onClick={event => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  nudgePan('down')
-                }}
-                disabled={!canPanY}
-                aria-label="Bild nach unten verschieben"
-              >
-                ↓
-              </button>
-              <button
-                type="button"
-                className="playercard__pan-button playercard__pan-button--left"
-                onClick={event => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  nudgePan('left')
-                }}
-                disabled={!canPanX}
-                aria-label="Bild nach links verschieben"
-              >
-                ←
-              </button>
-              <button
-                type="button"
-                className="playercard__pan-button playercard__pan-button--right"
-                onClick={event => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  nudgePan('right')
-                }}
-                disabled={!canPanX}
-                aria-label="Bild nach rechts verschieben"
-              >
-                →
-              </button>
               <div className="playercard__zoom-controls">
                 <button
                   type="button"
@@ -686,17 +622,25 @@ export default function PlayerCardPreview({
         <button
           type="button"
           className="btn"
-          onClick={onDownloadCard}
+          onClick={() => onDownloadCard(false)}
           disabled={isProcessing || isDownloading}
         >
-          {isDownloading ? 'Exportiere …' : 'Karte exportieren'}
+          {isDownloading ? 'Exportiere …' : 'Als PNG exportieren'}
+        </button>
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => onDownloadCard(true)}
+          disabled={isProcessing || isDownloading}
+        >
+          {isDownloading ? 'Bitte warten …' : 'Als JPEG exportieren'}
         </button>
       </div>
       <div className="playercard-photo-status">
         {isProcessing && <span className="playercard-photo-status__loading">Modell lädt – bitte warten …</span>}
         {errorMessage && <p className="playercard-photo-status__error">{errorMessage}</p>}
         {!isProcessing && !errorMessage && (
-          <span className="playercard-photo-status__hint">1080 × 1920 px • Transparentes PNG empfohlen</span>
+          <span className="playercard-photo-status__hint">1080 × 1920 px • PNG oder JPEG empfohlen</span>
         )}
       </div>
     </div>
