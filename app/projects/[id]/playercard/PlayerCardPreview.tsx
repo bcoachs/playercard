@@ -168,11 +168,13 @@ export default function PlayerCardPreview({
       }
       const scaledWidth = imageWidth * scale
       const scaledHeight = imageHeight * scale
-      const maxX = Math.abs(containerWidth - scaledWidth) / 2
-      const maxY = Math.abs(containerHeight - scaledHeight) / 2
+      const halfContainerWidth = containerWidth / 2
+      const halfContainerHeight = containerHeight / 2
+      const horizontalReach = Math.max(halfContainerWidth, Math.abs((scaledWidth - containerWidth) / 2))
+      const verticalReach = Math.max(halfContainerHeight, Math.abs((scaledHeight - containerHeight) / 2))
       return {
-        x: clamp(offsetX, -maxX, maxX),
-        y: clamp(offsetY, -maxY, maxY),
+        x: clamp(offsetX, -horizontalReach, horizontalReach),
+        y: clamp(offsetY, -verticalReach, verticalReach),
       }
     },
     [],
@@ -403,8 +405,10 @@ export default function PlayerCardPreview({
     [imageMetrics.height, transform.scale],
   )
 
-  const maxPanX = Math.abs(containerSize.width - scaledWidth) / 2
-  const maxPanY = Math.abs(containerSize.height - scaledHeight) / 2
+  const halfContainerWidth = containerSize.width / 2
+  const halfContainerHeight = containerSize.height / 2
+  const maxPanX = Math.max(halfContainerWidth, Math.abs((scaledWidth - containerSize.width) / 2))
+  const maxPanY = Math.max(halfContainerHeight, Math.abs((scaledHeight - containerSize.height) / 2))
   const canPanX = maxPanX > 0.5
   const canPanY = maxPanY > 0.5
   const canPan = canPanX || canPanY
