@@ -73,7 +73,20 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   })
 }
 
-export async function renderCardToCanvas(element: HTMLElement, scale = 2): Promise<HTMLCanvasElement> {
+type RenderOptions = {
+  scale?: number
+  minWidth?: number
+  minHeight?: number
+}
+
+export async function renderCardToCanvas(
+  element: HTMLElement,
+  options: RenderOptions | number = {},
+): Promise<HTMLCanvasElement> {
+  const resolvedOptions = typeof options === 'number' ? { scale: options } : options
+  const baseScale = resolvedOptions.scale ?? 1
+  const minWidth = resolvedOptions.minWidth ?? 0
+  const minHeight = resolvedOptions.minHeight ?? 0
   const clone = element.cloneNode(true) as HTMLElement
   await inlineStyles(element, clone)
   const { width, height } = element.getBoundingClientRect()
@@ -83,7 +96,13 @@ export async function renderCardToCanvas(element: HTMLElement, scale = 2): Promi
   try {
     const img = await loadImage(url)
     const canvas = document.createElement('canvas')
-    const ratio = Math.max(1, scale)
+    let ratio = Math.max(1, baseScale)
+    if (minWidth > 0 && width > 0) {
+      ratio = Math.max(ratio, minWidth / width)
+    }
+    if (minHeight > 0 && height > 0) {
+      ratio = Math.max(ratio, minHeight / height)
+    }
     canvas.width = Math.max(1, Math.round(width * ratio))
     canvas.height = Math.max(1, Math.round(height * ratio))
     const ctx = canvas.getContext('2d')
