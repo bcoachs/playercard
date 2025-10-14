@@ -1839,22 +1839,34 @@ a, .btn {
 
 .playercard__name-banner {
   position: absolute;
-  left: 50%;
+  left: 45%;
   bottom: 18px;
   transform: translateX(-50%);
-  background: rgba(4, 22, 45, 0.82);
-  padding: 12px 28px;
-  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
+  padding: 10px 20px;
+  border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.4);
   text-transform: uppercase;
   font-weight: 700;
   letter-spacing: 0.2em;
-  font-size: clamp(1.05rem, 2.6vw, 1.35rem);
+  font-size: clamp(1.05rem, 2.6vw, 1.5rem);
   color: #e2e8f0;
-  min-width: 68%;
+  min-width: 50%;
   text-align: center;
   z-index: 3;
 }
+
+/*
+
+  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  z-index: 2;
+*/
+
+
 
 .playercard__stations-panel {
   flex: 1;
