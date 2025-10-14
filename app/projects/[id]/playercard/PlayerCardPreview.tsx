@@ -23,15 +23,11 @@ type PhotoOffset = { x: number; y: number }
 
 type PlayerCardPreviewProps = {
   imageSrc: string | null
-  isProcessing: boolean
   onTriggerUpload: () => void
   onReset?: () => void
-  onReapply?: () => void
   errorMessage: string | null
   hasImage: boolean
   cardRef: RefObject<HTMLDivElement>
-  onDownloadCard: (asJpeg?: boolean) => void
-  isDownloading: boolean
   playerName: string | null
   position: string | null
   totalScore: number | null
@@ -77,15 +73,11 @@ function clamp(value: number, min: number, max: number) {
 
 export default function PlayerCardPreview({
   imageSrc,
-  isProcessing,
   onTriggerUpload,
   onReset,
-  onReapply,
   errorMessage,
   hasImage,
   cardRef,
-  onDownloadCard,
-  isDownloading,
   playerName,
   position,
   totalScore,
@@ -644,40 +636,19 @@ export default function PlayerCardPreview({
         </div>
       </div>
       <div className="playercard-photo-actions">
-        <button type="button" className="btn" onClick={onTriggerUpload} disabled={isProcessing}>
+        <button type="button" className="btn" onClick={onTriggerUpload}>
           {hasImage ? 'Neues Bild hochladen' : 'Bild hochladen'}
         </button>
-        {onReapply && (
-          <button type="button" className="btn" onClick={onReapply} disabled={isProcessing}>
-            Hintergrund freistellen
-          </button>
-        )}
         {onReset && (
-          <button type="button" className="btn-secondary" onClick={onReset} disabled={isProcessing}>
+          <button type="button" className="btn-secondary" onClick={onReset}>
             Original verwenden
           </button>
         )}
-        <button
-          type="button"
-          className="btn"
-          onClick={() => onDownloadCard(false)}
-          disabled={isProcessing || isDownloading}
-        >
-          {isDownloading ? 'Exportiere …' : 'Als PNG exportieren'}
-        </button>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => onDownloadCard(true)}
-          disabled={isProcessing || isDownloading}
-        >
-          {isDownloading ? 'Bitte warten …' : 'Als JPEG exportieren'}
-        </button>
       </div>
       <div className="playercard-photo-status">
-        {isProcessing && <span className="playercard-photo-status__loading">Modell lädt – bitte warten …</span>}
-        {errorMessage && <p className="playercard-photo-status__error">{errorMessage}</p>}
-        {!isProcessing && !errorMessage && (
+        {errorMessage ? (
+          <p className="playercard-photo-status__error">{errorMessage}</p>
+        ) : (
           <span className="playercard-photo-status__hint">1080 × 1920 px • PNG oder JPEG empfohlen</span>
         )}
       </div>
