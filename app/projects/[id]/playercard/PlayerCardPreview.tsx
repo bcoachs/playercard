@@ -1,4 +1,7 @@
-import React, { RefObject, useMemo } from 'react'
+import React, { RefObject, useCallback, useEffect, useRef, useState } from 'react'
+import ReactCountryFlag from 'react-country-flag'
+
+const PLACEHOLDER_IMAGE = '/public/placeholder.png'
 
 export type PlayerCardStationValue = {
   label: string
@@ -26,18 +29,6 @@ type PlayerCardPreviewProps = {
   stationValues: PlayerCardStationValue[]
 }
 
-function countryCodeToEmoji(code: string | null): string | null {
-  if (!code) return null
-  const normalized = code.trim().toUpperCase()
-  if (normalized.length !== 2) return null
-  const base = 0x1f1e6
-  const first = normalized.codePointAt(0)
-  const second = normalized.codePointAt(1)
-  if (!first || !second) return null
-  if (first < 65 || first > 90 || second < 65 || second > 90) return null
-  return String.fromCodePoint(base + first - 65, base + second - 65)
-}
-
 export default function PlayerCardPreview({
   imageSrc,
   isProcessing,
@@ -58,36 +49,153 @@ export default function PlayerCardPreview({
   kitNumber,
   stationValues,
 }: PlayerCardPreviewProps) {
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const dragStateRef = useRef<{
+    pointerType: 'mouse' | 'touch'
+    initialPointerX: number
+    initialPointerY: number
+    initialOffsetX: number
+    initialOffsetY: number
+    touchId?: number
+  } | null>(null)
+  const offsetRef = useRef(offset)
+
   const displayName = (playerName || 'Spieler auswählen').toUpperCase()
   const displayScore = typeof totalScore === 'number' ? String(totalScore) : '–'
   const displayPosition = position ? position.toUpperCase() : '–'
   const displayNumber = typeof kitNumber === 'number' && Number.isFinite(kitNumber) ? `#${kitNumber}` : '#–'
-  const flagEmoji = useMemo(() => countryCodeToEmoji(nationalityCode), [nationalityCode])
+  const resolvedImageSrc = imageSrc ?? PLACEHOLDER_IMAGE
+  const isPlaceholderImage = !imageSrc
 
-  const nationDisplay = useMemo(() => {
-    if (flagEmoji) {
-      return { type: 'emoji' as const, value: flagEmoji, label: nationalityLabel || 'Nationalflagge' }
+  useEffect(() => {
+    offsetRef.current = offset
+  }, [offset])
+
+  useEffect(() => {
+    setOffset({ x: 0, y: 0 })
+  }, [imageSrc])
+
+  const handleMouseMove = useCallback((event: MouseEvent) => {
+    const state = dragStateRef.current
+    if (!state || state.pointerType !== 'mouse') return
+    setOffset({
+      x: state.initialOffsetX + (event.clientX - state.initialPointerX),
+      y: state.initialOffsetY + (event.clientY - state.initialPointerY),
+    })
+  }, [])
+
+  const handleMouseUp = useCallback(() => {
+    const state = dragStateRef.current
+    if (!state || state.pointerType !== 'mouse') return
+    window.removeEventListener('mousemove', handleMouseMove)
+    window.removeEventListener('mouseup', handleMouseUp)
+    dragStateRef.current = null
+  }, [handleMouseMove])
+
+  const handleTouchMove = useCallback((event: TouchEvent) => {
+    const state = dragStateRef.current
+    if (!state || state.pointerType !== 'touch') return
+    const touch = Array.from(event.touches).find(item => item.identifier === state.touchId)
+    if (!touch) return
+    event.preventDefault()
+    setOffset({
+      x: state.initialOffsetX + (touch.clientX - state.initialPointerX),
+      y: state.initialOffsetY + (touch.clientY - state.initialPointerY),
+    })
+  }, [])
+
+  const handleTouchEnd = useCallback(
+    (event: TouchEvent) => {
+      const state = dragStateRef.current
+      if (!state || state.pointerType !== 'touch') return
+      const ended = Array.from(event.changedTouches).some(item => item.identifier === state.touchId)
+      if (!ended) return
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('touchend', handleTouchEnd)
+      window.removeEventListener('touchcancel', handleTouchEnd)
+      dragStateRef.current = null
+    },
+    [handleTouchMove],
+  )
+
+  const startDrag = useCallback(
+    (clientX: number, clientY: number, pointerType: 'mouse' | 'touch', touchId?: number) => {
+      dragStateRef.current = {
+        pointerType,
+        initialPointerX: clientX,
+        initialPointerY: clientY,
+        initialOffsetX: offsetRef.current.x,
+        initialOffsetY: offsetRef.current.y,
+        touchId,
+      }
+      if (pointerType === 'mouse') {
+        window.addEventListener('mousemove', handleMouseMove)
+        window.addEventListener('mouseup', handleMouseUp)
+      } else {
+        window.addEventListener('touchmove', handleTouchMove, { passive: false })
+        window.addEventListener('touchend', handleTouchEnd)
+        window.addEventListener('touchcancel', handleTouchEnd)
+      }
+    },
+    [handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd],
+  )
+
+  const onMouseDown = useCallback(
+    (event: React.MouseEvent<HTMLImageElement>) => {
+      event.preventDefault()
+      startDrag(event.clientX, event.clientY, 'mouse')
+    },
+    [startDrag],
+  )
+
+  const onTouchStart = useCallback(
+    (event: React.TouchEvent<HTMLImageElement>) => {
+      if (event.touches.length === 0) return
+      const touch = event.touches[0]
+      event.preventDefault()
+      startDrag(touch.clientX, touch.clientY, 'touch', touch.identifier)
+    },
+    [startDrag],
+  )
+
+  useEffect(() => {
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('touchend', handleTouchEnd)
+      window.removeEventListener('touchcancel', handleTouchEnd)
     }
-    if (nationalityLabel) {
-      return { type: 'text' as const, value: nationalityLabel }
-    }
-    return null
-  }, [flagEmoji, nationalityLabel])
+  }, [handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd])
+
+  const photoAlt = playerName
+    ? `Spielerfoto von ${playerName}`
+    : isPlaceholderImage
+      ? 'Platzhalterfoto'
+      : 'Spielerfoto'
+
+  const resolvedNationalityLabel = nationalityLabel ?? null
+
+  const getProgressWidth = useCallback((value: number | null) => {
+    if (typeof value !== 'number' || Number.isNaN(value)) return 0
+    return Math.min(100, Math.max(0, value))
+  }, [])
 
   return (
     <div className="playercard-photo-card">
       <div className="playercard-photo-frame">
         <div className="playercard" ref={cardRef}>
           <div className="playercard__photo-area">
-            {imageSrc ? (
-              <img
-                src={imageSrc}
-                alt={playerName ? `Spielerfoto von ${playerName}` : 'Spielerfoto'}
-                className="playercard__photo"
-              />
-            ) : (
-              <div className="playercard__photo playercard__photo--empty">Kein Spielerfoto</div>
-            )}
+            <img
+              src={resolvedImageSrc}
+              alt={photoAlt}
+              className={`playercard__photo${isPlaceholderImage ? ' playercard__photo--placeholder' : ''}`}
+              style={{ transform: `translate(${offset.x}px, ${offset.y}px)`, cursor: 'move', userSelect: 'none' }}
+              draggable={false}
+              onMouseDown={onMouseDown}
+              onTouchStart={onTouchStart}
+              onDragStart={event => event.preventDefault()}
+            />
             <div className="playercard__info-rail">
               <div className="playercard-info playercard-info--score">
                 <span className="playercard-info__value">{displayScore}</span>
@@ -98,14 +206,12 @@ export default function PlayerCardPreview({
                 <span className="playercard-info__label">Position</span>
               </div>
               <div className="playercard-info playercard-info--flag">
-                {nationDisplay ? (
-                  nationDisplay.type === 'emoji' ? (
-                    <span className="playercard-info__emoji" role="img" aria-label={nationDisplay.label}>
-                      {nationDisplay.value}
-                    </span>
-                  ) : (
-                    <span className="playercard-info__value">{nationDisplay.value}</span>
-                  )
+                {nationalityCode ? (
+                  <span className="playercard-info__flag" title={resolvedNationalityLabel ?? undefined}>
+                    <ReactCountryFlag countryCode={nationalityCode} svg style={{ width: '100%', height: '100%' }} />
+                  </span>
+                ) : resolvedNationalityLabel ? (
+                  <span className="playercard-info__value">{resolvedNationalityLabel}</span>
                 ) : (
                   <span className="playercard-info__placeholder">–</span>
                 )}
@@ -131,10 +237,19 @@ export default function PlayerCardPreview({
           <div className="playercard__stations-panel">
             {stationValues.map(station => (
               <div key={station.label} className="playercard-station">
-                <span className="playercard-station__label">{station.label}</span>
-                <span className="playercard-station__value">
-                  {typeof station.value === 'number' ? station.value : '–'}
-                </span>
+                <div className="playercard-station__header">
+                  <span className="playercard-station__label">{station.label}</span>
+                  <span className="playercard-station__value">
+                    {typeof station.value === 'number' ? station.value : '–'}
+                  </span>
+                </div>
+                <div className="playercard-station__bar" role="presentation">
+                  <div
+                    className="playercard-station__bar-fill"
+                    style={{ width: `${getProgressWidth(station.value)}%` }}
+                    aria-hidden="true"
+                  />
+                </div>
               </div>
             ))}
           </div>

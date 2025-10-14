@@ -16,7 +16,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
-      "@/lib/*": ["src/lib/*", "lib/*"]
+      "@/lib/*": ["src/lib/*", "lib/*"],
+      "react-country-flag": ["src/components/ReactCountryFlag.tsx"]
     },
     "types": ["@types/node", "@types/react", "@types/react-dom"],
     "plugins": [{ "name": "next" }]

@@ -1,4 +1,5 @@
 import React from 'react'
+import ReactCountryFlag from 'react-country-flag'
 
 type PlayerHeaderProps = {
   projectName: string
@@ -38,11 +39,8 @@ export default function PlayerHeader({
   const rawNationality = nationalityLabel ?? player?.nationality ?? null
   const nationalityText =
     typeof rawNationality === 'string' ? (rawNationality.trim().length ? rawNationality.trim() : null) : rawNationality
-  const nationalityCodeLower = nationalityCode ? nationalityCode.toLowerCase() : null
-  const nationalityFlagUrl = nationalityCodeLower ? `https://flagcdn.com/h40/${nationalityCodeLower}.png` : null
-  const nationalityFlagSrcSet = nationalityCodeLower
-    ? `https://flagcdn.com/h40/${nationalityCodeLower}.png 1x, https://flagcdn.com/h80/${nationalityCodeLower}.png 2x`
-    : null
+  const hasNationalityCode = typeof nationalityCode === 'string' && nationalityCode.length === 2
+  const nationalityTitle = nationalityLabel ?? nationalityText ?? undefined
 
   return (
     <header className="playercard-header">
@@ -87,22 +85,14 @@ export default function PlayerHeader({
           <div className="playercard-detail">
             <span className="playercard-detail__label">Nationalität</span>
             <span className="playercard-detail__value">
-              {nationalityFlagUrl && (
-                <img
-                  src={nationalityFlagUrl}
-                  srcSet={nationalityFlagSrcSet ?? undefined}
-                  alt=""
-                  width={36}
-                  height={24}
-                  className="playercard-detail__flag"
-                  loading="lazy"
-                  decoding="async"
-                  aria-hidden="true"
-                />
-              )}
+              {hasNationalityCode && nationalityCode ? (
+                <span className="playercard-detail__flag" title={nationalityTitle}>
+                  <ReactCountryFlag countryCode={nationalityCode} svg style={{ width: '100%', height: '100%' }} />
+                </span>
+              ) : null}
               {nationalityText ? (
                 <span>{nationalityText}</span>
-              ) : !nationalityFlagUrl ? (
+              ) : !hasNationalityCode ? (
                 <span>–</span>
               ) : null}
             </span>
