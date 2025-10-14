@@ -1839,7 +1839,7 @@ a, .btn {
 
 .playercard__name-banner {
   position: absolute;
-  left: 45%;
+  left: 50%;
   bottom: 18px;
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.12);
