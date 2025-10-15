@@ -1657,6 +1657,16 @@ a, .btn {
   align-items: center;
 }
 
+.playercard-export {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.playercard-export .btn {
+  width: min(100%, 320px);
+}
+
 .playercard-toast {
   position: fixed;
   bottom: 32px;
