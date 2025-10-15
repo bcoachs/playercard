@@ -10,7 +10,7 @@ import PlayerStats, { PlayerStat } from './PlayerStats'
 import BackgroundSelector, { BackgroundOption } from './BackgroundSelector'
 import { blobToDataUrl } from './blobToDataUrl'
 import { resolvePlayerPhotoUrl } from './resolvePlayerPhotoUrl'
-import { buildPlayerStationAverages } from '@/lib/data'
+import { fetchAggregatedMetrics, type AggregatedStationMetrics } from '@/lib/data'
 import { aggregateScore, scoreForStation, type ScoreDependencies, type ScoreMap } from '@/lib/scoring'
 
 const STAT_ORDER = [
@@ -53,12 +53,6 @@ type Player = {
 }
 
 type Project = { id: string; name: string; date: string | null }
-
-type Measurement = {
-  player_id: string
-  station_id: string
-  value: number
-}
 
 type CsvStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -202,7 +196,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const [project, setProject] = useState<Project | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [stations, setStations] = useState<Station[]>([])
-  const [measurements, setMeasurements] = useState<Measurement[]>([])
+  const [playerMetrics, setPlayerMetrics] = useState<AggregatedStationMetrics>({})
 
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(() => {
     if (typeof initialPlayerId === 'string' && initialPlayerId) {
@@ -291,9 +285,9 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       setIsLoading(true)
       setLoadError(null)
       try {
-        const [dashboardRes, measurementRes] = await Promise.all([
+        const [dashboardRes, stationsRes] = await Promise.all([
           fetch(`/api/projects/${projectId}/dashboard`, { cache: 'no-store' }),
-          fetch(`/api/projects/${projectId}/measurements`, { cache: 'no-store' }),
+          fetch(`/api/projects/${projectId}/stations`, { cache: 'no-store' }),
         ])
 
         const errors: string[] = []
@@ -302,27 +296,26 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
           const dashboardData = await dashboardRes.json().catch(() => ({}))
           if (isMounted) {
             setProject(dashboardData.project || null)
-            setStations(Array.isArray(dashboardData.stations) ? dashboardData.stations : [])
             setPlayers(Array.isArray(dashboardData.players) ? dashboardData.players : [])
           }
         } else {
           errors.push('Projekt konnte nicht geladen werden.')
           if (isMounted) {
             setProject(null)
-            setStations([])
             setPlayers([])
           }
         }
 
-        if (measurementRes.ok) {
-          const measurementData = await measurementRes.json().catch(() => ({}))
+        if (stationsRes.ok) {
+          const stationData = await stationsRes.json().catch(() => ({}))
           if (isMounted) {
-            setMeasurements(Array.isArray(measurementData.items) ? measurementData.items : [])
+            const items: Station[] = Array.isArray(stationData.items) ? stationData.items : []
+            setStations(items)
           }
         } else {
-          errors.push('Messwerte konnten nicht geladen werden.')
+          errors.push('Stationen konnten nicht geladen werden.')
           if (isMounted) {
-            setMeasurements([])
+            setStations([])
           }
         }
 
@@ -439,8 +432,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     return parsed
   }, [project?.date])
 
-  const measByPlayerStation = useMemo(() => buildPlayerStationAverages(measurements), [measurements])
-
   const sortedStations = useMemo(() => {
     return stations.slice().sort((a, b) => {
       const ia = STAT_INDEX[a.name as (typeof STAT_ORDER)[number]] ?? 99
@@ -461,12 +452,36 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     [eventYear, s1Female, s1Male, s6Female, s6Male, s4Map],
   )
 
+  useEffect(() => {
+    let cancelled = false
+    if (!selectedPlayerId) {
+      setPlayerMetrics({})
+      return
+    }
+
+    setPlayerMetrics({})
+
+    fetchAggregatedMetrics(projectId, selectedPlayerId)
+      .then(values => {
+        if (!cancelled) setPlayerMetrics(values)
+      })
+      .catch(error => {
+        if (!cancelled) {
+          console.warn('Aggregierte Werte konnten nicht geladen werden.', error)
+          setPlayerMetrics({})
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, selectedPlayerId])
+
   const stats = useMemo<PlayerStat[]>(() => {
     if (!selectedPlayer) return []
-    const playerMeasurements = measByPlayerStation[selectedPlayer.id] || {}
     const entries: PlayerStat[] = []
     for (const station of sortedStations) {
-      const raw = playerMeasurements[station.id]
+      const raw = playerMetrics[station.id]
       if (typeof raw === 'undefined') {
         entries.push({
           id: station.id,
@@ -481,7 +496,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       entries.push({ id: station.id, label: station.name, score, raw, unit: station.unit })
     }
     return entries
-  }, [selectedPlayer, sortedStations, measByPlayerStation, scoreDeps])
+  }, [selectedPlayer, sortedStations, playerMetrics, scoreDeps])
 
   const totalScore = useMemo(() => {
     return aggregateScore(stats.map(stat => stat.score))

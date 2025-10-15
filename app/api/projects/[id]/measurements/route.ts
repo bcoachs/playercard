@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const project_id = params.id
-  const { data, error } = await supabaseAdmin
+  const { searchParams } = new URL(req.url)
+  const playerId = searchParams.get('playerId') || searchParams.get('player') || null
+
+  const query = supabaseAdmin
     .from('measurements')
     .select('id, project_id, player_id, station_id, value, entered_at')
     .eq('project_id', project_id)
     .order('entered_at', { ascending: false })
+
+  if (playerId) {
+    query.eq('player_id', playerId)
+  }
+
+  const { data, error } = await query
 
   if (error) return new NextResponse(error.message, { status: 500 })
   return NextResponse.json({ items: data ?? [] })
