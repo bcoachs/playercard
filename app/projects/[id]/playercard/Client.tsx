@@ -132,57 +132,6 @@ function scoreFromSpeedStep(speed: number, rows: number[]): number {
   return 0
 }
 
-function buildPhotoCandidates(rawUrl: string): string[] {
-  const trimmed = rawUrl.trim()
-  if (!trimmed.length) return []
-  const [pathPart, queryPart] = trimmed.split('?')
-  const query = queryPart ? `?${queryPart}` : ''
-  const fileMatch = pathPart.match(/\.([a-zA-Z0-9]+)$/)
-  const extension = fileMatch ? fileMatch[1].toLowerCase() : null
-  const basePath = fileMatch ? pathPart.slice(0, -fileMatch[0].length) : pathPart
-  const candidates = new Set<string>()
-  candidates.add(trimmed)
-  const appendWithExt = (ext: string) => {
-    if (!ext) return
-    candidates.add(`${basePath}.${ext}${query}`)
-  }
-  if (extension === 'png') {
-    appendWithExt('jpg')
-    appendWithExt('jpeg')
-  } else if (extension === 'jpg' || extension === 'jpeg') {
-    appendWithExt('png')
-    appendWithExt(extension === 'jpg' ? 'jpeg' : 'jpg')
-  } else {
-    appendWithExt('png')
-    appendWithExt('jpg')
-    appendWithExt('jpeg')
-  }
-  return Array.from(candidates)
-}
-
-async function fetchFirstAvailablePhoto(url: string): Promise<{ url: string; dataUrl: string } | null> {
-  const candidates = buildPhotoCandidates(url)
-  for (const candidate of candidates) {
-    try {
-      const response = await fetch(candidate, { cache: 'no-store' })
-      if (!response.ok) {
-        console.warn('Spielerfoto konnte nicht geladen werden:', {
-          url: candidate,
-          status: response.status,
-        })
-        continue
-      }
-      const blob = await response.blob()
-      if (!blob.size) continue
-      const dataUrl = await blobToDataUrl(blob)
-      return { url: candidate, dataUrl }
-    } catch (error) {
-      console.warn('Fehler beim Laden des Spielerfotos:', { url: candidate, error })
-    }
-  }
-  return null
-}
-
 async function loadS1Map(gender: 'male' | 'female'): Promise<ScoreMap | null> {
   const candidates =
     gender === 'male'
@@ -345,7 +294,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     if (url.startsWith('data:')) {
       setLocalPhoto(url)
     } else {
-      setLocalPhoto(null)
+      setLocalPhoto(PLACEHOLDER_IMAGE)
     }
   }, [])
 
@@ -652,49 +601,58 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
 
   useEffect(() => {
     let cancelled = false
-    const rawPhotoUrl = typeof selectedPlayer?.photo_url === 'string' ? selectedPlayer.photo_url.trim() : ''
+    setLocalPhoto(PLACEHOLDER_IMAGE)
+    setErrorMessage(null)
 
-    if (!rawPhotoUrl.length) {
-      applyDisplayImage(null)
+    if (!selectedPlayer) {
       setOriginalImage(null)
-      setErrorMessage(null)
+      applyDisplayImage(null)
       setLocalPhoto(PLACEHOLDER_IMAGE)
       return () => {
         cancelled = true
       }
     }
 
-    const ensuredUrl = rawPhotoUrl as string
-    setErrorMessage(null)
-    setOriginalImage(ensuredUrl)
-    applyDisplayImage(ensuredUrl)
-
-    const loadPreferredPhoto = async () => {
-      const result = await fetchFirstAvailablePhoto(ensuredUrl)
-      if (cancelled) return
-      if (!result) {
-        console.warn('Kein gültiges Spielerfoto gefunden. Platzhalter wird angezeigt.', {
-          url: ensuredUrl,
-        })
-        setOriginalImage(null)
-        setErrorMessage('Spielerfoto konnte nicht geladen werden. Platzhalter wird angezeigt.')
-        setLocalPhoto(PLACEHOLDER_IMAGE)
-        return
+    const photoUrl = typeof selectedPlayer.photo_url === 'string' ? selectedPlayer.photo_url.trim() : ''
+    if (!photoUrl.length) {
+      setOriginalImage(null)
+      applyDisplayImage(null)
+      setLocalPhoto(PLACEHOLDER_IMAGE)
+      return () => {
+        cancelled = true
       }
-
-      const { url, dataUrl } = result
-      if (cancelled) return
-      setOriginalImage(url)
-      applyDisplayImage(url)
-      setLocalPhoto(dataUrl)
     }
 
-    loadPreferredPhoto()
+    setOriginalImage(photoUrl)
+    applyDisplayImage(photoUrl)
+
+    const fetchPhoto = async () => {
+      try {
+        const res = await fetch(photoUrl)
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`)
+        }
+        const blob = await res.blob()
+        const dataUrl = await blobToDataUrl(blob)
+        if (!cancelled) {
+          setLocalPhoto(dataUrl)
+        }
+      } catch (err) {
+        console.warn('Spielerfoto konnte nicht geladen werden. Platzhalter wird genutzt.', err)
+        if (!cancelled) {
+          setOriginalImage(null)
+          setErrorMessage('Spielerfoto konnte nicht geladen werden. Platzhalter wird angezeigt.')
+          setLocalPhoto(PLACEHOLDER_IMAGE)
+        }
+      }
+    }
+
+    fetchPhoto()
 
     return () => {
       cancelled = true
     }
-  }, [selectedPlayer?.photo_url, applyDisplayImage])
+  }, [selectedPlayer, applyDisplayImage])
 
   const handleFileChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
