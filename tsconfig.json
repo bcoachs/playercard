@@ -17,7 +17,7 @@
     "paths": {
       "@/*": ["./*"],
       "@/lib/*": ["src/lib/*", "lib/*"],
-      "react-country-flag": ["src/components/ReactCountryFlag.tsx"]
+      "@/components/*": ["src/components/*", "components/*"]
     },
     "types": ["@types/node", "@types/react", "@types/react-dom"],
     "plugins": [{ "name": "next" }]

@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react'
-import ReactCountryFlag from 'react-country-flag'
+import ReactCountryFlag from '@/components/ReactCountryFlag'
 
 const PLACEHOLDER_IMAGE = '/public/placeholder.png'
 const MAX_ZOOM_MULTIPLIER = 4
