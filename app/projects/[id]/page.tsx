@@ -7,6 +7,8 @@ import BackFab from '../../components/BackFab'
 import PhotoCaptureModal from './PhotoCaptureModal'
 import { COUNTRY_OPTIONS, getCountryCode } from '@/lib/countries'
 import ReactCountryFlag from '@/components/ReactCountryFlag'
+import { buildPlayerStationAverages } from '@/lib/data'
+import { aggregateScore, scoreForStation, type ScoreDependencies, type ScoreMap } from '@/lib/scoring'
 
 type Station = {
   id: string
@@ -66,7 +68,7 @@ const USE_S4_CSV = (() => {
   return true
 })()
 
-async function loadS1Map(gender: 'male' | 'female'): Promise<Record<string, number[]> | null> {
+async function loadS1Map(gender: 'male' | 'female'): Promise<ScoreMap | null> {
   const candidates = gender === 'male'
     ? [
         '/config/s1_male.csv',
@@ -85,7 +87,7 @@ async function loadS1Map(gender: 'male' | 'female'): Promise<Record<string, numb
       if (lines.length < 2) continue
       const header = lines[0].split(';').map(s => s.trim())
       const ageCols = header.slice(1)
-      const out: Record<string, number[]> = {}
+      const out: ScoreMap = {}
       for (const age of ageCols) out[age] = []
       for (let i = 1; i < lines.length; i++) {
         const cols = lines[i].split(';').map(s => s.trim())
@@ -103,7 +105,7 @@ async function loadS1Map(gender: 'male' | 'female'): Promise<Record<string, numb
   return null
 }
 
-async function loadS6Map(gender: 'male' | 'female'): Promise<Record<string, number[]> | null> {
+async function loadS6Map(gender: 'male' | 'female'): Promise<ScoreMap | null> {
   try {
     const file = gender === 'male' ? '/config/s6_male.csv' : '/config/s6_female.csv'
     const res = await fetch(file, { cache: 'no-store' })
@@ -113,7 +115,7 @@ async function loadS6Map(gender: 'male' | 'female'): Promise<Record<string, numb
     if (lines.length < 2) return null
     const header = lines[0].split(';').map(s => s.trim())
     const ageCols = header.slice(1)
-    const out: Record<string, number[]> = {}
+    const out: ScoreMap = {}
     for (const age of ageCols) out[age] = []
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split(';').map(s => s.trim())
@@ -136,7 +138,7 @@ function statusText(status: CsvStatus) {
   return 'deaktiviert'
 }
 
-async function loadS4Map(): Promise<Record<string, number[]> | null> {
+async function loadS4Map(): Promise<ScoreMap | null> {
   try {
     const file = '/config/s4.csv'
     const res = await fetch(file, { cache: 'no-store' })
@@ -146,7 +148,7 @@ async function loadS4Map(): Promise<Record<string, number[]> | null> {
     if (lines.length < 3) return null
     const header = lines[0].split(';').map(s => s.trim())
     const ageCols = header.slice(1)
-    const out: Record<string, number[]> = {}
+    const out: ScoreMap = {}
     for (const age of ageCols) out[age] = []
     // skip the second row (index 1) as it's empty or header-like
     for (let i = 2; i < lines.length; i++) {
@@ -161,75 +163,6 @@ async function loadS4Map(): Promise<Record<string, number[]> | null> {
   } catch {
     return null
   }
-}
-
-function nearestAgeBucket(age: number, keys: string[]): string {
-  const parsed = keys.map(k => {
-    const nums = k.match(/\d+/g)?.map(Number) || []
-    const mid = nums.length === 2 ? (nums[0] + nums[1]) / 2 : (nums[0] || 0)
-    return { key: k, mid }
-  })
-  parsed.sort((a, b) => Math.abs(a.mid - age) - Math.abs(b.mid - age))
-  return parsed[0]?.key || keys[0]
-}
-
-/** Schrittlogik: schneller (t kleiner) → höherer Score. */
-function scoreFromTimeStep(seconds: number, rows: number[]): number {
-  for (let i = 0; i < rows.length; i++) {
-    if (seconds <= rows[i]) return Math.max(0, Math.min(100, 100 - i))
-  }
-  return 0
-}
-
-/** Schrittlogik für S4: schneller (km/h größer) → höherer Score. */
-function scoreFromSpeedStep(speed: number, rows: number[]): number {
-  for (let i = 0; i < rows.length; i++) {
-    if (speed >= rows[i]) return Math.max(0, Math.min(100, 100 - i))
-  }
-  return 0
-}
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n))
-}
-
-function normScore(st: Station, raw: number): number {
-  const min = st.min_value ?? 0
-  const max = st.max_value ?? 100
-  if (max === min) return 0
-  if (st.higher_is_better) return Math.round(clamp((raw - min) / (max - min), 0, 1) * 100)
-  return Math.round(clamp((max - raw) / (max - min), 0, 1) * 100)
-}
-
-function normalizeGender(value: Player['gender'] | string | null | undefined): 'male' | 'female' | null {
-  if (value === null || value === undefined) return null
-  const normalized = String(value).trim().toLowerCase()
-  if (!normalized) return null
-  if (
-    normalized === 'male' ||
-    normalized === 'm' ||
-    normalized === 'mann' ||
-    normalized === 'männlich' ||
-    normalized === 'maennlich' ||
-    normalized === 'herr' ||
-    normalized === 'boy'
-  ) {
-    return 'male'
-  }
-  if (
-    normalized === 'female' ||
-    normalized === 'f' ||
-    normalized === 'frau' ||
-    normalized === 'weiblich' ||
-    normalized === 'weibl' ||
-    normalized === 'mädchen' ||
-    normalized === 'maedchen' ||
-    normalized === 'girl' ||
-    normalized === 'w'
-  ) {
-    return 'female'
-  }
-  return null
 }
 
 export default function ProjectDashboard() {
@@ -412,17 +345,17 @@ export default function ProjectDashboard() {
   }
 
   // S1 CSV (global)
-  const [s1Female, setS1Female] = useState<Record<string, number[]> | null>(null)
-  const [s1Male, setS1Male] = useState<Record<string, number[]> | null>(null)
+  const [s1Female, setS1Female] = useState<ScoreMap | null>(null)
+  const [s1Male, setS1Male] = useState<ScoreMap | null>(null)
   const [s1Status, setS1Status] = useState<CsvStatus>(USE_S1_CSV ? 'loading' : 'off')
 
   // S6 CSV (global)
-  const [s6Female, setS6Female] = useState<Record<string, number[]> | null>(null)
-  const [s6Male, setS6Male] = useState<Record<string, number[]> | null>(null)
+  const [s6Female, setS6Female] = useState<ScoreMap | null>(null)
+  const [s6Male, setS6Male] = useState<ScoreMap | null>(null)
   const [s6Status, setS6Status] = useState<CsvStatus>(USE_S6_CSV ? 'loading' : 'off')
 
   // S4 CSV (global, no gender distinction)
-  const [s4Map, setS4Map] = useState<Record<string, number[]> | null>(null)
+  const [s4Map, setS4Map] = useState<ScoreMap | null>(null)
   const [s4Status, setS4Status] = useState<CsvStatus>(USE_S4_CSV ? 'loading' : 'off')
 
   /* Laden */
@@ -464,8 +397,8 @@ export default function ProjectDashboard() {
     Promise.allSettled([loadS1Map('female'), loadS1Map('male')]).then(([f, m]) => {
       const fOK = f.status === 'fulfilled' && f.value
       const mOK = m.status === 'fulfilled' && m.value
-      if (fOK) setS1Female(f.value as Record<string, number[]>)
-      if (mOK) setS1Male(m.value as Record<string, number[]>)
+      if (fOK) setS1Female(f.value as ScoreMap)
+      if (mOK) setS1Male(m.value as ScoreMap)
       setS1Status(fOK || mOK ? 'ok' : 'fail')
     })
   }, [])
@@ -480,8 +413,8 @@ export default function ProjectDashboard() {
     Promise.allSettled([loadS6Map('female'), loadS6Map('male')]).then(([f, m]) => {
       const fOK = f.status === 'fulfilled' && f.value
       const mOK = m.status === 'fulfilled' && m.value
-      if (fOK) setS6Female(f.value as any)
-      if (mOK) setS6Male(m.value as any)
+      if (fOK) setS6Female(f.value as ScoreMap)
+      if (mOK) setS6Male(m.value as ScoreMap)
       setS6Status(fOK || mOK ? 'ok' : 'fail')
     })
   }, [])
@@ -503,83 +436,12 @@ export default function ProjectDashboard() {
     })
   }, [])
 
-  const measByPlayerStation = useMemo(() => {
-    const map: Record<string, Record<string, number>> = {}
-    for (const m of meas) {
-      if (!map[m.player_id]) map[m.player_id] = {}
-      map[m.player_id][m.station_id] = Number(m.value || 0)
-    }
-    return map
-  }, [meas])
+  const measByPlayerStation = useMemo(() => buildPlayerStationAverages(meas), [meas])
 
   /* Alter/Scoring */
   const eventYear = useMemo(() => {
     return project?.date ? Number(String(project.date).slice(0, 4)) : new Date().getFullYear()
   }, [project?.date])
-
-  function resolveAge(by: number | null): number {
-    if (!by) return 16
-    return Math.max(6, Math.min(49, eventYear - by))
-  }
-
-  function scoreFor(st: Station, p: Player, raw: number): number {
-    const n = st.name.toLowerCase()
-    const gender = normalizeGender(p.gender)
-    const isMale = gender === 'male'
-    if (n.includes('beweglichkeit')) {
-      if (USE_S1_CSV) {
-        const map = isMale ? s1Male : s1Female
-        if (map) {
-          const keys = Object.keys(map)
-          if (keys.length) {
-            const bucket = nearestAgeBucket(resolveAge(p.birth_year), keys)
-            const rows = map[bucket] || []
-            if (rows.length) return scoreFromTimeStep(Number(raw), rows)
-          }
-        }
-      }
-      return normScore({ ...st, min_value: 10, max_value: 40, higher_is_better: false }, Number(raw))
-    }
-    if (n.includes('schnelligkeit')) {
-      // S6 via CSV (falls da), sonst Fallback
-      if (USE_S6_CSV) {
-        const map = isMale ? s6Male : s6Female
-        if (map) {
-          const keys = Object.keys(map)
-          if (keys.length) {
-            const bucket = nearestAgeBucket(resolveAge(p.birth_year), keys)
-            const rows = map[bucket] || []
-            if (rows.length) return scoreFromTimeStep(Number(raw), rows)
-          }
-        }
-      }
-      // Fallback: 4–20 s → 100–0 (weniger ist besser)
-      return normScore({ ...st, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
-    }
-    if (n.includes('schusskraft')) {
-      // S4 via CSV (falls da), sonst Fallback
-      if (USE_S4_CSV && s4Map) {
-        const keys = Object.keys(s4Map)
-        if (keys.length) {
-          const bucket = nearestAgeBucket(resolveAge(p.birth_year), keys)
-          const rows = s4Map[bucket] || []
-          if (rows.length) return scoreFromSpeedStep(Number(raw), rows)
-        }
-      }
-      // Fallback: 0–150 km/h → 0–100 (höher = besser)
-      return normScore({ ...st, min_value: 0, max_value: 150, higher_is_better: true }, Number(raw))
-    }
-    if (n.includes('passgenauigkeit')) {
-      // Rohwert kommt in Capture bereits 0–100 (11/17/33-Gewichtung) → direkt
-      return Math.round(clamp(Number(raw), 0, 100))
-    }
-    if (n.includes('schusspräzision')) {
-      // 24 Punkte Max (oben 3x, unten 1x) → 0–100
-      const pct = clamp(Number(raw) / 24, 0, 1)
-      return Math.round(pct * 100)
-    }
-    return Math.round(normScore(st, Number(raw)))
-  }
 
   const sortedStations = useMemo<Station[]>(() => {
     return stations.slice().sort((a: Station, b: Station) => {
@@ -589,6 +451,18 @@ export default function ProjectDashboard() {
     })
   }, [stations])
 
+  const scoreDeps = useMemo<ScoreDependencies>(
+    () => ({
+      eventYear,
+      s1Female,
+      s1Male,
+      s6Female,
+      s6Male,
+      s4Map,
+    }),
+    [eventYear, s1Female, s1Male, s6Female, s6Male, s4Map],
+  )
+
   const rows = useMemo(() => {
     type Row = {
       player: Player
@@ -597,24 +471,28 @@ export default function ProjectDashboard() {
     }
     const out: Row[] = players.map((p: Player) => {
       const perStation: Row['perStation'] = []
-      let sum = 0,
-        count = 0
+      const stationScores: (number | null)[] = []
       for (const st of sortedStations) {
         const raw = measByPlayerStation[p.id]?.[st.id]
         let sc: number | null = null
         if (typeof raw === 'number') {
-          sc = scoreFor(st, p, raw)
-          sum += sc
-          count++
+          sc = scoreForStation(st, p, raw, scoreDeps)
         }
-        perStation.push({ id: st.id, name: st.name, raw: typeof raw === 'number' ? raw : null, score: sc, unit: st.unit })
+        perStation.push({
+          id: st.id,
+          name: st.name,
+          raw: typeof raw === 'number' ? raw : null,
+          score: sc,
+          unit: st.unit,
+        })
+        stationScores.push(sc)
       }
-      const avg = count ? Math.round(sum / count) : 0
+      const avg = aggregateScore(stationScores) ?? 0
       return { player: p, perStation, avg }
     })
     out.sort((a, b) => b.avg - a.avg)
     return out
-  }, [players, sortedStations, measByPlayerStation, s6Female, s6Male, s4Map, project, eventYear])
+  }, [players, sortedStations, measByPlayerStation, scoreDeps])
 
   /* Helpers: Formular befüllen/Reset */
   function fillForm(p: Player) {
