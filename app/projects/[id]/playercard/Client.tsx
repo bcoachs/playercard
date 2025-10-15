@@ -9,6 +9,7 @@ import PlayerCardPreview from './PlayerCardPreview'
 import PlayerStats, { PlayerStat } from './PlayerStats'
 import BackgroundSelector, { BackgroundOption } from './BackgroundSelector'
 import { blobToDataUrl } from './blobToDataUrl'
+import { resolvePlayerPhotoUrl } from './resolvePlayerPhotoUrl'
 
 const STAT_ORDER = [
   'Beweglichkeit',
@@ -269,8 +270,21 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const playercardRef = useRef<HTMLDivElement | null>(null)
-  const loadPlayerImage = useCallback(async (url: string): Promise<string> => {
-    const res = await fetch(url)
+  const loadPlayerImage = useCallback(async (photoPath: string): Promise<string> => {
+    const trimmed = photoPath.trim()
+    if (!trimmed) {
+      throw new Error('Empty photo path')
+    }
+    if (trimmed.startsWith('data:')) {
+      return trimmed
+    }
+
+    const resolvedUrl = await resolvePlayerPhotoUrl(trimmed)
+    if (!resolvedUrl) {
+      throw new Error('Failed to resolve public player photo URL')
+    }
+
+    const res = await fetch(resolvedUrl, { cache: 'no-store' })
     if (!res.ok) {
       throw new Error(`Failed to fetch image: ${res.status}`)
     }
@@ -288,7 +302,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     setDisplayImage(url)
     setPhotoOffset(prev => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }))
     if (!url) {
-      setLocalPhoto(null)
+      setLocalPhoto(PLACEHOLDER_IMAGE)
       return
     }
     if (url.startsWith('data:')) {
@@ -584,6 +598,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       const dataUrl = await toPng(cardEl, {
         cacheBust: true,
         backgroundColor: '#0a1e38',
+        filter: (node: HTMLElement) => node.dataset?.exportIgnore !== 'true',
       })
       const link = document.createElement('a')
       link.download = `${selectedPlayer?.display_name ?? 'player'}_card.png`
@@ -601,13 +616,11 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
 
   useEffect(() => {
     let cancelled = false
-    setLocalPhoto(PLACEHOLDER_IMAGE)
     setErrorMessage(null)
 
     if (!selectedPlayer) {
       setOriginalImage(null)
       applyDisplayImage(null)
-      setLocalPhoto(PLACEHOLDER_IMAGE)
       return () => {
         cancelled = true
       }
@@ -617,32 +630,35 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     if (!photoUrl.length) {
       setOriginalImage(null)
       applyDisplayImage(null)
-      setLocalPhoto(PLACEHOLDER_IMAGE)
       return () => {
         cancelled = true
       }
     }
 
-    setOriginalImage(photoUrl)
-    applyDisplayImage(photoUrl)
+    if (photoUrl.startsWith('data:')) {
+      setOriginalImage(photoUrl)
+      applyDisplayImage(photoUrl)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    setOriginalImage(null)
+    applyDisplayImage(null)
 
     const fetchPhoto = async () => {
       try {
-        const res = await fetch(photoUrl)
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`)
-        }
-        const blob = await res.blob()
-        const dataUrl = await blobToDataUrl(blob)
+        const dataUrl = await loadPlayerImage(photoUrl)
         if (!cancelled) {
-          setLocalPhoto(dataUrl)
+          setOriginalImage(dataUrl)
+          applyDisplayImage(dataUrl)
         }
       } catch (err) {
         console.warn('Spielerfoto konnte nicht geladen werden. Platzhalter wird genutzt.', err)
         if (!cancelled) {
           setOriginalImage(null)
           setErrorMessage('Spielerfoto konnte nicht geladen werden. Platzhalter wird angezeigt.')
-          setLocalPhoto(PLACEHOLDER_IMAGE)
+          applyDisplayImage(null)
         }
       }
     }
@@ -652,7 +668,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     return () => {
       cancelled = true
     }
-  }, [selectedPlayer, applyDisplayImage])
+  }, [selectedPlayer, applyDisplayImage, loadPlayerImage])
 
   const handleFileChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -679,15 +695,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     if (!originalImage) return
     setErrorMessage(null)
     applyDisplayImage(originalImage)
-    if (!originalImage.startsWith('data:')) {
-      loadPlayerImage(originalImage)
-        .then(setLocalPhoto)
-        .catch(error => {
-          console.warn('Spielerfoto konnte nicht geladen werden. Platzhalter wird genutzt.', error)
-          setLocalPhoto(PLACEHOLDER_IMAGE)
-        })
-    }
-  }, [originalImage, applyDisplayImage, loadPlayerImage])
+  }, [originalImage, applyDisplayImage])
 
   const canReset = Boolean(originalImage) && displayImage !== originalImage
 
@@ -729,9 +737,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
                 manifestError={manifestStatus === 'error'}
               />
               <div className="playercard-cta">
-                <button className="btn" type="button" onClick={handleDownload}>
-                  Playercard als PNG herunterladen
-                </button>
                 <Link href={`/projects/${projectId}`} className="btn-secondary">
                   Zur Spielermatrix
                 </Link>
@@ -757,6 +762,11 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
                 photoOffset={photoOffset}
                 onPhotoOffsetChange={handlePhotoOffsetChange}
               />
+              <div className="playercard-export">
+                <button className="btn" type="button" onClick={handleDownload}>
+                  Playercard als PNG herunterladen
+                </button>
+              </div>
               <input
                 ref={fileInputRef}
                 type="file"

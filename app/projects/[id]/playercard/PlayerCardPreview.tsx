@@ -546,7 +546,7 @@ export default function PlayerCardPreview({
               onError={handleImageError}
             />
             <div className="playercard__photo-controls">
-              <div className="playercard__zoom-controls">
+              <div className="playercard__zoom-controls" data-export-ignore="true">
                 <button
                   type="button"
                   className="playercard__zoom-button"
