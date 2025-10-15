@@ -324,10 +324,12 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
         }
       } catch (err) {
         if (!isMounted) return
+        // Bei Fehlern alle lokal gehaltenen Daten zurücksetzen
         setProject(null)
         setStations([])
         setPlayers([])
-        setMeasurements([])
+        // Aggregierte Metrics resetten, da measurements-State hier nicht existiert
+        setPlayerMetrics({})
         setLoadError(err instanceof Error ? err.message : 'Unbekannter Fehler beim Laden')
       } finally {
         if (isMounted) setIsLoading(false)
