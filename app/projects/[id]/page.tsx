@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import BackFab from '../../components/BackFab'
 import PhotoCaptureModal from './PhotoCaptureModal'
 import { COUNTRY_OPTIONS, getCountryCode } from '@/lib/countries'
+import ReactCountryFlag from '@/components/ReactCountryFlag'
 
 type Station = {
   id: string
@@ -198,6 +199,37 @@ function normScore(st: Station, raw: number): number {
   if (max === min) return 0
   if (st.higher_is_better) return Math.round(clamp((raw - min) / (max - min), 0, 1) * 100)
   return Math.round(clamp((max - raw) / (max - min), 0, 1) * 100)
+}
+
+function normalizeGender(value: Player['gender'] | string | null | undefined): 'male' | 'female' | null {
+  if (value === null || value === undefined) return null
+  const normalized = String(value).trim().toLowerCase()
+  if (!normalized) return null
+  if (
+    normalized === 'male' ||
+    normalized === 'm' ||
+    normalized === 'mann' ||
+    normalized === 'männlich' ||
+    normalized === 'maennlich' ||
+    normalized === 'herr' ||
+    normalized === 'boy'
+  ) {
+    return 'male'
+  }
+  if (
+    normalized === 'female' ||
+    normalized === 'f' ||
+    normalized === 'frau' ||
+    normalized === 'weiblich' ||
+    normalized === 'weibl' ||
+    normalized === 'mädchen' ||
+    normalized === 'maedchen' ||
+    normalized === 'girl' ||
+    normalized === 'w'
+  ) {
+    return 'female'
+  }
+  return null
 }
 
 export default function ProjectDashboard() {
@@ -492,9 +524,11 @@ export default function ProjectDashboard() {
 
   function scoreFor(st: Station, p: Player, raw: number): number {
     const n = st.name.toLowerCase()
+    const gender = normalizeGender(p.gender)
+    const isMale = gender === 'male'
     if (n.includes('beweglichkeit')) {
       if (USE_S1_CSV) {
-        const map = p.gender === 'male' ? s1Male : s1Female
+        const map = isMale ? s1Male : s1Female
         if (map) {
           const keys = Object.keys(map)
           if (keys.length) {
@@ -509,7 +543,7 @@ export default function ProjectDashboard() {
     if (n.includes('schnelligkeit')) {
       // S6 via CSV (falls da), sonst Fallback
       if (USE_S6_CSV) {
-        const map = p.gender === 'male' ? s6Male : s6Female
+        const map = isMale ? s6Male : s6Female
         if (map) {
           const keys = Object.keys(map)
           if (keys.length) {
@@ -880,12 +914,22 @@ export default function ProjectDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ player, perStation, avg }) => (
-                  <tr key={player.id} className="align-top hoverable-row" onClick={() => fillForm(player)} style={{ cursor: 'pointer' }}>
-                    <td className="p-2 whitespace-nowrap font-medium">
-                      {player.display_name}
-                      {Number.isFinite(player.fav_number as any) ? ` #${player.fav_number}` : ''}
-                    </td>
+                {rows.map(({ player, perStation, avg }) => {
+                  const natCode = getCountryCode(player.nationality)
+                  const hasNumber = Number.isFinite(player.fav_number as any)
+                  return (
+                    <tr key={player.id} className="align-top hoverable-row" onClick={() => fillForm(player)} style={{ cursor: 'pointer' }}>
+                      <td className="p-2 whitespace-nowrap font-medium">
+                        <div className="matrix-player-cell">
+                          {natCode ? (
+                            <span className="matrix-player-flag" title={player.nationality ?? undefined}>
+                              <ReactCountryFlag countryCode={natCode} style={{ fontSize: '1.1rem' }} />
+                            </span>
+                          ) : null}
+                          <span>{player.display_name}</span>
+                          {hasNumber ? <span className="matrix-player-number">#{player.fav_number}</span> : null}
+                        </div>
+                      </td>
                     <td className="p-2">
                       <span className="badge-green">{avg}</span>
                     </td>
@@ -909,8 +953,9 @@ export default function ProjectDashboard() {
                         </td>
                       )
                     })}
-                  </tr>
-                ))}
+                    </tr>
+                  )
+                })}
                 {!rows.length && (
                   <tr>
                     <td colSpan={2 + stations.length} className="p-3 text-center" style={{ color: 'rgba(255,255,255,.85)' }}>
