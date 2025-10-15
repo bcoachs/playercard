@@ -10,7 +10,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     await Promise.all([
       supabaseAdmin.from('projects').select('id,name,date,logo_url').eq('id', projectId).single(),
       supabaseAdmin.from('stations').select('id,name,unit').eq('project_id', projectId).order('name'),
-      supabaseAdmin.from('players').select('id,display_name,club,fav_position,fav_number,birth_year,nationality').eq('project_id', projectId).order('display_name'),
+      supabaseAdmin
+        .from('players')
+        .select(
+          'id,display_name,club,fav_position,fav_number,birth_year,nationality,photo_url,club_logo_url,club_logo,number',
+        )
+        .eq('project_id', projectId)
+        .order('display_name'),
       supabaseAdmin.from('measurements').select('player_id,station_id').eq('project_id', projectId)
     ])
   if (pErr || sErr || plErr || mErr) {

@@ -1,5 +1,5 @@
 import React from 'react'
-import ReactCountryFlag from 'react-country-flag'
+import ReactCountryFlag from '@/components/ReactCountryFlag'
 
 type PlayerHeaderProps = {
   projectName: string

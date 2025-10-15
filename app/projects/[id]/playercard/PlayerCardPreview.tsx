@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react'
-import ReactCountryFlag from 'react-country-flag'
+import ReactCountryFlag from '@/components/ReactCountryFlag'
 
 const PLACEHOLDER_IMAGE = '/public/placeholder.png'
 const MAX_ZOOM_MULTIPLIER = 4
@@ -496,9 +496,11 @@ export default function PlayerCardPreview({
     [zoomTo],
   )
 
+  const isPlaceholderSource = !imageSrc || imageSrc === PLACEHOLDER_IMAGE
+
   const photoAlt = playerName
     ? `Spielerfoto von ${playerName}`
-    : !imageSrc || imageError
+    : isPlaceholderSource || imageError
       ? 'Platzhalterfoto'
       : 'Spielerfoto'
 
@@ -519,7 +521,7 @@ export default function PlayerCardPreview({
     return { ...base, ...cardBackgroundStyle }
   }, [cardBackgroundStyle])
 
-  const isPlaceholderImage = !imageSrc || imageError
+  const isPlaceholderImage = isPlaceholderSource || imageError
 
   return (
     <div className="playercard-photo-card">
@@ -544,7 +546,7 @@ export default function PlayerCardPreview({
               onError={handleImageError}
             />
             <div className="playercard__photo-controls">
-              <div className="playercard__zoom-controls">
+              <div className="playercard__zoom-controls" data-export-ignore="true">
                 <button
                   type="button"
                   className="playercard__zoom-button"
