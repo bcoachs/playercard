@@ -127,3 +127,26 @@ export function measurementsToRawMetrics(
 
   return metrics
 }
+
+export type AggregatedStationMetrics = Record<string, number>
+
+export async function fetchAggregatedMetrics(
+  projectId: string,
+  playerId: string,
+): Promise<AggregatedStationMetrics> {
+  if (!projectId || !playerId) return {}
+
+  const params = new URLSearchParams({ playerId })
+  const res = await fetch(`/api/projects/${projectId}/measurements?${params.toString()}`, {
+    cache: 'no-store',
+  })
+
+  if (!res.ok) {
+    throw new Error(`Failed to load aggregated metrics for player ${playerId}`)
+  }
+
+  const payload = await res.json().catch(() => ({}))
+  const items: MeasurementRow[] = Array.isArray(payload?.items) ? payload.items : []
+  const byPlayer = buildPlayerStationAverages(items)
+  return byPlayer[playerId] ?? {}
+}
