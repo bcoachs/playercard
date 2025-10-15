@@ -8,6 +8,7 @@ import PlayerHeader from './PlayerHeader'
 import PlayerCardPreview from './PlayerCardPreview'
 import PlayerStats, { PlayerStat } from './PlayerStats'
 import BackgroundSelector, { BackgroundOption } from './BackgroundSelector'
+import { blobToDataUrl } from './blobToDataUrl'
 
 const STAT_ORDER = [
   'Beweglichkeit',
@@ -75,6 +76,8 @@ const DEFAULT_BACKGROUNDS: BackgroundOption[] = [
   },
 ]
 
+const PLACEHOLDER_IMAGE = '/public/placeholder.png'
+
 const USE_S1_CSV = (() => {
   const v = process.env.NEXT_PUBLIC_USE_S1_CSV
   if (v === '0' || v === 'false') return false
@@ -127,56 +130,6 @@ function scoreFromSpeedStep(speed: number, rows: number[]): number {
     if (speed >= rows[i]) return Math.max(0, Math.min(100, 100 - i))
   }
   return 0
-}
-
-function buildPhotoCandidates(rawUrl: string): string[] {
-  const trimmed = rawUrl.trim()
-  if (!trimmed.length) return []
-  const [pathPart, queryPart] = trimmed.split('?')
-  const query = queryPart ? `?${queryPart}` : ''
-  const fileMatch = pathPart.match(/\.([a-zA-Z0-9]+)$/)
-  const extension = fileMatch ? fileMatch[1].toLowerCase() : null
-  const basePath = fileMatch ? pathPart.slice(0, -fileMatch[0].length) : pathPart
-  const candidates = new Set<string>()
-  candidates.add(trimmed)
-  const appendWithExt = (ext: string) => {
-    if (!ext) return
-    candidates.add(`${basePath}.${ext}${query}`)
-  }
-  if (extension === 'png') {
-    appendWithExt('jpg')
-    appendWithExt('jpeg')
-  } else if (extension === 'jpg' || extension === 'jpeg') {
-    appendWithExt('png')
-    appendWithExt(extension === 'jpg' ? 'jpeg' : 'jpg')
-  } else {
-    appendWithExt('png')
-    appendWithExt('jpg')
-    appendWithExt('jpeg')
-  }
-  return Array.from(candidates)
-}
-
-async function fetchFirstAvailablePhoto(url: string): Promise<{ url: string; blob: Blob } | null> {
-  const candidates = buildPhotoCandidates(url)
-  for (const candidate of candidates) {
-    try {
-      const response = await fetch(candidate, { cache: 'no-store' })
-      if (!response.ok) {
-        console.warn('Spielerfoto konnte nicht geladen werden:', {
-          url: candidate,
-          status: response.status,
-        })
-        continue
-      }
-      const blob = await response.blob()
-      if (!blob.size) continue
-      return { url: candidate, blob }
-    } catch (error) {
-      console.warn('Fehler beim Laden des Spielerfotos:', { url: candidate, error })
-    }
-  }
-  return null
 }
 
 async function loadS1Map(gender: 'male' | 'female'): Promise<ScoreMap | null> {
@@ -313,9 +266,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const [displayImage, setDisplayImage] = useState<string | null>(null)
   const [localPhoto, setLocalPhoto] = useState<string | null>(null)
   const [photoOffset, setPhotoOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
-  const [objectUrl, setObjectUrl] = useState<string | null>(null)
-  const manualOriginalUrlRef = useRef<string | null>(null)
-  const lastLocalPhotoRef = useRef<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const playercardRef = useRef<HTMLDivElement | null>(null)
@@ -325,7 +275,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       throw new Error(`Failed to fetch image: ${res.status}`)
     }
     const blob = await res.blob()
-    return URL.createObjectURL(blob)
+    return blobToDataUrl(blob)
   }, [])
 
   useEffect(() => {
@@ -334,24 +284,19 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     }
   }, [initialPlayerId])
 
-  const applyDisplayImage = useCallback(
-    (url: string | null, options?: { objectUrl?: boolean }) => {
-      setDisplayImage(url)
-      setPhotoOffset(prev => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }))
-      if (!url) {
-        setLocalPhoto(null)
-      } else if (options?.objectUrl || url.startsWith('data:') || url.startsWith('blob:')) {
-        setLocalPhoto(url)
-      }
-      setObjectUrl(prev => {
-        if (prev && prev !== url) {
-          URL.revokeObjectURL(prev)
-        }
-        return options?.objectUrl ? url : null
-      })
-    },
-    [setLocalPhoto],
-  )
+  const applyDisplayImage = useCallback((url: string | null) => {
+    setDisplayImage(url)
+    setPhotoOffset(prev => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }))
+    if (!url) {
+      setLocalPhoto(null)
+      return
+    }
+    if (url.startsWith('data:')) {
+      setLocalPhoto(url)
+    } else {
+      setLocalPhoto(PLACEHOLDER_IMAGE)
+    }
+  }, [])
 
   const handlePhotoOffsetChange = useCallback((offset: { x: number; y: number }) => {
     setPhotoOffset(prev => {
@@ -362,31 +307,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     })
   }, [])
 
-  useEffect(() => {
-    return () => {
-      if (manualOriginalUrlRef.current) {
-        URL.revokeObjectURL(manualOriginalUrlRef.current)
-        manualOriginalUrlRef.current = null
-      }
-    }
-  }, [])
-
-
-
-  useEffect(() => {
-    const previous = lastLocalPhotoRef.current
-    if (previous && previous !== localPhoto && previous.startsWith('blob:')) {
-      URL.revokeObjectURL(previous)
-    }
-    lastLocalPhotoRef.current = localPhoto
-    return () => {
-      if (localPhoto && localPhoto.startsWith('blob:')) {
-        URL.revokeObjectURL(localPhoto)
-      }
-    }
-  }, [localPhoto])
-
- 
   useEffect(() => {
     let isMounted = true
     async function load() {
@@ -533,15 +453,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     if (!selectedPlayerId) return null
     return players.find(player => player.id === selectedPlayerId) || null
   }, [players, selectedPlayerId])
-
-  useEffect(() => {
-    if (objectUrl) {
-      return () => {
-        URL.revokeObjectURL(objectUrl)
-      }
-    }
-    return () => undefined
-  }, [objectUrl])
 
   const eventYear = useMemo(() => {
     if (!project?.date) return new Date().getFullYear()
@@ -690,95 +601,91 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
 
   useEffect(() => {
     let cancelled = false
-    const rawPhotoUrl = typeof selectedPlayer?.photo_url === 'string' ? selectedPlayer.photo_url.trim() : ''
+    setLocalPhoto(PLACEHOLDER_IMAGE)
+    setErrorMessage(null)
 
-    if (manualOriginalUrlRef.current) {
-      URL.revokeObjectURL(manualOriginalUrlRef.current)
-      manualOriginalUrlRef.current = null
-    }
-
-    if (!rawPhotoUrl.length) {
-      applyDisplayImage(null)
+    if (!selectedPlayer) {
       setOriginalImage(null)
-      setErrorMessage(null)
-      setLocalPhoto(null)
+      applyDisplayImage(null)
+      setLocalPhoto(PLACEHOLDER_IMAGE)
       return () => {
         cancelled = true
       }
     }
 
-    const ensuredUrl = rawPhotoUrl as string
-    setErrorMessage(null)
-    setOriginalImage(ensuredUrl)
-    applyDisplayImage(ensuredUrl, { objectUrl: false })
-    setLocalPhoto(null)
-
-    const loadPreferredPhoto = async () => {
-      const result = await fetchFirstAvailablePhoto(ensuredUrl)
-      if (cancelled) return
-      if (!result) {
-        console.warn('Kein gültiges Spielerfoto gefunden. Platzhalter wird angezeigt.', {
-          url: ensuredUrl,
-        })
-        setOriginalImage(null)
-        setErrorMessage('Spielerfoto konnte nicht geladen werden. Platzhalter wird angezeigt.')
-        setLocalPhoto(ensuredUrl)
-        return
+    const photoUrl = typeof selectedPlayer.photo_url === 'string' ? selectedPlayer.photo_url.trim() : ''
+    if (!photoUrl.length) {
+      setOriginalImage(null)
+      applyDisplayImage(null)
+      setLocalPhoto(PLACEHOLDER_IMAGE)
+      return () => {
+        cancelled = true
       }
+    }
 
-      const { url } = result
-      if (cancelled) return
-      setOriginalImage(url)
-      applyDisplayImage(url, { objectUrl: false })
+    setOriginalImage(photoUrl)
+    applyDisplayImage(photoUrl)
+
+    const fetchPhoto = async () => {
       try {
-        const dataUrl = await loadPlayerImage(url)
+        const res = await fetch(photoUrl)
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`)
+        }
+        const blob = await res.blob()
+        const dataUrl = await blobToDataUrl(blob)
         if (!cancelled) {
           setLocalPhoto(dataUrl)
         }
-      } catch (error) {
+      } catch (err) {
+        console.warn('Spielerfoto konnte nicht geladen werden. Platzhalter wird genutzt.', err)
         if (!cancelled) {
-          setLocalPhoto(url)
+          setOriginalImage(null)
+          setErrorMessage('Spielerfoto konnte nicht geladen werden. Platzhalter wird angezeigt.')
+          setLocalPhoto(PLACEHOLDER_IMAGE)
         }
       }
     }
 
-    loadPreferredPhoto()
+    fetchPhoto()
 
     return () => {
       cancelled = true
     }
-  }, [selectedPlayer?.photo_url, applyDisplayImage, loadPlayerImage])
+  }, [selectedPlayer, applyDisplayImage])
 
   const handleFileChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
+    async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0]
       if (!file) return
       if (!file.type.startsWith('image/')) {
         setErrorMessage('Bitte eine Bilddatei auswählen.')
         return
       }
-      if (manualOriginalUrlRef.current) {
-        URL.revokeObjectURL(manualOriginalUrlRef.current)
+      try {
+        const dataUrl = await blobToDataUrl(file)
+        setOriginalImage(dataUrl)
+        setErrorMessage(null)
+        applyDisplayImage(dataUrl)
+      } catch (error) {
+        console.error('Bilddatei konnte nicht gelesen werden.', error)
+        setErrorMessage('Die ausgewählte Datei konnte nicht geladen werden.')
       }
-      const manualUrl = URL.createObjectURL(file)
-      manualOriginalUrlRef.current = manualUrl
-      setOriginalImage(manualUrl)
-      setErrorMessage(null)
-      applyDisplayImage(manualUrl, { objectUrl: true })
     },
-    [applyDisplayImage]
+    [applyDisplayImage],
   )
 
   const resetToOriginal = useCallback(() => {
     if (!originalImage) return
     setErrorMessage(null)
-    const shouldTreatAsObjectUrl =
-      manualOriginalUrlRef.current === originalImage || originalImage.startsWith('blob:')
-    applyDisplayImage(originalImage, { objectUrl: shouldTreatAsObjectUrl })
-    if (!shouldTreatAsObjectUrl) {
+    applyDisplayImage(originalImage)
+    if (!originalImage.startsWith('data:')) {
       loadPlayerImage(originalImage)
         .then(setLocalPhoto)
-        .catch(() => setLocalPhoto(originalImage))
+        .catch(error => {
+          console.warn('Spielerfoto konnte nicht geladen werden. Platzhalter wird genutzt.', error)
+          setLocalPhoto(PLACEHOLDER_IMAGE)
+        })
     }
   }, [originalImage, applyDisplayImage, loadPlayerImage])
 
@@ -832,11 +739,11 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
             </section>
             <section className="playercard-column playercard-column--photo">
               <PlayerCardPreview
-                imageSrc={localPhoto ?? displayImage}
+                imageSrc={localPhoto}
                 onTriggerUpload={triggerFileDialog}
                 onReset={canReset ? resetToOriginal : undefined}
                 errorMessage={errorMessage}
-                hasImage={Boolean(localPhoto ?? displayImage)}
+                hasImage={Boolean(localPhoto && localPhoto !== PLACEHOLDER_IMAGE)}
                 cardRef={playercardRef}
                 playerName={selectedPlayer?.display_name ?? null}
                 position={selectedPlayer?.fav_position ?? null}
