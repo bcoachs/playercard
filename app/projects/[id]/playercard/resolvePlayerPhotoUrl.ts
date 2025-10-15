@@ -24,11 +24,12 @@ export async function resolvePlayerPhotoUrl(photoPath: string): Promise<string |
     return null
   }
 
-  const { data, error } = supabase.storage.from(PLAYER_PHOTO_BUCKET).getPublicUrl(trimmed)
-  if (error) {
-    console.warn('Supabase public URL lookup failed for player photo.', error)
+  const { data } = supabase.storage.from(PLAYER_PHOTO_BUCKET).getPublicUrl(trimmed)
+  const publicUrl = data?.publicUrl
+  if (!publicUrl) {
+    console.warn('Supabase public URL lookup failed for player photo.')
     return null
   }
 
-  return data?.publicUrl ?? null
+  return publicUrl
 }
