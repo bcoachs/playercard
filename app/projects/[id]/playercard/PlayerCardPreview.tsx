@@ -615,7 +615,7 @@ export default function PlayerCardPreview({
               <span>{(playerName || 'Spieler auswählen').toUpperCase()}</span>
             </div>
           </div>
-          <div className="playercard__stations-panel">
+          <div className="playercard__stations-panel playercard__stats-grid">
             {stationValues.map(station => (
               <div key={station.label} className="playercard-station">
                 <div className="playercard-station__header">

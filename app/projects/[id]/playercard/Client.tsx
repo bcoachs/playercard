@@ -10,6 +10,8 @@ import PlayerStats, { PlayerStat } from './PlayerStats'
 import BackgroundSelector, { BackgroundOption } from './BackgroundSelector'
 import { blobToDataUrl } from './blobToDataUrl'
 import { resolvePlayerPhotoUrl } from './resolvePlayerPhotoUrl'
+import { buildPlayerStationAverages } from '@/lib/data'
+import { aggregateScore, scoreForStation, type ScoreDependencies, type ScoreMap } from '@/lib/scoring'
 
 const STAT_ORDER = [
   'Beweglichkeit',
@@ -58,8 +60,6 @@ type Measurement = {
   value: number
 }
 
-type ScoreMap = Record<string, number[]>
-
 type CsvStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 const DEFAULT_BACKGROUNDS: BackgroundOption[] = [
@@ -96,42 +96,6 @@ const USE_S4_CSV = (() => {
   if (v === '0' || v === 'false') return false
   return true
 })()
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n))
-}
-
-function normScore(st: Station, raw: number): number {
-  const min = st.min_value ?? 0
-  const max = st.max_value ?? 100
-  if (max === min) return 0
-  if (st.higher_is_better) return Math.round(clamp((raw - min) / (max - min), 0, 1) * 100)
-  return Math.round(clamp((max - raw) / (max - min), 0, 1) * 100)
-}
-
-function nearestAgeBucket(age: number, keys: string[]): string {
-  const parsed = keys.map(key => {
-    const nums = key.match(/\d+/g)?.map(Number) || []
-    const mid = nums.length === 2 ? (nums[0] + nums[1]) / 2 : (nums[0] || 0)
-    return { key, mid }
-  })
-  parsed.sort((a, b) => Math.abs(a.mid - age) - Math.abs(b.mid - age))
-  return parsed[0]?.key || keys[0]
-}
-
-function scoreFromTimeStep(seconds: number, rows: number[]): number {
-  for (let i = 0; i < rows.length; i++) {
-    if (seconds <= rows[i]) return Math.max(0, Math.min(100, 100 - i))
-  }
-  return 0
-}
-
-function scoreFromSpeedStep(speed: number, rows: number[]): number {
-  for (let i = 0; i < rows.length; i++) {
-    if (speed >= rows[i]) return Math.max(0, Math.min(100, 100 - i))
-  }
-  return 0
-}
 
 async function loadS1Map(gender: 'male' | 'female'): Promise<ScoreMap | null> {
   const candidates =
@@ -475,14 +439,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     return parsed
   }, [project?.date])
 
-  const measByPlayerStation = useMemo(() => {
-    const map: Record<string, Record<string, number>> = {}
-    for (const m of measurements) {
-      if (!map[m.player_id]) map[m.player_id] = {}
-      map[m.player_id][m.station_id] = Number(m.value || 0)
-    }
-    return map
-  }, [measurements])
+  const measByPlayerStation = useMemo(() => buildPlayerStationAverages(measurements), [measurements])
 
   const sortedStations = useMemo(() => {
     return stations.slice().sort((a, b) => {
@@ -491,6 +448,18 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       return ia - ib
     })
   }, [stations])
+
+  const scoreDeps = useMemo<ScoreDependencies>(
+    () => ({
+      eventYear,
+      s1Female,
+      s1Male,
+      s6Female,
+      s6Male,
+      s4Map,
+    }),
+    [eventYear, s1Female, s1Male, s6Female, s6Male, s4Map],
+  )
 
   const stats = useMemo<PlayerStat[]>(() => {
     if (!selectedPlayer) return []
@@ -508,24 +477,14 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
         })
         continue
       }
-      const score = scoreForStation(station, selectedPlayer, raw, {
-        s1Female,
-        s1Male,
-        s6Female,
-        s6Male,
-        s4Map,
-        eventYear,
-      })
+      const score = scoreForStation(station, selectedPlayer, raw, scoreDeps)
       entries.push({ id: station.id, label: station.name, score, raw, unit: station.unit })
     }
     return entries
-  }, [selectedPlayer, sortedStations, measByPlayerStation, s1Female, s1Male, s6Female, s6Male, s4Map, eventYear])
+  }, [selectedPlayer, sortedStations, measByPlayerStation, scoreDeps])
 
   const totalScore = useMemo(() => {
-    const values = stats.map(stat => stat.score).filter((value): value is number => typeof value === 'number')
-    if (!values.length) return null
-    const sum = values.reduce((acc, value) => acc + value, 0)
-    return Math.round(sum / values.length)
+    return aggregateScore(stats.map(stat => stat.score))
   }, [stats])
 
   const stationValues = useMemo(
@@ -764,7 +723,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
               />
               <div className="playercard-export">
                 <button className="btn" type="button" onClick={handleDownload}>
-                  Playercard als PNG herunterladen
+                  Playercard senden
                 </button>
               </div>
               <input
@@ -780,69 +739,4 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       </div>
     </main>
   )
-}
-
-type ScoreDependencies = {
-  s1Female: ScoreMap | null
-  s1Male: ScoreMap | null
-  s6Female: ScoreMap | null
-  s6Male: ScoreMap | null
-  s4Map: ScoreMap | null
-  eventYear: number
-}
-
-function scoreForStation(station: Station, player: Player, raw: number, deps: ScoreDependencies): number {
-  const name = station.name.toLowerCase()
-  if (name.includes('beweglichkeit')) {
-    if (USE_S1_CSV) {
-      const map = player.gender === 'male' ? deps.s1Male : deps.s1Female
-      if (map) {
-        const keys = Object.keys(map)
-        if (keys.length) {
-          const bucket = nearestAgeBucket(resolveAge(player.birth_year, deps.eventYear), keys)
-          const rows = map[bucket] || []
-          if (rows.length) return scoreFromTimeStep(Number(raw), rows)
-        }
-      }
-    }
-    return normScore({ ...station, min_value: 10, max_value: 40, higher_is_better: false }, Number(raw))
-  }
-  if (name.includes('schnelligkeit')) {
-    if (USE_S6_CSV) {
-      const map = player.gender === 'male' ? deps.s6Male : deps.s6Female
-      if (map) {
-        const keys = Object.keys(map)
-        if (keys.length) {
-          const bucket = nearestAgeBucket(resolveAge(player.birth_year, deps.eventYear), keys)
-          const rows = map[bucket] || []
-          if (rows.length) return scoreFromTimeStep(Number(raw), rows)
-        }
-      }
-    }
-    return normScore({ ...station, min_value: 4, max_value: 20, higher_is_better: false }, Number(raw))
-  }
-  if (name.includes('schusskraft')) {
-    if (USE_S4_CSV && deps.s4Map) {
-      const keys = Object.keys(deps.s4Map)
-      if (keys.length) {
-        const bucket = nearestAgeBucket(resolveAge(player.birth_year, deps.eventYear), keys)
-        const rows = deps.s4Map[bucket] || []
-        if (rows.length) return scoreFromSpeedStep(Number(raw), rows)
-      }
-    }
-    return normScore({ ...station, min_value: 0, max_value: 150, higher_is_better: true }, Number(raw))
-  }
-  if (name.includes('passgenauigkeit')) {
-    return Math.round(clamp(Number(raw), 0, 100))
-  }
-  if (name.includes('schusspräzision')) {
-    const pct = clamp(Number(raw) / 24, 0, 1)
-    return Math.round(pct * 100)
-  }
-  return Math.round(normScore(station, Number(raw)))
-}
-
-function resolveAge(birthYear: number | null | undefined, eventYear: number): number {
-  if (!birthYear) return 16
-  return Math.max(6, Math.min(49, eventYear - birthYear))
 }
