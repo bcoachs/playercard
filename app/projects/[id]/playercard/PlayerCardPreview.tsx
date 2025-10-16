@@ -541,54 +541,56 @@ export default function PlayerCardPreview({
         className="playercard-photo-frame"
         data-image-loaded={imageLoaded ? 'true' : 'false'}
       >
-        <div className="playercard" id="playerCardRoot" ref={cardRef} style={combinedBackgroundStyle}>
-          <div className="playercard__photo-area" ref={containerRef} onWheel={handleWheel}>
-            <img
-              src={activeImageSrc}
-              alt={photoAlt}
-              className={`playercard__photo${isPlaceholderImage ? ' playercard__photo--placeholder' : ''}`}
-              style={{
-                transform: `translate3d(-50%, -50%, 0) translate3d(${transform.offsetX}px, ${transform.offsetY}px, 0) scale(${transform.scale})`,
-                cursor: cursorStyle,
-                userSelect: 'none',
-              }}
-              draggable={false}
-              crossOrigin="anonymous"
-              referrerPolicy="no-referrer"
-              onMouseDown={onMouseDown}
-              onTouchStart={onTouchStart}
-              onDragStart={event => event.preventDefault()}
-              onLoad={handleImageLoad}
-              onError={handleImageError}
-            />
-            <div className="playercard__photo-controls">
-              <div className="playercard__zoom-controls" data-export-ignore="true">
-                <button
-                  type="button"
-                  className="playercard__zoom-button"
-                  onClick={event => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    zoomByStep('out')
-                  }}
-                  disabled={!canZoomOut}
-                  aria-label="Herauszoomen"
-                >
-                  −
-                </button>
-                <button
-                  type="button"
-                  className="playercard__zoom-button"
-                  onClick={event => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    zoomByStep('in')
-                  }}
-                  disabled={!canZoomIn}
-                  aria-label="Hineinzoomen"
-                >
-                  +
-                </button>
+        <div className="playercard-wrapper">
+          <div className="playercard" id="playerCardRoot" ref={cardRef} style={combinedBackgroundStyle}>
+            <div className="playercard__photo-area" ref={containerRef} onWheel={handleWheel}>
+              <img
+                src={activeImageSrc}
+                alt={photoAlt}
+                className={`playercard__photo${isPlaceholderImage ? ' playercard__photo--placeholder' : ''}`}
+                style={{
+                  transform: `translate3d(-50%, -50%, 0) translate3d(${transform.offsetX}px, ${transform.offsetY}px, 0) scale(${transform.scale})`,
+                  cursor: cursorStyle,
+                  userSelect: 'none',
+                }}
+                draggable={false}
+                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
+                onMouseDown={onMouseDown}
+                onTouchStart={onTouchStart}
+                onDragStart={event => event.preventDefault()}
+                onLoad={handleImageLoad}
+                onError={handleImageError}
+              />
+              <div className="playercard__photo-controls">
+                <div className="playercard__zoom-controls" data-export-ignore="true">
+                  <button
+                    type="button"
+                    className="playercard__zoom-button"
+                    onClick={event => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      zoomByStep('out')
+                    }}
+                    disabled={!canZoomOut}
+                    aria-label="Herauszoomen"
+                  >
+                    −
+                  </button>
+                  <button
+                    type="button"
+                    className="playercard__zoom-button"
+                    onClick={event => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      zoomByStep('in')
+                    }}
+                    disabled={!canZoomIn}
+                    aria-label="Hineinzoomen"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </div>
             <div className="playercard__info-rail">
