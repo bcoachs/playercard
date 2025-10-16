@@ -800,13 +800,13 @@ export default function ProjectDashboard() {
                     <tr key={player.id} className="align-top hoverable-row" onClick={() => fillForm(player)} style={{ cursor: 'pointer' }}>
                       <td className="p-2 whitespace-nowrap font-medium">
                         <div className="matrix-player-cell">
-                          {natCode ? (
-                            <span className="matrix-player-flag">
+                          <span className="matrix-player-flag" aria-hidden={!natCode}>
+                            {natCode ? (
                               <ReactCountryFlag
                                 countryCode={natCode}
                                 svg
                                 title={player.nationality ?? undefined}
-                                aria-label={player.nationality ?? natCode}
+                                ariaLabel={player.nationality ?? natCode}
                                 className="country-flag"
                                 cdnSuffix="4x3"
                                 style={{
@@ -818,8 +818,10 @@ export default function ProjectDashboard() {
                                   backgroundPosition: '50% 50%',
                                 }}
                               />
-                            </span>
-                          ) : null}
+                            ) : (
+                              <span className="matrix-player-flag__fallback">--</span>
+                            )}
+                          </span>
                           <span>{player.display_name}</span>
                           {hasNumber ? <span className="matrix-player-number">#{player.fav_number}</span> : null}
                         </div>
