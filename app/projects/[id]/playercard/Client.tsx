@@ -92,6 +92,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const [displayImage, setDisplayImage] = useState<string | null>(null)
   const [localPhoto, setLocalPhoto] = useState<string | null>(null)
   const [photoOffset, setPhotoOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [imageReady, setImageReady] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const playercardRef = useRef<HTMLDivElement | null>(null)
@@ -339,6 +340,9 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   }, [])
 
   const handleDownload = useCallback(async () => {
+    if (!imageReady) {
+      return
+    }
     const cardEl = document.getElementById('playerCardRoot')
     if (!cardEl) return
     try {
@@ -359,7 +363,11 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
         alert('Export fehlgeschlagen. Prüfen Sie die Konsole auf Details.')
       }
     }
-  }, [selectedPlayer])
+  }, [imageReady, selectedPlayer])
+
+  useEffect(() => {
+    setImageReady(false)
+  }, [localPhoto])
 
   useEffect(() => {
     let cancelled = false
@@ -508,9 +516,10 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
                 cardBackgroundStyle={cardBackgroundStyle}
                 photoOffset={photoOffset}
                 onPhotoOffsetChange={handlePhotoOffsetChange}
+                onImageLoad={() => setImageReady(true)}
               />
               <div className="playercard-export">
-                <button className="btn" type="button" onClick={handleDownload}>
+                <button className="btn" type="button" onClick={handleDownload} disabled={!imageReady}>
                   Playercard senden
                 </button>
               </div>

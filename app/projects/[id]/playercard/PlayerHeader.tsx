@@ -1,5 +1,4 @@
 import React from 'react'
-import ReactCountryFlag from '@/components/ReactCountryFlag'
 
 type PlayerHeaderProps = {
   projectName: string
@@ -39,8 +38,11 @@ export default function PlayerHeader({
   const rawNationality = nationalityLabel ?? player?.nationality ?? null
   const nationalityText =
     typeof rawNationality === 'string' ? (rawNationality.trim().length ? rawNationality.trim() : null) : rawNationality
-  const hasNationalityCode = typeof nationalityCode === 'string' && nationalityCode.length === 2
   const nationalityTitle = nationalityLabel ?? nationalityText ?? undefined
+  const flagUrl =
+    nationalityCode && nationalityCode.length === 2
+      ? `/flags/${nationalityCode.toLowerCase()}.png`
+      : null
 
   return (
     <header className="playercard-header">
@@ -85,16 +87,20 @@ export default function PlayerHeader({
           <div className="playercard-detail">
             <span className="playercard-detail__label">Nationalität</span>
             <span className="playercard-detail__value">
-              {hasNationalityCode && nationalityCode ? (
+              {flagUrl ? (
                 <span className="playercard-flag playercard-detail__flag" title={nationalityTitle}>
-                  <ReactCountryFlag countryCode={nationalityCode} />
+                  <img
+                    src={flagUrl}
+                    alt={nationalityTitle ?? nationalityCode ?? ''}
+                    className="playercard-flag-img"
+                  />
                 </span>
-              ) : null}
-              {nationalityText ? (
+              ) : nationalityText ? (
                 <span>{nationalityText}</span>
-              ) : !hasNationalityCode ? (
+              ) : (
                 <span>–</span>
-              ) : null}
+              )}
+              {flagUrl && nationalityText ? <span>{nationalityText}</span> : null}
             </span>
           </div>
           <div className="playercard-detail">
