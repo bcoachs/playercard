@@ -10,22 +10,7 @@ import PlayerStats, { PlayerStat } from './PlayerStats'
 import BackgroundSelector, { BackgroundOption } from './BackgroundSelector'
 import { blobToDataUrl } from './blobToDataUrl'
 import { resolvePlayerPhotoUrl } from './resolvePlayerPhotoUrl'
-import { fetchAggregatedMetrics, type AggregatedStationMetrics } from '@/lib/data'
-import { aggregateScore, scoreForStation, type ScoreDependencies, type ScoreMap } from '@/lib/scoring'
-
-const STAT_ORDER = [
-  'Beweglichkeit',
-  'Technik',
-  'Passgenauigkeit',
-  'Schusskraft',
-  'Schusspräzision',
-  'Schnelligkeit',
-] as const
-
-const STAT_INDEX: Record<string, number> = STAT_ORDER.reduce((acc, name, index) => {
-  acc[name] = index
-  return acc
-}, {} as Record<string, number>)
+import { STAT_ORDER, type PlayerPerformanceEntry } from '@/lib/playerPerformance'
 
 type Station = {
   id: string
@@ -54,8 +39,6 @@ type Player = {
 
 type Project = { id: string; name: string; date: string | null }
 
-type CsvStatus = 'idle' | 'loading' | 'ready' | 'error'
-
 const DEFAULT_BACKGROUNDS: BackgroundOption[] = [
   {
     id: 'gradient-dark',
@@ -73,115 +56,6 @@ const DEFAULT_BACKGROUNDS: BackgroundOption[] = [
 
 const PLACEHOLDER_IMAGE = '/public/placeholder.png'
 
-const USE_S1_CSV = (() => {
-  const v = process.env.NEXT_PUBLIC_USE_S1_CSV
-  if (v === '0' || v === 'false') return false
-  return true
-})()
-
-const USE_S6_CSV = (() => {
-  const v = process.env.NEXT_PUBLIC_USE_S6_CSV
-  if (v === '0' || v === 'false') return false
-  return true
-})()
-
-const USE_S4_CSV = (() => {
-  const v = process.env.NEXT_PUBLIC_USE_S4_CSV
-  if (v === '0' || v === 'false') return false
-  return true
-})()
-
-async function loadS1Map(gender: 'male' | 'female'): Promise<ScoreMap | null> {
-  const candidates =
-    gender === 'male'
-      ? [
-          '/config/s1_male.csv',
-          '/config/S1_Beweglichkeit_m.csv',
-          '/config/s1_female.csv',
-          '/config/S1_Beweglichkeit_w.csv',
-          '/config/s1.csv',
-        ]
-      : ['/config/s1_female.csv', '/config/S1_Beweglichkeit_w.csv', '/config/s1.csv']
-  for (const file of candidates) {
-    try {
-      const res = await fetch(file, { cache: 'no-store' })
-      if (!res.ok) continue
-      const text = await res.text()
-      const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
-      if (lines.length < 2) continue
-      const header = lines[0].split(';').map(s => s.trim())
-      const ageCols = header.slice(1)
-      const out: ScoreMap = {}
-      for (const age of ageCols) out[age] = []
-      for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(';').map(s => s.trim())
-        for (let c = 1; c < cols.length; c++) {
-          const age = ageCols[c - 1]
-          const sec = Number((cols[c] || '').replace(',', '.'))
-          if (Number.isFinite(sec)) out[age].push(sec)
-        }
-      }
-      if (Object.keys(out).length) return out
-    } catch (err) {
-      console.warn('S1 CSV konnte nicht geladen werden:', err)
-    }
-  }
-  return null
-}
-
-async function loadS6Map(gender: 'male' | 'female'): Promise<ScoreMap | null> {
-  try {
-    const file = gender === 'male' ? '/config/s6_male.csv' : '/config/s6_female.csv'
-    const res = await fetch(file, { cache: 'no-store' })
-    if (!res.ok) return null
-    const text = await res.text()
-    const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
-    if (lines.length < 2) return null
-    const header = lines[0].split(';').map(s => s.trim())
-    const ageCols = header.slice(1)
-    const out: ScoreMap = {}
-    for (const age of ageCols) out[age] = []
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(';').map(s => s.trim())
-      for (let c = 1; c < cols.length; c++) {
-        const age = ageCols[c - 1]
-        const sec = Number((cols[c] || '').replace(',', '.'))
-        if (Number.isFinite(sec)) out[age].push(sec)
-      }
-    }
-    return out
-  } catch (err) {
-    console.warn('S6 CSV konnte nicht geladen werden:', err)
-    return null
-  }
-}
-
-async function loadS4Map(): Promise<ScoreMap | null> {
-  try {
-    const res = await fetch('/config/s4.csv', { cache: 'no-store' })
-    if (!res.ok) return null
-    const text = await res.text()
-    const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
-    if (lines.length < 3) return null
-    const header = lines[0].split(';').map(s => s.trim())
-    const ageCols = header.slice(1)
-    const out: ScoreMap = {}
-    for (const age of ageCols) out[age] = []
-    for (let i = 2; i < lines.length; i++) {
-      const cols = lines[i].split(';').map(s => s.trim())
-      for (let c = 1; c < cols.length; c++) {
-        const age = ageCols[c - 1]
-        const kmh = Number((cols[c] || '').replace(',', '.'))
-        if (Number.isFinite(kmh)) out[age].push(kmh)
-      }
-    }
-    return out
-  } catch (err) {
-    console.warn('S4 CSV konnte nicht geladen werden:', err)
-    return null
-  }
-}
-
 function formatBirthYearToAge(birthYear: number | null, eventYear: number): number | null {
   if (!birthYear) return null
   return Math.max(6, Math.min(49, eventYear - birthYear))
@@ -196,7 +70,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const [project, setProject] = useState<Project | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [stations, setStations] = useState<Station[]>([])
-  const [playerMetrics, setPlayerMetrics] = useState<AggregatedStationMetrics>({})
+  const [performances, setPerformances] = useState<Record<string, PlayerPerformanceEntry>>({})
 
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(() => {
     if (typeof initialPlayerId === 'string' && initialPlayerId) {
@@ -209,13 +83,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const [selectedBackgroundId, setSelectedBackgroundId] = useState(DEFAULT_BACKGROUNDS[0].id)
 
   const [manifestStatus, setManifestStatus] = useState<'idle' | 'error'>('idle')
-
-  const [s1Female, setS1Female] = useState<ScoreMap | null>(null)
-  const [s1Male, setS1Male] = useState<ScoreMap | null>(null)
-  const [s6Female, setS6Female] = useState<ScoreMap | null>(null)
-  const [s6Male, setS6Male] = useState<ScoreMap | null>(null)
-  const [s4Map, setS4Map] = useState<ScoreMap | null>(null)
-  const [scoreStatus, setScoreStatus] = useState<CsvStatus>('idle')
 
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -285,51 +152,40 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
       setIsLoading(true)
       setLoadError(null)
       try {
-        const [dashboardRes, stationsRes] = await Promise.all([
-          fetch(`/api/projects/${projectId}/dashboard`, { cache: 'no-store' }),
-          fetch(`/api/projects/${projectId}/stations`, { cache: 'no-store' }),
-        ])
-
-        const errors: string[] = []
-
-        if (dashboardRes.ok) {
-          const dashboardData = await dashboardRes.json().catch(() => ({}))
-          if (isMounted) {
-            setProject(dashboardData.project || null)
-            setPlayers(Array.isArray(dashboardData.players) ? dashboardData.players : [])
-          }
-        } else {
-          errors.push('Projekt konnte nicht geladen werden.')
+        const res = await fetch(`/api/projects/${projectId}/dashboard`, { cache: 'no-store' })
+        if (!res.ok) {
+          const message = await res.text().catch(() => '')
           if (isMounted) {
             setProject(null)
             setPlayers([])
-          }
-        }
-
-        if (stationsRes.ok) {
-          const stationData = await stationsRes.json().catch(() => ({}))
-          if (isMounted) {
-            const items: Station[] = Array.isArray(stationData.items) ? stationData.items : []
-            setStations(items)
-          }
-        } else {
-          errors.push('Stationen konnten nicht geladen werden.')
-          if (isMounted) {
             setStations([])
+            setPerformances({})
+            setLoadError(message || 'Projekt konnte nicht geladen werden.')
           }
+          return
         }
 
-        if (isMounted) {
-          setLoadError(errors.length ? errors.join(' ') : null)
-        }
+        const data = await res.json().catch(() => ({}))
+        if (!isMounted) return
+
+        const projectData = data?.project || null
+        const playerItems: Player[] = Array.isArray(data?.players) ? data.players : []
+        const stationItems: Station[] = Array.isArray(data?.stations) ? data.stations : []
+        const performanceMap: Record<string, PlayerPerformanceEntry> =
+          data && typeof data.performances === 'object' && data.performances !== null ? data.performances : {}
+
+        setProject(projectData)
+        setPlayers(playerItems)
+        setStations(stationItems)
+        setPerformances(performanceMap)
+        setLoadError(null)
       } catch (err) {
         if (!isMounted) return
         // Bei Fehlern alle lokal gehaltenen Daten zurücksetzen
         setProject(null)
         setStations([])
         setPlayers([])
-        // Aggregierte Metrics resetten, da measurements-State hier nicht existiert
-        setPlayerMetrics({})
+        setPerformances({})
         setLoadError(err instanceof Error ? err.message : 'Unbekannter Fehler beim Laden')
       } finally {
         if (isMounted) setIsLoading(false)
@@ -374,49 +230,6 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   }, [backgroundOptions, selectedBackgroundId])
 
   useEffect(() => {
-    let cancelled = false
-    if (scoreStatus !== 'idle') return
-    setScoreStatus('loading')
-    const promises: Promise<void>[] = []
-    if (USE_S1_CSV) {
-      promises.push(
-        Promise.allSettled([loadS1Map('female'), loadS1Map('male')]).then(([female, male]) => {
-          if (cancelled) return
-          if (female.status === 'fulfilled' && female.value) setS1Female(female.value)
-          if (male.status === 'fulfilled' && male.value) setS1Male(male.value)
-        })
-      )
-    }
-    if (USE_S6_CSV) {
-      promises.push(
-        Promise.allSettled([loadS6Map('female'), loadS6Map('male')]).then(([female, male]) => {
-          if (cancelled) return
-          if (female.status === 'fulfilled' && female.value) setS6Female(female.value)
-          if (male.status === 'fulfilled' && male.value) setS6Male(male.value)
-        })
-      )
-    }
-    if (USE_S4_CSV) {
-      promises.push(
-        loadS4Map().then(map => {
-          if (cancelled) return
-          if (map) setS4Map(map)
-        })
-      )
-    }
-    Promise.all(promises)
-      .then(() => {
-        if (!cancelled) setScoreStatus('ready')
-      })
-      .catch(() => {
-        if (!cancelled) setScoreStatus('error')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [scoreStatus])
-
-  useEffect(() => {
     if (!players.length) return
     if (selectedPlayerId && players.some(player => player.id === selectedPlayerId)) return
     setSelectedPlayerId(players[0].id)
@@ -434,75 +247,33 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     return parsed
   }, [project?.date])
 
-  const sortedStations = useMemo(() => {
-    return stations.slice().sort((a, b) => {
-      const ia = STAT_INDEX[a.name as (typeof STAT_ORDER)[number]] ?? 99
-      const ib = STAT_INDEX[b.name as (typeof STAT_ORDER)[number]] ?? 99
-      return ia - ib
-    })
-  }, [stations])
-
-  const scoreDeps = useMemo<ScoreDependencies>(
-    () => ({
-      eventYear,
-      s1Female,
-      s1Male,
-      s6Female,
-      s6Male,
-      s4Map,
-    }),
-    [eventYear, s1Female, s1Male, s6Female, s6Male, s4Map],
-  )
-
-  useEffect(() => {
-    let cancelled = false
-    if (!selectedPlayerId) {
-      setPlayerMetrics({})
-      return
-    }
-
-    setPlayerMetrics({})
-
-    fetchAggregatedMetrics(projectId, selectedPlayerId)
-      .then(values => {
-        if (!cancelled) setPlayerMetrics(values)
-      })
-      .catch(error => {
-        if (!cancelled) {
-          console.warn('Aggregierte Werte konnten nicht geladen werden.', error)
-          setPlayerMetrics({})
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [projectId, selectedPlayerId])
-
   const stats = useMemo<PlayerStat[]>(() => {
-    if (!selectedPlayer) return []
-    const entries: PlayerStat[] = []
-    for (const station of sortedStations) {
-      const raw = playerMetrics[station.id]
-      if (typeof raw === 'undefined') {
-        entries.push({
-          id: station.id,
-          label: station.name,
-          score: null,
-          raw: null,
-          unit: station.unit,
-        })
-        continue
-      }
-      const score = scoreForStation(station, selectedPlayer, raw, scoreDeps)
-      entries.push({ id: station.id, label: station.name, score, raw, unit: station.unit })
+    if (!selectedPlayerId) {
+      return stations.map(station => ({
+        id: station.id,
+        label: station.name,
+        score: null,
+        raw: null,
+        unit: station.unit,
+      }))
     }
-    return entries
-  }, [selectedPlayer, sortedStations, playerMetrics, scoreDeps])
+    const entry = performances[selectedPlayerId]
+    if (entry?.stats) {
+      return entry.stats
+    }
+    if (stations.length) {
+      return stations.map(station => ({
+        id: station.id,
+        label: station.name,
+        score: null,
+        raw: null,
+        unit: station.unit,
+      }))
+    }
+    return []
+  }, [performances, selectedPlayerId, stations])
 
-  const totalScore = useMemo(() => {
-    return aggregateScore(stats.map(stat => stat.score))
-  }, [stats])
+  const totalScore = performances[selectedPlayerId]?.totalScore ?? null
 
   const stationValues = useMemo(
     () =>
