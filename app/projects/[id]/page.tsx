@@ -6,7 +6,6 @@ import { useParams } from 'next/navigation'
 import BackFab from '../../components/BackFab'
 import PhotoCaptureModal from './PhotoCaptureModal'
 import { COUNTRY_OPTIONS, getCountryCode } from '@/lib/countries'
-import ReactCountryFlag from '@/components/ReactCountryFlag'
 import { buildPlayerStationAverages } from '@/lib/data'
 import { aggregateScore, scoreForStation, type ScoreDependencies, type ScoreMap } from '@/lib/scoring'
 
@@ -794,17 +793,22 @@ export default function ProjectDashboard() {
               <tbody>
                 {rows.map(({ player, perStation, avg }) => {
                   const natCode = getCountryCode(player.nationality)
+                  const flagUrl = natCode ? `/flags/${natCode.toLowerCase()}.png` : null
                   const hasNumber = Number.isFinite(player.fav_number as any)
                   return (
                     <tr key={player.id} className="align-top hoverable-row" onClick={() => fillForm(player)} style={{ cursor: 'pointer' }}>
                       <td className="p-2 whitespace-nowrap font-medium">
                         <div className="matrix-player-cell">
-                          {natCode ? (
+                          {flagUrl ? (
                             <span
                               className="playercard-flag matrix-player-flag"
                               title={player.nationality ?? undefined}
                             >
-                              <ReactCountryFlag countryCode={natCode} />
+                              <img
+                                src={flagUrl}
+                                alt={player.nationality ?? natCode ?? ''}
+                                className="playercard-flag-img"
+                              />
                             </span>
                           ) : null}
                           <span>{player.display_name}</span>
