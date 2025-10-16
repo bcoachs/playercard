@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react'
-import ReactCountryFlag from '@/components/ReactCountryFlag'
+import ReactCountryFlag from 'react-country-flag'
 
 const PLACEHOLDER_IMAGE = '/public/placeholder.png'
 const MAX_ZOOM_MULTIPLIER = 4
@@ -505,6 +505,12 @@ export default function PlayerCardPreview({
       : 'Spielerfoto'
 
   const resolvedNationalityLabel = nationalityLabel ?? null
+  const normalizedNationalityCode =
+    typeof nationalityCode === 'string' && nationalityCode.trim().length
+      ? nationalityCode.trim().toUpperCase()
+      : null
+  const hasNationalityCode =
+    typeof normalizedNationalityCode === 'string' && /^[A-Z]{2}$/.test(normalizedNationalityCode)
 
   const getProgressWidth = useCallback((value: number | null) => {
     if (typeof value !== 'number' || Number.isNaN(value)) return 0
@@ -585,9 +591,24 @@ export default function PlayerCardPreview({
                 <span className="playercard-info__label">Position</span>
               </div>
               <div className="playercard-info playercard-info--flag">
-                {nationalityCode ? (
-                  <span className="playercard-info__flag" title={resolvedNationalityLabel ?? undefined}>
-                    <ReactCountryFlag countryCode={nationalityCode} style={{ fontSize: '1.6rem' }} />
+                {hasNationalityCode && normalizedNationalityCode ? (
+                  <span className="playercard-info__flag">
+                    <ReactCountryFlag
+                      countryCode={normalizedNationalityCode}
+                      svg
+                      title={resolvedNationalityLabel ?? undefined}
+                      aria-label={resolvedNationalityLabel ?? normalizedNationalityCode}
+                      className="country-flag"
+                      cdnSuffix="4x3"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: 0,
+                        display: 'block',
+                        backgroundSize: 'cover',
+                        backgroundPosition: '50% 50%',
+                      }}
+                    />
                   </span>
                 ) : resolvedNationalityLabel ? (
                   <span className="playercard-info__value">{resolvedNationalityLabel}</span>

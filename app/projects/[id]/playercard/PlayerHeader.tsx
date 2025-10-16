@@ -1,5 +1,5 @@
 import React from 'react'
-import ReactCountryFlag from '@/components/ReactCountryFlag'
+import ReactCountryFlag from 'react-country-flag'
 
 type PlayerHeaderProps = {
   projectName: string
@@ -39,7 +39,12 @@ export default function PlayerHeader({
   const rawNationality = nationalityLabel ?? player?.nationality ?? null
   const nationalityText =
     typeof rawNationality === 'string' ? (rawNationality.trim().length ? rawNationality.trim() : null) : rawNationality
-  const hasNationalityCode = typeof nationalityCode === 'string' && nationalityCode.length === 2
+  const normalizedNationalityCode =
+    typeof nationalityCode === 'string' && nationalityCode.trim().length
+      ? nationalityCode.trim().toUpperCase()
+      : null
+  const hasNationalityCode =
+    typeof normalizedNationalityCode === 'string' && /^[A-Z]{2}$/.test(normalizedNationalityCode)
   const nationalityTitle = nationalityLabel ?? nationalityText ?? undefined
 
   return (
@@ -85,9 +90,24 @@ export default function PlayerHeader({
           <div className="playercard-detail">
             <span className="playercard-detail__label">Nationalität</span>
             <span className="playercard-detail__value">
-              {hasNationalityCode && nationalityCode ? (
-                <span className="playercard-detail__flag" title={nationalityTitle}>
-                  <ReactCountryFlag countryCode={nationalityCode} style={{ fontSize: '1.5rem' }} />
+              {hasNationalityCode && normalizedNationalityCode ? (
+                <span className="playercard-detail__flag">
+                  <ReactCountryFlag
+                    countryCode={normalizedNationalityCode}
+                    svg
+                    title={nationalityTitle}
+                    aria-label={nationalityTitle ?? normalizedNationalityCode}
+                    className="country-flag"
+                    cdnSuffix="4x3"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: 0,
+                      display: 'block',
+                      backgroundSize: 'cover',
+                      backgroundPosition: '50% 50%',
+                    }}
+                  />
                 </span>
               ) : null}
               {nationalityText ? (
