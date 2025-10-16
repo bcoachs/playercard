@@ -806,7 +806,7 @@ export default function ProjectDashboard() {
                                 countryCode={natCode}
                                 svg
                                 title={player.nationality ?? undefined}
-                                ariaLabel={player.nationality ?? natCode}
+                                aria-label={player.nationality ?? natCode}
                                 className="country-flag"
                                 cdnSuffix="4x3"
                                 style={{

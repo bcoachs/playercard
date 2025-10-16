@@ -597,7 +597,7 @@ export default function PlayerCardPreview({
                       countryCode={normalizedNationalityCode}
                       svg
                       title={resolvedNationalityLabel ?? undefined}
-                      ariaLabel={resolvedNationalityLabel ?? normalizedNationalityCode}
+                      aria-label={resolvedNationalityLabel ?? normalizedNationalityCode}
                       className="country-flag"
                       cdnSuffix="4x3"
                       style={{

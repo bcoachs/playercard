@@ -96,7 +96,7 @@ export default function PlayerHeader({
                     countryCode={normalizedNationalityCode}
                     svg
                     title={nationalityTitle}
-                    ariaLabel={nationalityTitle ?? normalizedNationalityCode}
+                    aria-label={nationalityTitle ?? normalizedNationalityCode}
                     className="country-flag"
                     cdnSuffix="4x3"
                     style={{
