@@ -600,7 +600,6 @@ export default function PlayerCardPreview({
                       aria-label={resolvedNationalityLabel ?? normalizedNationalityCode}
                       className="country-flag"
                       cdnSuffix="4x3"
-                      fallback={normalizedNationalityCode}
                       style={{
                         width: '100%',
                         height: '100%',

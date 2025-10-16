@@ -99,7 +99,6 @@ export default function PlayerHeader({
                     aria-label={nationalityTitle ?? normalizedNationalityCode}
                     className="country-flag"
                     cdnSuffix="4x3"
-                    fallback={normalizedNationalityCode}
                     style={{
                       width: '100%',
                       height: '100%',

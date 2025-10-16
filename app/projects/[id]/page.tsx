@@ -809,7 +809,6 @@ export default function ProjectDashboard() {
                                 aria-label={player.nationality ?? natCode}
                                 className="country-flag"
                                 cdnSuffix="4x3"
-                                fallback={natCode}
                                 style={{
                                   width: '100%',
                                   height: '100%',
