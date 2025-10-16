@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import BackFab from '../../components/BackFab'
 import PhotoCaptureModal from './PhotoCaptureModal'
 import { COUNTRY_OPTIONS, getCountryCode } from '@/lib/countries'
-import ReactCountryFlag from '@/components/ReactCountryFlag'
+import ReactCountryFlag from 'react-country-flag'
 import { buildPlayerStationAverages } from '@/lib/data'
 import { aggregateScore, scoreForStation, type ScoreDependencies, type ScoreMap } from '@/lib/scoring'
 
@@ -793,15 +793,32 @@ export default function ProjectDashboard() {
               </thead>
               <tbody>
                 {rows.map(({ player, perStation, avg }) => {
-                  const natCode = getCountryCode(player.nationality)
+                  const natCodeRaw = getCountryCode(player.nationality)
+                  const natCode = natCodeRaw && /^[A-Z]{2}$/.test(natCodeRaw) ? natCodeRaw : null
                   const hasNumber = Number.isFinite(player.fav_number as any)
                   return (
                     <tr key={player.id} className="align-top hoverable-row" onClick={() => fillForm(player)} style={{ cursor: 'pointer' }}>
                       <td className="p-2 whitespace-nowrap font-medium">
                         <div className="matrix-player-cell">
                           {natCode ? (
-                            <span className="matrix-player-flag" title={player.nationality ?? undefined}>
-                              <ReactCountryFlag countryCode={natCode} style={{ fontSize: '1.1rem' }} />
+                            <span className="matrix-player-flag">
+                              <ReactCountryFlag
+                                countryCode={natCode}
+                                svg
+                                title={player.nationality ?? undefined}
+                                aria-label={player.nationality ?? natCode}
+                                className="country-flag"
+                                cdnSuffix="4x3"
+                                fallback={natCode}
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  borderRadius: 0,
+                                  display: 'block',
+                                  backgroundSize: 'cover',
+                                  backgroundPosition: '50% 50%',
+                                }}
+                              />
                             </span>
                           ) : null}
                           <span>{player.display_name}</span>
