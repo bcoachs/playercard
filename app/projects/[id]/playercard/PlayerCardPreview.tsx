@@ -7,7 +7,6 @@ import React, {
   useRef,
   useState,
 } from 'react'
-import ReactCountryFlag from '@/components/ReactCountryFlag'
 
 const PLACEHOLDER_IMAGE = '/public/placeholder.png'
 const MAX_ZOOM_MULTIPLIER = 4
@@ -39,6 +38,7 @@ type PlayerCardPreviewProps = {
   cardBackgroundStyle?: CSSProperties
   photoOffset: PhotoOffset
   onPhotoOffsetChange?: (offset: PhotoOffset) => void
+  onImageLoad?: () => void
 }
 
 type TransformState = {
@@ -89,9 +89,11 @@ export default function PlayerCardPreview({
   cardBackgroundStyle,
   photoOffset,
   onPhotoOffsetChange,
+  onImageLoad,
 }: PlayerCardPreviewProps) {
   const [activeImageSrc, setActiveImageSrc] = useState<string>(imageSrc ?? PLACEHOLDER_IMAGE)
   const [imageError, setImageError] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
   const [transform, setTransform] = useState<TransformState>({
     offsetX: 0,
     offsetY: 0,
@@ -124,6 +126,7 @@ export default function PlayerCardPreview({
     const nextSrc = imageSrc ?? PLACEHOLDER_IMAGE
     setActiveImageSrc(nextSrc)
     setImageError(false)
+    setImageLoaded(false)
     setTransform(prev => ({
       ...prev,
       offsetX: 0,
@@ -475,7 +478,11 @@ export default function PlayerCardPreview({
       naturalSizeRef.current = metrics
       setImageMetrics(metrics)
     }
-  }, [])
+    setImageLoaded(true)
+    if (onImageLoad) {
+      onImageLoad()
+    }
+  }, [onImageLoad])
 
   const handleImageError = useCallback(() => {
     if (!imageError) {
@@ -485,6 +492,7 @@ export default function PlayerCardPreview({
       setImageError(true)
       setActiveImageSrc(PLACEHOLDER_IMAGE)
     }
+    setImageLoaded(false)
   }, [imageError, imageSrc])
 
   const zoomByStep = useCallback(
@@ -505,6 +513,10 @@ export default function PlayerCardPreview({
       : 'Spielerfoto'
 
   const resolvedNationalityLabel = nationalityLabel ?? null
+  const flagUrl =
+    nationalityCode && nationalityCode.length === 2
+      ? `/flags/${nationalityCode.toLowerCase()}.png`
+      : null
 
   const getProgressWidth = useCallback((value: number | null) => {
     if (typeof value !== 'number' || Number.isNaN(value)) return 0
@@ -525,7 +537,10 @@ export default function PlayerCardPreview({
 
   return (
     <div className="playercard-photo-card">
-      <div className="playercard-photo-frame">
+      <div
+        className="playercard-photo-frame"
+        data-image-loaded={imageLoaded ? 'true' : 'false'}
+      >
         <div className="playercard" id="playerCardRoot" ref={cardRef} style={combinedBackgroundStyle}>
           <div className="playercard__photo-area" ref={containerRef} onWheel={handleWheel}>
             <img
@@ -538,6 +553,7 @@ export default function PlayerCardPreview({
                 userSelect: 'none',
               }}
               draggable={false}
+              crossOrigin="anonymous"
               referrerPolicy="no-referrer"
               onMouseDown={onMouseDown}
               onTouchStart={onTouchStart}
@@ -585,12 +601,16 @@ export default function PlayerCardPreview({
                 <span className="playercard-info__label">Position</span>
               </div>
               <div className="playercard-info playercard-info--flag">
-                {nationalityCode ? (
+                {flagUrl ? (
                   <span
                     className="playercard-flag playercard-info__flag"
                     title={resolvedNationalityLabel ?? undefined}
                   >
-                    <ReactCountryFlag countryCode={nationalityCode} />
+                    <img
+                      src={flagUrl}
+                      alt={resolvedNationalityLabel ?? nationalityCode ?? ''}
+                      className="playercard-flag-img"
+                    />
                   </span>
                 ) : resolvedNationalityLabel ? (
                   <span className="playercard-info__value">{resolvedNationalityLabel}</span>
