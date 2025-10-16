@@ -800,8 +800,11 @@ export default function ProjectDashboard() {
                       <td className="p-2 whitespace-nowrap font-medium">
                         <div className="matrix-player-cell">
                           {natCode ? (
-                            <span className="matrix-player-flag" title={player.nationality ?? undefined}>
-                              <ReactCountryFlag countryCode={natCode} style={{ fontSize: '1.1rem' }} />
+                            <span
+                              className="playercard-flag matrix-player-flag"
+                              title={player.nationality ?? undefined}
+                            >
+                              <ReactCountryFlag countryCode={natCode} />
                             </span>
                           ) : null}
                           <span>{player.display_name}</span>

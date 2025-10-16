@@ -86,8 +86,8 @@ export default function PlayerHeader({
             <span className="playercard-detail__label">Nationalität</span>
             <span className="playercard-detail__value">
               {hasNationalityCode && nationalityCode ? (
-                <span className="playercard-detail__flag" title={nationalityTitle}>
-                  <ReactCountryFlag countryCode={nationalityCode} style={{ fontSize: '1.5rem' }} />
+                <span className="playercard-flag playercard-detail__flag" title={nationalityTitle}>
+                  <ReactCountryFlag countryCode={nationalityCode} />
                 </span>
               ) : null}
               {nationalityText ? (
