@@ -93,6 +93,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
   const [localPhoto, setLocalPhoto] = useState<string | null>(null)
   const [photoOffset, setPhotoOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [imageReady, setImageReady] = useState(false)
+  const [clubLogoDataUrl, setClubLogoDataUrl] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const playercardRef = useRef<HTMLDivElement | null>(null)
@@ -304,6 +305,51 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
     return selectedPlayer.club_logo_url ?? selectedPlayer.club_logo ?? selectedPlayer.clubLogoUrl ?? null
   }, [selectedPlayer])
 
+  useEffect(() => {
+    let cancelled = false
+
+    if (!clubLogoUrl) {
+      setClubLogoDataUrl(null)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    if (clubLogoUrl.startsWith('data:')) {
+      setClubLogoDataUrl(clubLogoUrl)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    setClubLogoDataUrl(null)
+
+    const loadLogo = async () => {
+      try {
+        const response = await fetch(clubLogoUrl, { cache: 'no-store' })
+        if (!response.ok) {
+          throw new Error(`Failed to fetch club logo: ${response.status}`)
+        }
+        const blob = await response.blob()
+        const dataUrl = await blobToDataUrl(blob)
+        if (!cancelled) {
+          setClubLogoDataUrl(dataUrl)
+        }
+      } catch (error) {
+        console.warn('Vereinslogo konnte nicht geladen werden.', error)
+        if (!cancelled) {
+          setClubLogoDataUrl(null)
+        }
+      }
+    }
+
+    loadLogo()
+
+    return () => {
+      cancelled = true
+    }
+  }, [clubLogoUrl, blobToDataUrl])
+
   const kitNumber = useMemo(() => {
     if (!selectedPlayer) return null
     if (typeof selectedPlayer.fav_number === 'number') return selectedPlayer.fav_number
@@ -510,7 +556,7 @@ export default function PlayercardClient({ projectId, initialPlayerId }: Playerc
                 totalScore={totalScore}
                 nationalityCode={nationalityCode}
                 nationalityLabel={nationalityLabel}
-                clubLogoUrl={clubLogoUrl}
+                clubLogoUrl={clubLogoDataUrl}
                 kitNumber={kitNumber}
                 stationValues={stationValues}
                 cardBackgroundStyle={cardBackgroundStyle}

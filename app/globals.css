@@ -389,8 +389,8 @@ a, .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
-  height: 1.1rem;
+  width: clamp(1.4rem, 3vw, 2rem);
+  height: clamp(1rem, 2.2vw, 1.4rem);
   font-size: 1.3rem;
   line-height: 1;
   border-radius: 0;
@@ -403,6 +403,7 @@ a, .btn {
 }
 
 .playercard-flag-img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1749,17 +1750,24 @@ a, .btn {
   justify-content: center;
 }
 
+.playercard-wrapper {
+  --card-scale: 1;
+  transform-origin: top left;
+  transform: scale(var(--card-scale));
+  width: 100%;
+}
+
 .playercard {
   position: relative;
   width: 100%;
   aspect-ratio: 9 / 16;
-  border-radius: 32px;
-  border: 2px solid rgba(255, 255, 255, 0.65);
+  border-radius: clamp(1.6rem, 5vw, 2.8rem);
+  border: clamp(0.12rem, 0.4vw, 0.22rem) solid rgba(255, 255, 255, 0.65);
   background: #051a36;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 28px 56px rgba(2, 6, 23, 0.55);
+  box-shadow: 0 clamp(1.4rem, 4vw, 2.8rem) clamp(3.2rem, 8vw, 4.5rem) rgba(2, 6, 23, 0.55);
   color: #f8fafc;
   isolation: isolate;
   padding-left: 0px;
@@ -1771,7 +1779,7 @@ a, .btn {
   top: 0;
   bottom: 0;
   left: 0;
-  width: 4px;
+  width: clamp(0.2rem, 0.6vw, 0.35rem);
   background: linear-gradient(to bottom, #00f260, #0575e6);
   border-radius: 4px;
   pointer-events: none;
@@ -1873,13 +1881,13 @@ a, .btn {
   height: 75%;
   left: 12%;
   width: 20%;
-  min-width: 72px;
-  border-radius: 14px;
+  min-width: clamp(4.5rem, 12vw, 7rem);
+  border-radius: clamp(0.9rem, 2.2vw, 1.5rem);
   background: rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(6px);
   display: flex;
   flex-direction: column;
-  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  border-right: clamp(0.06rem, 0.2vw, 0.12rem) solid rgba(255, 255, 255, 0.2);
   z-index: 2;
 }
 
@@ -1889,10 +1897,10 @@ a, .btn {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 10px 8px;
-  gap: 6px;
+  padding: clamp(0.55rem, 1.5vw, 0.75rem) clamp(0.45rem, 1.2vw, 0.6rem);
+  gap: clamp(0.35rem, 1vw, 0.6rem);
   text-align: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom: clamp(0.05rem, 0.16vw, 0.1rem) solid rgba(255, 255, 255, 0.18);
 }
 
 .playercard-info:last-child {
@@ -1931,9 +1939,9 @@ a, .btn {
 
 .playercard-info__logo {
   max-width: 64%;
-  max-height: 56px;
+  max-height: clamp(2.4rem, 5vw, 3.5rem);
   object-fit: contain;
-  filter: drop-shadow(0 4px 12px rgba(15, 23, 42, 0.45));
+  filter: drop-shadow(0 clamp(0.6rem, 1.6vw, 1rem) clamp(1.2rem, 3vw, 1.8rem) rgba(15, 23, 42, 0.45));
 }
 
 .playercard-info__placeholder {
@@ -1958,13 +1966,13 @@ a, .btn {
 .playercard__name-banner {
   position: absolute;
   left: 50%;
-  bottom: 18px;
+  bottom: 5%;
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(6px);
-  padding: 10px 20px;
-  border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  padding: clamp(0.6rem, 1.6vw, 0.9rem) clamp(1.2rem, 3.4vw, 2.1rem);
+  border-radius: clamp(0.85rem, 2.2vw, 1.4rem);
+  border: clamp(0.05rem, 0.18vw, 0.12rem) solid rgba(148, 163, 184, 0.4);
   text-transform: uppercase;
   font-weight: 700;
   letter-spacing: 0.2em;
@@ -1991,39 +1999,39 @@ a, .btn {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: repeat(3, 1fr);
-  gap: 12px 18px;
-  padding: 20px 24px;
+  gap: clamp(0.35rem, 1vw, 0.6rem) clamp(0.45rem, 1.2vw, 0.7rem);
+  padding: clamp(0.6rem, 1.6vw, 0.9rem) clamp(0.7rem, 1.8vw, 1rem);
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  border-top: clamp(0.04rem, 0.12vw, 0.08rem) solid rgba(255, 255, 255, 0.18);
 }
 
 .playercard__stats-grid {
-  gap: 16px 28px;
-  padding: 24px 32px;
+  gap: clamp(0.35rem, 1vw, 0.6rem) clamp(0.45rem, 1.2vw, 0.7rem);
+  padding: clamp(0.6rem, 1.6vw, 0.9rem) clamp(0.7rem, 1.8vw, 1rem);
 }
 
 .playercard__stats-grid .playercard-station {
-  padding: 12px 14px;
+  padding: clamp(0.45rem, 1.2vw, 0.65rem) clamp(0.5rem, 1.4vw, 0.75rem);
 }
 
 .playercard-station {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  box-shadow: inset 0 0 12px rgba(15, 118, 210, 0.18);
+  gap: clamp(0.35rem, 1vw, 0.55rem);
+  padding: clamp(0.45rem, 1.2vw, 0.65rem) clamp(0.5rem, 1.4vw, 0.75rem);
+  border-radius: clamp(0.65rem, 1.6vw, 0.95rem);
+  background: rgba(15, 23, 42, 0.38);
+  border: clamp(0.04rem, 0.12vw, 0.08rem) solid rgba(148, 163, 184, 0.25);
+  box-shadow: inset 0 0 clamp(0.75rem, 2vw, 1.1rem) rgba(15, 118, 210, 0.18);
 }
 
 .playercard-station__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: clamp(0.45rem, 1.4vw, 0.8rem);
 }
 
 .playercard-station__label {
@@ -2043,7 +2051,7 @@ a, .btn {
 
 .playercard-station__bar {
   position: relative;
-  height: 8px;
+  height: clamp(0.35rem, 1vw, 0.6rem);
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.25);
   overflow: hidden;
