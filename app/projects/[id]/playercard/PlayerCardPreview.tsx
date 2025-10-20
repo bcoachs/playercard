@@ -636,28 +636,28 @@ export default function PlayerCardPreview({
                 <span className="playercard-info__label">Nummer</span>
               </div>
             </div>
+            <div className="playercard__stations-panel playercard__stats-grid">
+              {stationValues.map(station => (
+                <div key={station.label} className="playercard-station">
+                  <div className="playercard-station__header">
+                    <span className="playercard-station__label">{station.label}</span>
+                    <span className="playercard-station__value">
+                      {typeof station.value === 'number' ? station.value : '–'}
+                    </span>
+                  </div>
+                  <div className="playercard-station__bar" role="presentation">
+                    <div
+                      className="playercard-station__bar-fill"
+                      style={{ width: `${getProgressWidth(station.value)}%` }}
+                      aria-hidden="true"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
             <div className="playercard__name-banner">
               <span>{(playerName || 'Spieler auswählen').toUpperCase()}</span>
             </div>
-          </div>
-          <div className="playercard__stations-panel playercard__stats-grid">
-            {stationValues.map(station => (
-              <div key={station.label} className="playercard-station">
-                <div className="playercard-station__header">
-                  <span className="playercard-station__label">{station.label}</span>
-                  <span className="playercard-station__value">
-                    {typeof station.value === 'number' ? station.value : '–'}
-                  </span>
-                </div>
-                <div className="playercard-station__bar" role="presentation">
-                  <div
-                    className="playercard-station__bar-fill"
-                    style={{ width: `${getProgressWidth(station.value)}%` }}
-                    aria-hidden="true"
-                  />
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </div>

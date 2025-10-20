@@ -1622,12 +1622,12 @@ a, .btn {
 
 .playercard-background-selector {
   background: rgba(15, 23, 42, 0.82);
-  border-radius: 24px;
-  padding: clamp(20px, 3vw, 32px);
+  border-radius: clamp(1.1rem, 3vw, 1.5rem);
+  padding: clamp(1.25rem, 3vw, 2rem);
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  gap: clamp(1rem, 2.4vw, 1.2rem);
+  border: clamp(0.05rem, 0.16vw, 0.1rem) solid rgba(148, 163, 184, 0.14);
 }
 
 .playercard-background-selector__title {
@@ -1643,39 +1643,40 @@ a, .btn {
 
 .playercard-background-selector__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(clamp(8rem, 26vw, 10rem), 1fr));
+  gap: clamp(0.7rem, 2vw, 1rem);
 }
 
 .playercard-background-option {
   position: relative;
   border: none;
-  border-radius: 18px;
-  height: 96px;
+  border-radius: clamp(0.85rem, 2.2vw, 1.2rem);
+  height: clamp(5.2rem, 16vw, 6rem);
   cursor: pointer;
   overflow: hidden;
   background-size: cover;
   background-position: center;
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.2);
+  box-shadow: inset 0 0 0 clamp(0.04rem, 0.12vw, 0.08rem) rgba(148, 163, 184, 0.2);
   transition: transform 0.25s ease, box-shadow 0.25s ease;
   color: #f8fafc;
 }
 
 .playercard-background-option:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.45);
+  transform: translateY(-0.12rem);
+  box-shadow: 0 clamp(0.75rem, 2vw, 1.4rem) clamp(1.4rem, 3.6vw, 2.4rem) rgba(15, 23, 42, 0.45);
 }
 
 .playercard-background-option--active {
-  box-shadow: 0 0 0 2px #facc15, 0 16px 32px rgba(250, 204, 21, 0.28);
+  box-shadow: 0 0 0 clamp(0.08rem, 0.24vw, 0.12rem) #facc15,
+    0 clamp(1rem, 2.8vw, 2rem) clamp(1.6rem, 4.2vw, 2.6rem) rgba(250, 204, 21, 0.28);
 }
 
 .playercard-background-option__label {
   position: absolute;
-  inset: auto 12px 12px;
+  inset: auto clamp(0.7rem, 2.4vw, 0.9rem) clamp(0.7rem, 2.4vw, 0.9rem);
   font-size: 0.8rem;
   font-weight: 600;
-  text-shadow: 0 2px 8px rgba(2, 6, 23, 0.65);
+  text-shadow: 0 clamp(0.12rem, 0.4vw, 0.18rem) clamp(0.5rem, 1.6vw, 0.75rem) rgba(2, 6, 23, 0.65);
 }
 
 .playercard-background-selector__error {
@@ -1687,18 +1688,18 @@ a, .btn {
 .playercard-cta {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: clamp(0.6rem, 1.8vw, 0.9rem);
   align-items: center;
 }
 
 .playercard-export {
-  margin-top: 24px;
+  margin-top: clamp(1.2rem, 3.4vw, 1.6rem);
   display: flex;
   justify-content: center;
 }
 
 .playercard-export .btn {
-  width: min(100%, 320px);
+  width: min(100%, clamp(14rem, 48vw, 20rem));
 }
 
 .playercard-toast {
@@ -1745,7 +1746,7 @@ a, .btn {
 }
 
 .playercard-photo-frame {
-  width: min(420px, 100%);
+  width: min(100%, clamp(18rem, 46vw, 26.25rem));
   display: flex;
   justify-content: center;
 }
@@ -1770,7 +1771,7 @@ a, .btn {
   box-shadow: 0 clamp(1.4rem, 4vw, 2.8rem) clamp(3.2rem, 8vw, 4.5rem) rgba(2, 6, 23, 0.55);
   color: #f8fafc;
   isolation: isolate;
-  padding-left: 0px;
+  padding-left: 0;
 }
 
 .playercard::before {
@@ -1818,18 +1819,18 @@ a, .btn {
 .playercard__zoom-button {
   pointer-events: auto;
   background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: clamp(0.05rem, 0.18vw, 0.1rem) solid rgba(148, 163, 184, 0.35);
   color: #e2e8f0;
   border-radius: 9999px;
-  width: 38px;
-  height: 38px;
+  width: clamp(2.2rem, 5.6vw, 2.6rem);
+  height: clamp(2.2rem, 5.6vw, 2.6rem);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
+  font-size: clamp(1rem, 2.4vw, 1.2rem);
   line-height: 1;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
-  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.35);
+  box-shadow: 0 clamp(0.8rem, 2.4vw, 1.4rem) clamp(1.4rem, 4vw, 2.4rem) rgba(2, 6, 23, 0.35);
   backdrop-filter: blur(6px);
   cursor: pointer;
 }
@@ -1848,10 +1849,10 @@ a, .btn {
 
 .playercard__zoom-controls {
   position: absolute;
-  bottom: 14px;
-  right: 14px;
+  bottom: clamp(0.75rem, 2vw, 1.2rem);
+  right: clamp(0.75rem, 2vw, 1.2rem);
   display: flex;
-  gap: 8px;
+  gap: clamp(0.45rem, 1.2vw, 0.6rem);
   pointer-events: auto;
 }
 
@@ -1878,10 +1879,10 @@ a, .btn {
   position: absolute;
   top: 8%;
   bottom: auto;
-  height: 75%;
-  left: 10%;
-  width: 15%;
-  min-width: clamp(4.5rem, 12vw, 7rem);
+  height: 72%;
+  left: 8%;
+  width: 13.5%;
+  min-width: clamp(4.1rem, 11vw, 6.4rem);
   border-radius: clamp(0.9rem, 2.2vw, 1.5rem);
   background: rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(6px);
@@ -1966,7 +1967,7 @@ a, .btn {
 .playercard__name-banner {
   position: absolute;
   left: 50%;
-  bottom: 5%;
+  bottom: clamp(1.1rem, 3vw, 1.7rem);
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(6px);
@@ -1995,32 +1996,37 @@ a, .btn {
 
 
 .playercard__stations-panel {
-  flex: 1;
+  flex: 0 0 auto;
+  width: 100%;
+  margin-top: auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(3, 1fr);
-  gap: clamp(0.35rem, 1vw, 0.6rem) clamp(0.45rem, 1.2vw, 0.7rem);
-  padding: clamp(0.6rem, 1.6vw, 0.9rem) clamp(0.7rem, 1.8vw, 1rem);
+  grid-auto-rows: minmax(0, 1fr);
+  gap: clamp(0.4rem, 1.2vw, 0.8rem);
+  padding: clamp(0.8rem, 2.2vw, 1.25rem) clamp(0.9rem, 2.4vw, 1.4rem) clamp(1.4rem, 3.2vw, 1.9rem);
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
   border-top: clamp(0.04rem, 0.12vw, 0.08rem) solid rgba(255, 255, 255, 0.18);
+  position: relative;
+  z-index: 1;
 }
 
 .playercard__stats-grid {
-  gap: clamp(0.35rem, 1vw, 0.6rem) clamp(0.45rem, 1.2vw, 0.7rem);
-  padding: clamp(0.6rem, 1.6vw, 0.9rem) clamp(0.7rem, 1.8vw, 1rem);
+  gap: clamp(0.4rem, 1.2vw, 0.8rem);
+  padding: clamp(0.8rem, 2.2vw, 1.25rem) clamp(0.9rem, 2.4vw, 1.4rem) clamp(1.4rem, 3.2vw, 1.9rem);
+  grid-auto-rows: minmax(0, 1fr);
 }
 
 .playercard__stats-grid .playercard-station {
-  padding: clamp(0.45rem, 1.2vw, 0.65rem) clamp(0.5rem, 1.4vw, 0.75rem);
+  padding: clamp(0.6rem, 1.6vw, 1rem) clamp(0.8rem, 2vw, 1.2rem);
 }
 
 .playercard-station {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: clamp(0.35rem, 1vw, 0.55rem);
-  padding: clamp(0.45rem, 1.2vw, 0.65rem) clamp(0.5rem, 1.4vw, 0.75rem);
+  gap: clamp(0.45rem, 1.4vw, 0.85rem);
+  padding: clamp(0.6rem, 1.6vw, 1rem) clamp(0.8rem, 2vw, 1.2rem);
   border-radius: clamp(0.65rem, 1.6vw, 0.95rem);
   background: rgba(15, 23, 42, 0.38);
   border: clamp(0.04rem, 0.12vw, 0.08rem) solid rgba(148, 163, 184, 0.25);
@@ -2067,14 +2073,14 @@ a, .btn {
 .playercard-photo-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: clamp(0.6rem, 1.8vw, 0.9rem);
   justify-content: center;
 }
 
 .playercard-photo-status {
   font-size: 0.85rem;
   color: rgba(148, 163, 184, 0.8);
-  min-height: 20px;
+  min-height: clamp(1rem, 2.8vw, 1.3rem);
 }
 
 .playercard-photo-status__loading {
@@ -2101,47 +2107,47 @@ a, .btn {
 
 @media (max-width: 640px) {
   .playercard-shell {
-    gap: 16px;
+    gap: clamp(0.9rem, 5vw, 1.1rem);
   }
 
   .playercard-grid {
-    padding: 24px;
+    padding: clamp(1.2rem, 6vw, 1.6rem);
   }
 
   .playercard-photo-frame {
-    width: min(360px, 100%);
+    width: min(100%, clamp(16rem, 64vw, 22.5rem));
   }
 
   .playercard {
-    border-radius: 28px;
+    border-radius: clamp(1.4rem, 6vw, 1.75rem);
   }
 
   .playercard__info-rail {
-    width: 26%;
-    min-width: 64px;
+    width: 24%;
+    min-width: clamp(4rem, 14vw, 4.5rem);
   }
 
   .playercard__stations-panel {
-    padding: 16px;
-    gap: 10px 12px;
+    padding: clamp(0.75rem, 2.4vw, 1.1rem) clamp(0.85rem, 2.6vw, 1.2rem) clamp(1.1rem, 3vw, 1.5rem);
+    gap: clamp(0.45rem, 1.4vw, 0.75rem) clamp(0.55rem, 1.6vw, 0.8rem);
   }
 
   .playercard__stats-grid {
-    padding: 18px;
-    gap: 12px 16px;
+    padding: clamp(0.9rem, 2.6vw, 1.2rem) clamp(1rem, 3vw, 1.4rem) clamp(1.3rem, 3.4vw, 1.7rem);
+    gap: clamp(0.55rem, 1.6vw, 0.85rem) clamp(0.65rem, 1.8vw, 0.95rem);
   }
 
   .playercard__stats-grid .playercard-station {
-    padding: 10px 12px;
+    padding: clamp(0.55rem, 1.6vw, 0.85rem) clamp(0.7rem, 1.8vw, 1rem);
   }
 
   .playercard__name-banner {
-    padding: 10px 20px;
-    letter-spacing: 0.16em;
+    padding: clamp(0.55rem, 2.8vw, 0.75rem) clamp(1rem, 4vw, 1.4rem);
+    letter-spacing: clamp(0.14em, 0.4vw, 0.18em);
   }
 
   .playercard-station {
-    padding: 6px 8px;
+    padding: clamp(0.55rem, 1.6vw, 0.85rem) clamp(0.7rem, 1.8vw, 1rem);
   }
 
   .playercard-station__label {
