@@ -1879,8 +1879,8 @@ a, .btn {
   top: 8%;
   bottom: auto;
   height: 75%;
-  left: 12%;
-  width: 20%;
+  left: 10%;
+  width: 15%;
   min-width: clamp(4.5rem, 12vw, 7rem);
   border-radius: clamp(0.9rem, 2.2vw, 1.5rem);
   background: rgba(255, 255, 255, 0.12);
