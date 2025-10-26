@@ -13,6 +13,8 @@
   --ring:   rgba(236,3,71,.35);
   --btn-wide: 210px;           /* Standardbreite Buttons */
   --btn-wide-height: 54px;     /* Standardhöhe Buttons */
+  --playercard-width: 26.25rem; /* 420px Standardbreite */
+  --playercard-golden-ratio: 1.618;
 }
 
 /* -------------------------------------------------
@@ -1746,7 +1748,7 @@ a, .btn {
 }
 
 .playercard-photo-frame {
-  width: min(100%, clamp(18rem, 46vw, 26.25rem));
+  width: min(100%, var(--playercard-width));
   display: flex;
   justify-content: center;
 }
@@ -1760,14 +1762,17 @@ a, .btn {
 
 .playercard {
   position: relative;
-  width: 100%;
-  aspect-ratio: 9 / 16;
+  --card-width: min(100%, var(--playercard-width));
+  --playercard-photo-row: calc(var(--playercard-golden-ratio) / (1 + var(--playercard-golden-ratio)));
+  --playercard-panel-row: calc(1 / (1 + var(--playercard-golden-ratio)));
+  width: var(--card-width);
+  height: calc(var(--card-width) * 16 / 9);
   border-radius: clamp(1.6rem, 5vw, 2.8rem);
   border: clamp(0.12rem, 0.4vw, 0.22rem) solid rgba(255, 255, 255, 0.65);
   background: #051a36;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: calc(var(--playercard-photo-row) * 100%) calc(var(--playercard-panel-row) * 100%);
   box-shadow: 0 clamp(1.4rem, 4vw, 2.8rem) clamp(3.2rem, 8vw, 4.5rem) rgba(2, 6, 23, 0.55);
   color: #f8fafc;
   isolation: isolate;
@@ -1788,7 +1793,7 @@ a, .btn {
 
 .playercard__photo-area {
   position: relative;
-  flex: 1 1 auto;
+  grid-row: 1;
   width: 100%;
   height: 100%;
   background: linear-gradient(160deg, rgba(15, 23, 42, 0.9), rgba(15, 118, 210, 0.35));
@@ -1996,14 +2001,14 @@ a, .btn {
 
 
 .playercard__stations-panel {
-  flex: 0 0 auto;
+  grid-row: 2;
   width: 100%;
-  margin-top: auto;
+  height: 100%;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
-  gap: clamp(0.4rem, 1.2vw, 0.8rem);
-  padding: clamp(0.8rem, 2.2vw, 1.25rem) clamp(0.9rem, 2.4vw, 1.4rem) clamp(1.4rem, 3.2vw, 1.9rem);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 12px;
+  padding: 16px 18px 24px;
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
   border-top: clamp(0.04rem, 0.12vw, 0.08rem) solid rgba(255, 255, 255, 0.18);
@@ -2012,36 +2017,36 @@ a, .btn {
 }
 
 .playercard__stats-grid {
-  gap: clamp(0.4rem, 1.2vw, 0.8rem);
-  padding: clamp(0.8rem, 2.2vw, 1.25rem) clamp(0.9rem, 2.4vw, 1.4rem) clamp(1.4rem, 3.2vw, 1.9rem);
-  grid-auto-rows: minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px 18px 24px;
+  grid-template-rows: repeat(3, 1fr);
 }
 
 .playercard__stats-grid .playercard-station {
-  padding: clamp(0.6rem, 1.6vw, 1rem) clamp(0.8rem, 2vw, 1.2rem);
+  padding: 8px 12px;
 }
 
 .playercard-station {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: clamp(0.45rem, 1.4vw, 0.85rem);
-  padding: clamp(0.6rem, 1.6vw, 1rem) clamp(0.8rem, 2vw, 1.2rem);
-  border-radius: clamp(0.65rem, 1.6vw, 0.95rem);
+  padding: 8px 12px;
+  border-radius: 12px;
   background: rgba(15, 23, 42, 0.38);
-  border: clamp(0.04rem, 0.12vw, 0.08rem) solid rgba(148, 163, 184, 0.25);
-  box-shadow: inset 0 0 clamp(0.75rem, 2vw, 1.1rem) rgba(15, 118, 210, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: inset 0 0 18px rgba(15, 118, 210, 0.18);
 }
 
 .playercard-station__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: clamp(0.45rem, 1.4vw, 0.8rem);
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .playercard-station__label {
-  font-size: 0.75rem;
+  font-size: 0.9rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -2049,23 +2054,25 @@ a, .btn {
 }
 
 .playercard-station__value {
-  font-size: clamp(1.35rem, 3vw, 1.8rem);
-  font-weight: 700;
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1;
   text-align: right;
   color: #f8fafc;
+  margin-bottom: 4px;
 }
 
 .playercard-station__bar {
   position: relative;
-  height: clamp(0.35rem, 1vw, 0.6rem);
-  border-radius: 999px;
+  height: 6px;
+  border-radius: 3px;
   background: rgba(148, 163, 184, 0.25);
   overflow: hidden;
 }
 
 .playercard-station__bar-fill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: 3px;
   background: linear-gradient(90deg, #00f260, #0575e6);
   transition: width 0.3s ease;
 }
@@ -2115,7 +2122,7 @@ a, .btn {
   }
 
   .playercard-photo-frame {
-    width: min(100%, clamp(16rem, 64vw, 22.5rem));
+    width: min(100%, 22.5rem);
   }
 
   .playercard {
@@ -2128,17 +2135,19 @@ a, .btn {
   }
 
   .playercard__stations-panel {
-    padding: clamp(0.75rem, 2.4vw, 1.1rem) clamp(0.85rem, 2.6vw, 1.2rem) clamp(1.1rem, 3vw, 1.5rem);
-    gap: clamp(0.45rem, 1.4vw, 0.75rem) clamp(0.55rem, 1.6vw, 0.8rem);
+    padding: 12px 14px 18px;
+    gap: 10px;
+    grid-template-rows: repeat(3, 1fr);
   }
 
   .playercard__stats-grid {
-    padding: clamp(0.9rem, 2.6vw, 1.2rem) clamp(1rem, 3vw, 1.4rem) clamp(1.3rem, 3.4vw, 1.7rem);
-    gap: clamp(0.55rem, 1.6vw, 0.85rem) clamp(0.65rem, 1.8vw, 0.95rem);
+    padding: 12px 14px 18px;
+    gap: 10px;
+    grid-template-rows: repeat(3, 1fr);
   }
 
   .playercard__stats-grid .playercard-station {
-    padding: clamp(0.55rem, 1.6vw, 0.85rem) clamp(0.7rem, 1.8vw, 1rem);
+    padding: 8px 10px;
   }
 
   .playercard__name-banner {
@@ -2147,11 +2156,11 @@ a, .btn {
   }
 
   .playercard-station {
-    padding: clamp(0.55rem, 1.6vw, 0.85rem) clamp(0.7rem, 1.8vw, 1rem);
+    padding: 8px 10px;
   }
 
   .playercard-station__label {
-    font-size: 0.7rem;
+    font-size: 0.8rem;
   }
 
   .playercard-header__details {
