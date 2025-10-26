@@ -1745,10 +1745,11 @@ a, .btn {
   flex-direction: column;
   gap: clamp(16px, 4vw, 24px);
   align-items: center;
+  --playercard-render-width: var(--playercard-width);
 }
 
 .playercard-photo-frame {
-  width: min(100%, var(--playercard-width));
+  width: min(100%, var(--playercard-render-width, var(--playercard-width)));
   display: flex;
   justify-content: center;
 }
@@ -1762,7 +1763,7 @@ a, .btn {
 
 .playercard {
   position: relative;
-  --card-width: min(100%, var(--playercard-width));
+  --card-width: var(--playercard-render-width, var(--playercard-width));
   --playercard-photo-row: calc(var(--playercard-golden-ratio) / (1 + var(--playercard-golden-ratio)));
   --playercard-panel-row: calc(1 / (1 + var(--playercard-golden-ratio)));
   width: var(--card-width);
@@ -2113,6 +2114,10 @@ a, .btn {
 }
 
 @media (max-width: 640px) {
+  .playercard-photo-card {
+    --playercard-render-width: min(100%, 22.5rem);
+  }
+
   .playercard-shell {
     gap: clamp(0.9rem, 5vw, 1.1rem);
   }
@@ -2122,7 +2127,7 @@ a, .btn {
   }
 
   .playercard-photo-frame {
-    width: min(100%, 22.5rem);
+    width: min(100%, var(--playercard-render-width));
   }
 
   .playercard {
