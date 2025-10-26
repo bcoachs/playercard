@@ -1766,6 +1766,9 @@ a, .btn {
   --card-width: var(--playercard-render-width, var(--playercard-width));
   --playercard-photo-row: calc(var(--playercard-golden-ratio) / (1 + var(--playercard-golden-ratio)));
   --playercard-panel-row: calc(1 / (1 + var(--playercard-golden-ratio)));
+  --playercard-info-rail-offset: 8%;
+  --playercard-info-rail-gap: 2%;
+  --playercard-info-rail-width: 13.5%;
   width: var(--card-width);
   height: calc(var(--card-width) * 16 / 9);
   border-radius: clamp(1.6rem, 5vw, 2.8rem);
@@ -1885,9 +1888,9 @@ a, .btn {
   position: absolute;
   top: 8%;
   bottom: auto;
-  height: 72%;
-  left: 8%;
-  width: 13.5%;
+  height: calc(var(--playercard-photo-row) * 100% * 0.66);
+  left: var(--playercard-info-rail-offset);
+  width: var(--playercard-info-rail-width);
   min-width: clamp(4.1rem, 11vw, 6.4rem);
   border-radius: clamp(0.9rem, 2.2vw, 1.5rem);
   background: rgba(255, 255, 255, 0.12);
@@ -2004,8 +2007,12 @@ a, .btn {
 .playercard__stations-panel {
   position: absolute;
   bottom: 0;
-  left: calc(8% + 13.5% + 2%);
-  right: 8%;
+  left: calc(
+    var(--playercard-info-rail-offset) +
+    var(--playercard-info-rail-width) +
+    var(--playercard-info-rail-gap)
+  );
+  right: var(--playercard-info-rail-offset);
   height: 38%;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -2143,11 +2150,13 @@ a, .btn {
 
   .playercard {
     border-radius: clamp(1.4rem, 6vw, 1.75rem);
+    --playercard-info-rail-width: 24%;
+    --playercard-info-rail-gap: 3.5%;
   }
 
   .playercard__info-rail {
-    width: 24%;
     min-width: clamp(4rem, 14vw, 4.5rem);
+    height: calc(var(--playercard-photo-row) * 100% * 0.7);
   }
 
   .playercard__stations-panel {
