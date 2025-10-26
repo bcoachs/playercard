@@ -1766,6 +1766,9 @@ a, .btn {
   --card-width: var(--playercard-render-width, var(--playercard-width));
   --playercard-photo-row: calc(var(--playercard-golden-ratio) / (1 + var(--playercard-golden-ratio)));
   --playercard-panel-row: calc(1 / (1 + var(--playercard-golden-ratio)));
+  --playercard-info-rail-offset: 8%;
+  --playercard-info-rail-gap: 2%;
+  --playercard-info-rail-width: 13.5%;
   width: var(--card-width);
   height: calc(var(--card-width) * 16 / 9);
   border-radius: clamp(1.6rem, 5vw, 2.8rem);
@@ -1885,9 +1888,9 @@ a, .btn {
   position: absolute;
   top: 8%;
   bottom: auto;
-  height: 72%;
-  left: 8%;
-  width: 13.5%;
+  height: calc(var(--playercard-photo-row) * 100% * 0.66);
+  left: var(--playercard-info-rail-offset);
+  width: var(--playercard-info-rail-width);
   min-width: clamp(4.1rem, 11vw, 6.4rem);
   border-radius: clamp(0.9rem, 2.2vw, 1.5rem);
   background: rgba(255, 255, 255, 0.12);
@@ -2002,18 +2005,24 @@ a, .btn {
 
 
 .playercard__stations-panel {
-  grid-row: 2;
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  bottom: 0;
+  left: calc(
+    var(--playercard-info-rail-offset) +
+    var(--playercard-info-rail-width) +
+    var(--playercard-info-rail-gap)
+  );
+  right: var(--playercard-info-rail-offset);
+  height: 38%;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   grid-template-rows: repeat(3, 1fr);
   gap: 12px;
   padding: 16px 18px 24px;
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
   border-top: clamp(0.04rem, 0.12vw, 0.08rem) solid rgba(255, 255, 255, 0.18);
-  position: relative;
+  border-radius: 0 0 clamp(1rem, 3vw, 1.5rem) clamp(1rem, 3vw, 1.5rem);
   z-index: 1;
 }
 
@@ -2047,34 +2056,43 @@ a, .btn {
 }
 
 .playercard-station__label {
-  font-size: 0.9rem;
+  font-size: clamp(0.7rem, 1.8vw, 0.9rem);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(226, 232, 240, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .playercard-station__value {
-  font-size: 1.4rem;
+  font-size: clamp(1rem, 3vw, 1.4rem);
   font-weight: 800;
   line-height: 1;
   text-align: right;
   color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   margin-bottom: 4px;
 }
 
 .playercard-station__bar {
   position: relative;
-  height: 6px;
+  height: clamp(4px, 1vw, 6px);
   border-radius: 3px;
   background: rgba(148, 163, 184, 0.25);
   overflow: hidden;
 }
 
 .playercard-station__bar-fill {
-  height: 100%;
-  border-radius: 3px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
   background: linear-gradient(90deg, #00f260, #0575e6);
+  border-radius: inherit;
   transition: width 0.3s ease;
 }
 
@@ -2132,11 +2150,13 @@ a, .btn {
 
   .playercard {
     border-radius: clamp(1.4rem, 6vw, 1.75rem);
+    --playercard-info-rail-width: 24%;
+    --playercard-info-rail-gap: 3.5%;
   }
 
   .playercard__info-rail {
-    width: 24%;
     min-width: clamp(4rem, 14vw, 4.5rem);
+    height: calc(var(--playercard-photo-row) * 100% * 0.7);
   }
 
   .playercard__stations-panel {
@@ -2165,7 +2185,11 @@ a, .btn {
   }
 
   .playercard-station__label {
-    font-size: 0.8rem;
+    font-size: clamp(0.6rem, 3vw, 0.8rem);
+  }
+
+  .playercard-station__value {
+    font-size: clamp(0.9rem, 4vw, 1.2rem);
   }
 
   .playercard-header__details {
