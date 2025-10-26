@@ -2010,7 +2010,7 @@ a, .btn {
   position: absolute;
   bottom: 0;
   left: 0;
-  right:0;
+  right: 0;
   height: var(--playercard-panel-row, 38%);
   display: grid;
   grid-template-columns: repeat(2, 1fr);
