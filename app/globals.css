@@ -1766,17 +1766,20 @@ a, .btn {
   --card-width: var(--playercard-render-width, var(--playercard-width));
   --playercard-photo-row: calc(var(--playercard-golden-ratio) / (1 + var(--playercard-golden-ratio)));
   --playercard-panel-row: calc(1 / (1 + var(--playercard-golden-ratio)));
+  /* Abstand zum linken und rechten Rand der Karte */
   --playercard-info-rail-offset: 8%;
+  /* Abstand zwischen der Info-Schiene und dem Statistik-Panel */
   --playercard-info-rail-gap: 2%;
+  /* Standardbreite der Info-Schiene (wird unten in den Media-Queries überschrieben) */
   --playercard-info-rail-width: 13.5%;
   width: var(--card-width);
   height: calc(var(--card-width) * 16 / 9);
+  display: grid;
+  grid-template-rows: calc(var(--playercard-photo-row) * 100%) calc(var(--playercard-panel-row) * 100%);
   border-radius: clamp(1.6rem, 5vw, 2.8rem);
   border: clamp(0.12rem, 0.4vw, 0.22rem) solid rgba(255, 255, 255, 0.65);
   background: #051a36;
   overflow: hidden;
-  display: grid;
-  grid-template-rows: calc(var(--playercard-photo-row) * 100%) calc(var(--playercard-panel-row) * 100%);
   box-shadow: 0 clamp(1.4rem, 4vw, 2.8rem) clamp(3.2rem, 8vw, 4.5rem) rgba(2, 6, 23, 0.55);
   color: #f8fafc;
   isolation: isolate;
@@ -1887,7 +1890,6 @@ a, .btn {
 .playercard__info-rail {
   position: absolute;
   top: 8%;
-  bottom: auto;
   height: calc(var(--playercard-photo-row) * 100% * 0.66);
   left: var(--playercard-info-rail-offset);
   width: var(--playercard-info-rail-width);
@@ -2013,7 +2015,7 @@ a, .btn {
     var(--playercard-info-rail-gap)
   );
   right: var(--playercard-info-rail-offset);
-  height: 38%;
+  height: var(--playercard-panel-row, 38%);
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   grid-template-rows: repeat(3, 1fr);
@@ -2162,7 +2164,6 @@ a, .btn {
   .playercard__stations-panel {
     padding: 12px 14px 18px;
     gap: 10px;
-    grid-template-rows: repeat(3, 1fr);
   }
 
   .playercard__stats-grid {
