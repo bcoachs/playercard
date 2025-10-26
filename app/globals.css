@@ -2009,12 +2009,8 @@ a, .btn {
 .playercard__stations-panel {
   position: absolute;
   bottom: 0;
-  left: calc(
-    var(--playercard-info-rail-offset) +
-    var(--playercard-info-rail-width) +
-    var(--playercard-info-rail-gap)
-  );
-  right: var(--playercard-info-rail-offset);
+  left: 0;
+  right:0;
   height: var(--playercard-panel-row, 38%);
   display: grid;
   grid-template-columns: repeat(2, 1fr);
