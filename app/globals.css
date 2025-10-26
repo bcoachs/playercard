@@ -2007,6 +2007,7 @@ a, .btn {
 
 
 .playercard__stations-panel {
+  box-sizing: border-box;
   position: absolute;
   bottom: 0;
   left: 0;
