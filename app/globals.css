@@ -2012,7 +2012,7 @@ a, .btn {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 285px /*var(--playercard-panel-row, 38%);*/
+  height: 285px; /*var(--playercard-panel-row, 38%);*/
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   grid-template-rows: repeat(3, 1fr);
