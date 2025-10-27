@@ -1890,7 +1890,7 @@ a, .btn {
 
 .playercard__info-rail {
   position: absolute;
-  top: 8%;
+  top: 6%;
   height: calc(var(--playercard-photo-row) * 100% * 0.8);
   left: var(--playercard-info-rail-offset);
   width: var(--playercard-info-rail-width);
