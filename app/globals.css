@@ -2012,12 +2012,12 @@ a, .btn {
   bottom: 0;
   left: 0;
   right: 0;
-  height: var(--playercard-panel-row, 38%);
+  height: 285px /*var(--playercard-panel-row, 38%);*/
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  gap: 12px;
-  padding: 16px 18px 24px;
+  gap: 6px;
+  padding: 6px 6px 6px;
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
   border-top: clamp(0.04rem, 0.12vw, 0.08rem) solid rgba(255, 255, 255, 0.18);
