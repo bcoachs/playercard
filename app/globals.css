@@ -1785,6 +1785,7 @@ a, .btn {
   color: #f8fafc;
   isolation: isolate;
   padding-left: 0;
+   box-sizing: border-box; /*(27.10.2025)*/
 }
 
 .playercard::before {
@@ -1898,8 +1899,14 @@ a, .btn {
   border-radius: clamp(0.9rem, 2.2vw, 1.5rem);
   background: rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(6px);
-  display: flex;
-  flex-direction: column;
+  display: grid; /*(27.10.2025)flex */
+   grid-auto-flow: column;
+  align-items: center;
+  gap: clamp(6px, 1.8vw, 12px);
+  box-sizing: border-box;
+  /* Innenabstand, damit Text nicht an den Rand klebt */
+  padding: clamp(8px, 1.8vw, 12px) clamp(10px, 2.5vw, 16px);
+  /*/*(27.10.2025)flex-direction: column;*/
   border-right: clamp(0.06rem, 0.2vw, 0.12rem) solid rgba(255, 255, 255, 0.2);
   z-index: 2;
 }
