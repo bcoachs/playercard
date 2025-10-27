@@ -1891,7 +1891,7 @@ a, .btn {
 .playercard__info-rail {
   position: absolute;
   top: 8%;
-  height: calc(var(--playercard-photo-row) * 100% * 1);
+  height: calc(var(--playercard-photo-row) * 100% * 0.8);
   left: var(--playercard-info-rail-offset);
   width: var(--playercard-info-rail-width);
   min-width: clamp(4.1rem, 11vw, 6.4rem);
