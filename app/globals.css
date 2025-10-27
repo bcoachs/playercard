@@ -1979,7 +1979,7 @@ a, .btn {
 .playercard__name-banner {
   position: absolute;
   left: 50%;
-  bottom: 31%;
+  bottom: 32%;
   transform: translateX(-50%);
   /* entfernen: Hintergrund, Blur, Padding, Border und Radius */
   font-family: 'Alex Brush', cursive;
