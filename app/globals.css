@@ -1979,32 +1979,24 @@ a, .btn {
 .playercard__name-banner {
   position: absolute;
   left: 50%;
-  bottom: 35%; /* clamp(1.1rem, 3vw, 1.7rem);*/
+  bottom: 35%;
   transform: translateX(-50%);
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(6px);
-  padding: clamp(0.6rem, 1.6vw, 0.9rem) clamp(1.2rem, 3.4vw, 2.1rem);
-  border-radius: clamp(0.85rem, 2.2vw, 1.4rem);
-  border: clamp(0.05rem, 0.18vw, 0.12rem) solid rgba(148, 163, 184, 0.4);
+  /* entfernen: Hintergrund, Blur, Padding, Border und Radius */
   font-family: 'Alex Brush', cursive;
   text-transform: none;
   font-weight: 700;
   letter-spacing: normal;
-  font-size: 80px; /*clamp(1.05rem, 2.6vw, 1.5rem);*/
-  color: #e2e8f0;
+  font-size: 80px; /* ggf. mit clamp() responsiv machen */
+  color: #ffd700; /* Gold */
+  text-shadow:
+    0 0 6px rgba(255, 215, 0, 0.6),
+    0 0 12px rgba(255, 215, 0, 0.4),
+    0 0 24px rgba(255, 215, 0, 0.3); /* Glow-Effekt */
   min-width: 50%;
   text-align: center;
   z-index: 3;
 }
 
-/*
-
-  backdrop-filter: blur(6px);
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid rgba(255, 255, 255, 0.2);
-  z-index: 2;
-*/
 
 
 
