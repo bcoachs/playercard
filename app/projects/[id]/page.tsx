@@ -187,6 +187,10 @@ export default function ProjectDashboard() {
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null)
   const [photoCleared, setPhotoCleared] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [photoOffset, setPhotoOffset] = useState({ x: 0, y: 0 })
+  const [isPhotoDragging, setIsPhotoDragging] = useState(false)
+  const photoMoveHandlerRef = useRef<((event: PointerEvent) => void) | null>(null)
+  const photoUpHandlerRef = useRef<((event: PointerEvent) => void) | null>(null)
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteId, setDeleteId] = useState('')
@@ -283,6 +287,59 @@ export default function ProjectDashboard() {
       fileInputRef.current.value = ''
     }
   }
+
+  const handlePhotoPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLImageElement>) => {
+      if (!photoPreview) return
+      event.preventDefault()
+      const target = event.currentTarget
+      const pointerId = event.pointerId
+      const startX = event.clientX - photoOffset.x
+      const startY = event.clientY - photoOffset.y
+      target.setPointerCapture(pointerId)
+      setIsPhotoDragging(true)
+
+      const handlePointerMove = (ev: PointerEvent) => {
+        setPhotoOffset({ x: ev.clientX - startX, y: ev.clientY - startY })
+      }
+
+      const handlePointerUp = () => {
+        if (target.hasPointerCapture(pointerId)) {
+          target.releasePointerCapture(pointerId)
+        }
+        setIsPhotoDragging(false)
+        window.removeEventListener('pointermove', handlePointerMove)
+        window.removeEventListener('pointerup', handlePointerUp)
+        window.removeEventListener('pointercancel', handlePointerUp)
+        photoMoveHandlerRef.current = null
+        photoUpHandlerRef.current = null
+      }
+
+      photoMoveHandlerRef.current = handlePointerMove
+      photoUpHandlerRef.current = handlePointerUp
+
+      window.addEventListener('pointermove', handlePointerMove)
+      window.addEventListener('pointerup', handlePointerUp)
+      window.addEventListener('pointercancel', handlePointerUp)
+    },
+    [photoOffset.x, photoOffset.y, photoPreview],
+  )
+
+  useEffect(() => {
+    setPhotoOffset({ x: 0, y: 0 })
+  }, [photoPreview])
+
+  useEffect(() => {
+    return () => {
+      if (photoMoveHandlerRef.current) {
+        window.removeEventListener('pointermove', photoMoveHandlerRef.current)
+      }
+      if (photoUpHandlerRef.current) {
+        window.removeEventListener('pointerup', photoUpHandlerRef.current)
+        window.removeEventListener('pointercancel', photoUpHandlerRef.current)
+      }
+    }
+  }, [])
 
   function openDeleteDialog() {
     if (!players.length) return
@@ -577,6 +634,16 @@ export default function ProjectDashboard() {
   const photoButtonLabel = photoPreview ? 'Foto neu aufnehmen' : 'Foto aufnehmen'
   const canRemovePhoto = Boolean(photoPreview)
   const canDeletePlayers = players.length > 0
+  const photoWrapperClassName = useMemo(() => {
+    let base = 'playercard-photo-wrapper'
+    if (photoPreview) {
+      base += ' playercard-photo-wrapper--interactive'
+    }
+    if (photoPreview && isPhotoDragging) {
+      base += ' playercard-photo-wrapper--dragging'
+    }
+    return base
+  }, [isPhotoDragging, photoPreview])
   const playercardHref = useMemo(() => {
     const base = `/projects/${projectId}/playercard`
     if (!editId) return base
@@ -616,15 +683,18 @@ export default function ProjectDashboard() {
               className="matrix-form grid gap-4 md:grid-cols-4 justify-items-center"
             >
               <div className="matrix-form__photo md:col-span-1 w-full">
-                <div className="playercard-photo-wrapper">
+                <div className={photoWrapperClassName}>
                   {photoPreview ? (
                     <img
                       src={photoPreview}
                       alt={pName ? `${pName} – Spielerfoto` : 'Spielerfoto'}
                       className="playercard-photo"
+                      style={{ transform: `translate(${photoOffset.x}px, ${photoOffset.y}px)` }}
+                      onPointerDown={handlePhotoPointerDown}
+                      draggable={false}
                     />
                   ) : (
-                    <div className="playercard-photo playercard-photo--empty">
+                    <div className="playercard-photo--empty">
                       <span>Foto folgt</span>
                     </div>
                   )}
