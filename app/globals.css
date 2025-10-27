@@ -1990,7 +1990,7 @@ a, .btn {
   text-transform: none;
   font-weight: 700;
   letter-spacing: normal;
-  font-size: 40px; /*clamp(1.05rem, 2.6vw, 1.5rem);*/
+  font-size: 80px; /*clamp(1.05rem, 2.6vw, 1.5rem);*/
   color: #e2e8f0;
   min-width: 50%;
   text-align: center;
