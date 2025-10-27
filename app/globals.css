@@ -1979,12 +1979,12 @@ a, .btn {
 .playercard__name-banner {
   position: absolute;
   left: 50%;
-  bottom: 33%;
+  bottom: 31%;
   transform: translateX(-50%);
   /* entfernen: Hintergrund, Blur, Padding, Border und Radius */
   font-family: 'Alex Brush', cursive;
   text-transform: none;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: normal;
   font-size: 90px; /* ggf. mit clamp() responsiv machen */
   color: #ffd700; /* Gold */
