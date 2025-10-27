@@ -1767,6 +1767,8 @@ a, .btn {
   --card-width: var(--playercard-render-width, var(--playercard-width));
   --playercard-photo-row: calc(var(--playercard-golden-ratio) / (1 + var(--playercard-golden-ratio)));
   --playercard-panel-row: calc(1 / (1 + var(--playercard-golden-ratio)));
+  --playercard-info-rail-offset: 8%;
+  --playercard-info-rail-width: 13.5%;
   width: var(--card-width);
   height: calc(var(--card-width) * 16 / 9);
   display: grid;
@@ -1885,27 +1887,34 @@ a, .btn {
 
 .playercard__info-rail {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  align-items: center;
-  justify-items: center;
-  gap: clamp(6px, 1.8vw, 12px);
-  padding: clamp(8px, 1.8vw, 12px) clamp(10px, 2.5vw, 16px);
-  background: linear-gradient(180deg, rgba(2, 6, 23, 0.35), rgba(2, 6, 23, 0.75));
+  top: clamp(1rem, 4vw, 1.75rem);
+  left: var(--playercard-info-rail-offset);
+  width: var(--playercard-info-rail-width);
+  min-width: clamp(4.1rem, 11vw, 6.4rem);
+  height: calc(var(--playercard-photo-row) * 100% * 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: clamp(0.4rem, 1.2vw, 0.6rem);
+  padding: clamp(0.85rem, 2.2vw, 1.2rem) clamp(0.7rem, 2vw, 1rem);
+  border-radius: clamp(0.9rem, 2.2vw, 1.5rem);
+  background: linear-gradient(200deg, rgba(2, 6, 23, 0.75), rgba(2, 6, 23, 0.35));
   backdrop-filter: blur(6px);
-  border-bottom-left-radius: inherit;
-  border-bottom-right-radius: inherit;
+  border-right: clamp(0.06rem, 0.2vw, 0.12rem) solid rgba(255, 255, 255, 0.2);
   z-index: 2;
   box-sizing: border-box;
-  width: 100%;
 }
 
 .playercard__info-rail .playercard-info {
   min-width: 0;
+  width: 100%;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.playercard__info-rail .playercard-info:last-child {
   border-bottom: none;
 }
 
@@ -2173,12 +2182,13 @@ a, .btn {
 
   .playercard {
     border-radius: clamp(1.4rem, 6vw, 1.75rem);
+    --playercard-info-rail-width: 24%;
   }
 
   .playercard__info-rail {
-    padding-inline: clamp(12px, 4vw, 18px);
-    grid-auto-flow: row;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: clamp(4rem, 14vw, 4.5rem);
+    height: calc(var(--playercard-photo-row) * 100% * 0.7);
+    padding: clamp(0.75rem, 3vw, 1rem) clamp(0.6rem, 2.4vw, 0.9rem);
   }
 
   .playercard__stations-panel {
