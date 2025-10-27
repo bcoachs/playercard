@@ -656,7 +656,7 @@ export default function PlayerCardPreview({
               ))}
             </div>
             <div className="playercard__name-banner">
-              <span>{(playerName || 'Spieler auswählen').toUpperCase()}</span>
+              <span>{playerName || 'Spieler auswählen'}</span> 
             </div>
           </div>
         </div>
