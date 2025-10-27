@@ -1978,7 +1978,7 @@ a, .btn {
 .playercard__name-banner {
   position: absolute;
   left: 50%;
-  bottom: clamp(1.1rem, 3vw, 1.7rem);
+  bottom: 33%; /* clamp(1.1rem, 3vw, 1.7rem);*/
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(6px);
