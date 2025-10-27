@@ -1767,25 +1767,19 @@ a, .btn {
   --card-width: var(--playercard-render-width, var(--playercard-width));
   --playercard-photo-row: calc(var(--playercard-golden-ratio) / (1 + var(--playercard-golden-ratio)));
   --playercard-panel-row: calc(1 / (1 + var(--playercard-golden-ratio)));
-  /* Abstand zum linken und rechten Rand der Karte */
-  --playercard-info-rail-offset: 8%;
-  /* Abstand zwischen der Info-Schiene und dem Statistik-Panel */
-  --playercard-info-rail-gap: 2%;
-  /* Standardbreite der Info-Schiene (wird unten in den Media-Queries überschrieben) */
-  --playercard-info-rail-width: 13.5%;
   width: var(--card-width);
   height: calc(var(--card-width) * 16 / 9);
   display: grid;
   grid-template-rows: calc(var(--playercard-photo-row) * 100%) calc(var(--playercard-panel-row) * 100%);
   border-radius: clamp(1.6rem, 5vw, 2.8rem);
   border: clamp(0.12rem, 0.4vw, 0.22rem) solid rgba(255, 255, 255, 0.65);
-  background: #051a36;
+  background-color: transparent;
   overflow: hidden;
   box-shadow: 0 clamp(1.4rem, 4vw, 2.8rem) clamp(3.2rem, 8vw, 4.5rem) rgba(2, 6, 23, 0.55);
   color: #f8fafc;
   isolation: isolate;
   padding-left: 0;
-
+  box-sizing: border-box;
 }
 
 .playercard::before {
@@ -1891,18 +1885,28 @@ a, .btn {
 
 .playercard__info-rail {
   position: absolute;
-  top: 6%;
-  height: calc(var(--playercard-photo-row) * 100% * 0.8);
-  left: var(--playercard-info-rail-offset);
-  width: var(--playercard-info-rail-width);
-  min-width: clamp(4.1rem, 11vw, 6.4rem);
-  border-radius: clamp(0.9rem, 2.2vw, 1.5rem);
-  background: rgba(255, 255, 255, 0.12);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
+  gap: clamp(6px, 1.8vw, 12px);
+  padding: clamp(8px, 1.8vw, 12px) clamp(10px, 2.5vw, 16px);
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.35), rgba(2, 6, 23, 0.75));
   backdrop-filter: blur(6px);
-  display: flex; 
-   flex-direction: column;
-  border-right: clamp(0.06rem, 0.2vw, 0.12rem) solid rgba(255, 255, 255, 0.2);
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
   z-index: 2;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.playercard__info-rail .playercard-info {
+  min-width: 0;
+  border-bottom: none;
 }
 
 .playercard-info {
@@ -1956,6 +1960,28 @@ a, .btn {
   max-height: clamp(2.4rem, 5vw, 3.5rem);
   object-fit: contain;
   filter: drop-shadow(0 clamp(0.6rem, 1.6vw, 1rem) clamp(1.2rem, 3vw, 1.8rem) rgba(15, 23, 42, 0.45));
+}
+
+.playercard__info-rail .playercard-info__label,
+.playercard__info-rail .playercard-info__value,
+.playercard__info-rail .playercard-info__placeholder {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1;
+}
+
+.playercard__info-rail .playercard-info__logo {
+  display: block;
+  height: clamp(18px, 3.2vw, 24px);
+  width: auto;
+  max-width: 100%;
+}
+
+.playercard__info-rail .playercard-info__flag {
+  display: block;
+  height: clamp(14px, 2.6vw, 18px);
+  width: auto;
 }
 
 .playercard-info__placeholder {
@@ -2147,13 +2173,12 @@ a, .btn {
 
   .playercard {
     border-radius: clamp(1.4rem, 6vw, 1.75rem);
-    --playercard-info-rail-width: 24%;
-    --playercard-info-rail-gap: 3.5%;
   }
 
   .playercard__info-rail {
-    min-width: clamp(4rem, 14vw, 4.5rem);
-    height: calc(var(--playercard-photo-row) * 100% * 0.7);
+    padding-inline: clamp(12px, 4vw, 18px);
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .playercard__stations-panel {
