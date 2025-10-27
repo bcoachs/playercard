@@ -1978,7 +1978,7 @@ a, .btn {
 
 .playercard__name-banner {
   position: absolute;
-  left: 10%;
+  left: 50%;
   bottom: 35%; /* clamp(1.1rem, 3vw, 1.7rem);*/
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.12);
@@ -1990,7 +1990,7 @@ a, .btn {
   text-transform: none;
   font-weight: 700;
   letter-spacing: normal;
-  font-size: clamp(1.05rem, 2.6vw, 1.5rem);
+  font-size: 20px; /*clamp(1.05rem, 2.6vw, 1.5rem);*/
   color: #e2e8f0;
   min-width: 50%;
   text-align: center;
