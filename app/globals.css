@@ -1764,6 +1764,9 @@ a, .btn {
 
 .playercard {
   position: relative;
+  /* Der Fallback sorgt dafür, dass --card-width immer definiert ist. Wird
+     --playercard-render-width von außen nicht gesetzt, fällt der Wert auf
+     --playercard-width (420px) zurück. */
   --card-width: var(--playercard-render-width, var(--playercard-width));
   --playercard-photo-row: calc(var(--playercard-golden-ratio) / (1 + var(--playercard-golden-ratio)));
   --playercard-panel-row: calc(1 / (1 + var(--playercard-golden-ratio)));
@@ -1774,7 +1777,10 @@ a, .btn {
   /* Standardbreite der Info-Schiene (wird unten in den Media-Queries überschrieben) */
   --playercard-info-rail-width: 13.5%;
   width: var(--card-width);
-  height: calc(var(--card-width) * 16 / 9);
+  aspect-ratio: 9 / 16;
+  /* 746px entspricht der Höhe bei 420px Breite (Standardmaß). Dadurch
+     schrumpft die Karte auf kleinen Viewports nicht auf nahezu null. */
+  min-height: 746px;
   display: grid;
   grid-template-rows: calc(var(--playercard-photo-row) * 100%) calc(var(--playercard-panel-row) * 100%);
   border-radius: clamp(1.6rem, 5vw, 2.8rem);
